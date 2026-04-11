@@ -74,7 +74,7 @@ users
 ├── display_name    VARCHAR NOT NULL
 ├── avatar_url      VARCHAR
 ├── auth_provider   VARCHAR NOT NULL  -- 'google' | 'local'
-├── password_hash   VARCHAR           -- NULL for SSO users
+├── password_hash   VARCHAR           -- NULL for SSO users; bcrypt (cost >= 12) or Argon2id
 ├── created_at      TIMESTAMPTZ
 └── updated_at      TIMESTAMPTZ
 ```
@@ -306,7 +306,7 @@ Server → Client
 └── { type: "post:updated",     channel: "feed",      data: PostSummary }
 ```
 
-**Auth:** JWT in query param on WS connect. Short-lived access tokens + refresh tokens.
+**Auth:** JWT via auth handshake message (NOT query params — query params leak tokens into logs). On connect, the client sends `{ type: "auth", token: "<jwt>" }` as the first message. The server validates the token and either confirms with `{ type: "auth:ok" }` or closes the connection with `{ type: "auth:error", reason: "..." }`. No other messages are processed until auth succeeds. On token expiry during an active connection, the server sends `{ type: "auth:expired" }` and the client must re-authenticate with a refreshed token before resuming.
 
 **AI endpoints use SSE**, not WebSocket — SSE is the standard for LLM streaming, simpler than multiplexing AI streams over the WS connection.
 
@@ -433,6 +433,39 @@ Heartbeat-based (client pings every 30s, server evicts after 60s silence). Displ
 ### Client Composable
 
 Single shared WebSocket connection. `useWebSocket` composable provides: `subscribe(channel, handler)` returning cleanup function, auto-reconnect with exponential backoff (1s, 2s, 4s, max 30s), automatic re-subscription on reconnect.
+
+## Security
+
+### Password Hashing
+
+Local auth passwords MUST be hashed with **bcrypt (cost factor >= 12)** or **Argon2id**. Raw passwords are never stored or logged. The `password_hash` column is NULL for SSO-only users. Implementation should use the `bcrypt` npm package (or `argon2` package).
+
+### Authentication Rate Limiting
+
+Auth endpoints enforce per-IP rate limits to prevent credential stuffing:
+- `POST /api/auth/login`: 5 attempts per minute per IP. After 10 consecutive failures on the same account, impose a 15-minute account lockout (responded as HTTP 429 with `Retry-After`).
+- `POST /api/auth/register`: 3 registrations per hour per IP.
+- `GET /api/auth/google/callback`: 10 per minute per IP.
+
+Rate limiting is implemented as a Fastify `onRequest` hook using an in-memory rate limiter (`@fastify/rate-limit` or equivalent).
+
+### Link Preview SSRF Protection
+
+When `content_type='link'`, the server fetches Open Graph metadata from `link_url`. This fetch is an SSRF vector. Mitigations:
+- **Scheme allowlist**: Only `https://` URLs are fetched. `http://`, `file://`, `ftp://`, and other schemes are rejected.
+- **IP blocklist**: After DNS resolution, the resolved IP is checked against blocked ranges before the request is made: `127.0.0.0/8`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `169.254.0.0/16`, `::1/128`, `fc00::/7`. If the resolved IP falls in any blocked range, the fetch is aborted and `link_preview` is set to NULL.
+- **Timeout & size cap**: Fetch timeout of 5 seconds, response body capped at 1 MB. Redirect limit of 3 hops, each hop re-checked against the IP blocklist.
+- **Failure mode**: If the fetch fails or is blocked, the post is still created successfully — `link_preview` is simply NULL and the UI shows the raw URL without a preview card.
+
+### Content Sanitization
+
+- All markdown content rendered in the frontend is sanitized with **DOMPurify** before DOM injection.
+- LLM output (autocomplete, generation, playground) is treated as untrusted user content and passes through the same sanitization pipeline.
+- A `Content-Security-Policy` header blocking inline scripts is set on all client responses.
+
+### JWT Storage
+
+Access tokens are stored in memory (Pinia store) and sent via `Authorization: Bearer` header on REST requests. Refresh tokens are stored in `httpOnly`, `Secure`, `SameSite=Strict` cookies. This approach avoids XSS exposure of refresh tokens and eliminates CSRF risk via the `SameSite=Strict` attribute.
 
 ## Issue Decomposition
 
