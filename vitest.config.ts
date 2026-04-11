@@ -13,7 +13,6 @@ export default defineConfig({
         'packages/server/src/server.ts',
         'packages/server/src/db/queries/types.ts',
         'packages/client/src/main.ts',
-        'packages/client/src/plugins/router.ts',
         'packages/shared/src/index.ts',
         'packages/shared/src/constants/index.ts',
         'packages/shared/src/types/index.ts',
