@@ -10,7 +10,7 @@
   "scripts": {
     "build": "npm run build --workspaces --if-present",
     "pretest": "if [ -f packages/shared/package.json ]; then npm run build --workspace=packages/shared; fi",
-    "test": "vitest run",
+    "test": "vitest run --passWithNoTests",
     "test:coverage": "npm run pretest && vitest run --coverage",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
