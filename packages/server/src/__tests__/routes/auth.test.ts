@@ -12,6 +12,21 @@ vi.mock('../../services/auth.js', () => ({
   verifyRefreshToken: vi.fn(),
 }));
 
+vi.mock('../../services/lockout.js', () => ({
+  lockoutService: {
+    checkLockout: vi.fn().mockReturnValue({ locked: false }),
+    recordFailure: vi.fn(),
+    resetFailures: vi.fn(),
+  },
+}));
+
+// Disable rate limiting in auth route tests to avoid interference
+vi.mock('../../plugins/rate-limit.js', () => ({
+  rateLimitPlugin: async () => {
+    // no-op: rate limiting is tested separately in plugins/rate-limit.test.ts
+  },
+}));
+
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
@@ -23,6 +38,7 @@ import {
   generateRefreshToken,
   verifyRefreshToken,
 } from '../../services/auth.js';
+import { lockoutService } from '../../services/lockout.js';
 import { buildApp } from '../../app.js';
 import type { FastifyInstance } from 'fastify';
 import type { UserRow } from '../../db/queries/types.js';
@@ -33,6 +49,9 @@ const mockVerifyPassword = verifyPassword as Mock;
 const mockGenerateAccessToken = generateAccessToken as Mock;
 const mockGenerateRefreshToken = generateRefreshToken as Mock;
 const mockVerifyRefreshToken = verifyRefreshToken as Mock;
+const mockCheckLockout = lockoutService.checkLockout as Mock;
+const mockRecordFailure = lockoutService.recordFailure as Mock;
+const mockResetFailures = lockoutService.resetFailures as Mock;
 
 const sampleUserRow: UserRow = {
   id: '550e8400-e29b-41d4-a716-446655440000',
@@ -293,6 +312,92 @@ describe('auth routes', () => {
 
       expect(response.statusCode).toBe(400);
       expect(response.json()).toHaveProperty('error');
+    });
+
+    it('returns 423 when account is locked', async () => {
+      mockCheckLockout.mockReturnValueOnce({ locked: true, remainingMs: 600000 });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        payload: {
+          email: 'locked@example.com',
+          password: 'password1A',
+        },
+      });
+
+      expect(response.statusCode).toBe(423);
+      const body = response.json();
+      expect(body.error).toBe('Account locked due to too many failed attempts. Try again later.');
+      expect(body.retryAfter).toBe(600000);
+      expect(mockCheckLockout).toHaveBeenCalledWith('locked@example.com');
+    });
+
+    it('returns 423 even with correct password when account is locked', async () => {
+      mockCheckLockout.mockReturnValueOnce({ locked: true, remainingMs: 300000 });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        payload: {
+          email: 'alice@example.com',
+          password: 'password1A',
+        },
+      });
+
+      expect(response.statusCode).toBe(423);
+      // Password should NOT have been checked
+      expect(mockVerifyPassword).not.toHaveBeenCalled();
+    });
+
+    it('records failure on wrong password', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [sampleUserRow], rowCount: 1 });
+      mockVerifyPassword.mockResolvedValue(false);
+
+      await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        payload: {
+          email: 'alice@example.com',
+          password: 'wrongpassword1',
+        },
+      });
+
+      expect(mockRecordFailure).toHaveBeenCalledWith('alice@example.com');
+    });
+
+    it('resets failures on successful login', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [sampleUserRow], rowCount: 1 });
+      mockVerifyPassword.mockResolvedValue(true);
+      mockGenerateAccessToken.mockReturnValue('access-token-login');
+      mockGenerateRefreshToken.mockReturnValue('refresh-token-login');
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        payload: {
+          email: 'alice@example.com',
+          password: 'password1A',
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(mockResetFailures).toHaveBeenCalledWith('alice@example.com');
+    });
+
+    it('does not record failure when user is not found', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+      await app.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        payload: {
+          email: 'nobody@example.com',
+          password: 'password1A',
+        },
+      });
+
+      expect(mockRecordFailure).not.toHaveBeenCalled();
     });
   });
 

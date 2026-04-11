@@ -24,6 +24,7 @@ import {
   generateRefreshToken,
   verifyRefreshToken,
 } from '../services/auth.js';
+import { lockoutService } from '../services/lockout.js';
 
 interface GoogleProfile {
   email?: string;
@@ -61,80 +62,103 @@ function getRefreshCookieOptions(): {
 
 export async function authRoutes(app: FastifyInstance): Promise<void> {
   // POST /register
-  app.post('/register', async (request, reply) => {
-    const parsed = registerSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply
-        .status(400)
-        .send({ error: parsed.error.errors.map((e) => e.message).join(', ') });
-    }
+  app.post(
+    '/register',
+    { config: { rateLimit: { max: 3, timeWindow: '1 hour' } } },
+    async (request, reply) => {
+      const parsed = registerSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply
+          .status(400)
+          .send({ error: parsed.error.errors.map((e) => e.message).join(', ') });
+      }
 
-    const { email, display_name, password } = parsed.data;
+      const { email, display_name, password } = parsed.data;
 
-    const existing = await findUserByEmail(email);
-    if (existing) {
-      return reply.status(409).send({ error: 'Email already in use' });
-    }
+      const existing = await findUserByEmail(email);
+      if (existing) {
+        return reply.status(409).send({ error: 'Email already in use' });
+      }
 
-    const passwordHash = await hashPassword(password);
-    const row = await createUser({
-      email,
-      displayName: display_name,
-      avatarUrl: null,
-      authProvider: 'local',
-      passwordHash,
-    });
+      const passwordHash = await hashPassword(password);
+      const row = await createUser({
+        email,
+        displayName: display_name,
+        avatarUrl: null,
+        authProvider: 'local',
+        passwordHash,
+      });
 
-    const user = toUser(row);
-    const accessToken = generateAccessToken(app, {
-      id: user.id,
-      email: user.email,
-      displayName: user.displayName,
-    });
-    const refreshToken = generateRefreshToken(app, { id: user.id });
+      const user = toUser(row);
+      const accessToken = generateAccessToken(app, {
+        id: user.id,
+        email: user.email,
+        displayName: user.displayName,
+      });
+      const refreshToken = generateRefreshToken(app, { id: user.id });
 
-    void reply.setCookie('refresh_token', refreshToken, getRefreshCookieOptions());
+      void reply.setCookie('refresh_token', refreshToken, getRefreshCookieOptions());
 
-    return reply.send({ user, accessToken });
-  });
+      return reply.send({ user, accessToken });
+    },
+  );
 
   // POST /login
-  app.post('/login', async (request, reply) => {
-    const parsed = loginSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply
-        .status(400)
-        .send({ error: parsed.error.errors.map((e) => e.message).join(', ') });
-    }
+  app.post(
+    '/login',
+    { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } },
+    async (request, reply) => {
+      const parsed = loginSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply
+          .status(400)
+          .send({ error: parsed.error.errors.map((e) => e.message).join(', ') });
+      }
 
-    const { email, password } = parsed.data;
+      const { email, password } = parsed.data;
 
-    const row = await findUserByEmail(email);
-    if (!row) {
-      return reply.status(401).send({ error: 'Invalid email or password' });
-    }
+      // Check account lockout BEFORE any other logic
+      const lockout = lockoutService.checkLockout(email);
+      if (lockout.locked) {
+        return reply
+          .status(423)
+          .send({
+            error: 'Account locked due to too many failed attempts. Try again later.',
+            retryAfter: lockout.remainingMs,
+          });
+      }
 
-    if (row.auth_provider === 'google') {
-      return reply.status(401).send({ error: 'Use Google sign-in for this account' });
-    }
+      const row = await findUserByEmail(email);
+      if (!row) {
+        return reply.status(401).send({ error: 'Invalid email or password' });
+      }
 
-    const valid = await verifyPassword(password, row.password_hash as string);
-    if (!valid) {
-      return reply.status(401).send({ error: 'Invalid email or password' });
-    }
+      if (row.auth_provider === 'google') {
+        return reply.status(401).send({ error: 'Use Google sign-in for this account' });
+      }
 
-    const user = toUser(row);
-    const accessToken = generateAccessToken(app, {
-      id: user.id,
-      email: user.email,
-      displayName: user.displayName,
-    });
-    const refreshToken = generateRefreshToken(app, { id: user.id });
+      const valid = await verifyPassword(password, row.password_hash as string);
+      if (!valid) {
+        lockoutService.recordFailure(email);
+        return reply.status(401).send({ error: 'Invalid email or password' });
+      }
 
-    void reply.setCookie('refresh_token', refreshToken, getRefreshCookieOptions());
+      // Successful login — reset lockout counter
+      lockoutService.resetFailures(email);
 
-    return reply.send({ user, accessToken });
-  });
+      const user = toUser(row);
+      const accessToken = generateAccessToken(app, {
+        id: user.id,
+        email: user.email,
+        displayName: user.displayName,
+      });
+      const refreshToken = generateRefreshToken(app, { id: user.id });
+
+      void reply.setCookie('refresh_token', refreshToken, getRefreshCookieOptions());
+
+      return reply.send({ user, accessToken });
+    },
+  );
 
   // POST /refresh
   app.post('/refresh', async (request, reply) => {
@@ -215,70 +239,74 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // GET /google/callback — handles the OAuth2 callback from Google
-  app.get('/google/callback', async (request, reply) => {
-    const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:3000';
+  app.get(
+    '/google/callback',
+    { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } },
+    async (request, reply) => {
+      const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:3000';
 
-    const oauth2 = app.googleOAuth2;
-    if (!oauth2) {
-      return reply.status(501).send({ error: 'Google OAuth is not configured' });
-    }
+      const oauth2 = app.googleOAuth2;
+      if (!oauth2) {
+        return reply.status(501).send({ error: 'Google OAuth is not configured' });
+      }
 
-    // Exchange authorization code for access token
-    const { token } = await oauth2.getAccessTokenFromAuthorizationCodeFlow(request);
+      // Exchange authorization code for access token
+      const { token } = await oauth2.getAccessTokenFromAuthorizationCodeFlow(request);
 
-    // Fetch Google profile
-    const profileResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-      headers: { Authorization: `Bearer ${token.access_token}` },
-    });
-    const profile = (await profileResponse.json()) as GoogleProfile;
-
-    if (!profile.email) {
-      return reply.status(502).send({ error: 'Google did not return an email address' });
-    }
-
-    const existing = await findUserByEmail(profile.email);
-
-    // Case 1: New user — create with google auth_provider
-    if (!existing) {
-      const row = await createUser({
-        email: profile.email,
-        displayName: profile.name ?? profile.email,
-        avatarUrl: profile.picture ?? null,
-        authProvider: 'google',
-        passwordHash: null,
+      // Fetch Google profile
+      const profileResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+        headers: { Authorization: `Bearer ${token.access_token}` },
       });
-      const user = toUser(row);
-      const accessToken = generateAccessToken(app, {
-        id: user.id,
-        email: user.email,
-        displayName: user.displayName,
-      });
-      const refreshToken = generateRefreshToken(app, { id: user.id });
-      void reply.setCookie('refresh_token', refreshToken, getRefreshCookieOptions());
-      return reply.redirect(`${frontendUrl}/auth/callback#access_token=${accessToken}`);
-    }
+      const profile = (await profileResponse.json()) as GoogleProfile;
 
-    // Case 2: Existing Google user — update avatar, generate tokens
-    if (existing.auth_provider === 'google') {
-      await updateUserAvatar(existing.id, profile.picture ?? existing.avatar_url ?? '');
-      const user = toUser(existing);
-      const accessToken = generateAccessToken(app, {
-        id: user.id,
-        email: user.email,
-        displayName: user.displayName,
-      });
-      const refreshToken = generateRefreshToken(app, { id: user.id });
-      void reply.setCookie('refresh_token', refreshToken, getRefreshCookieOptions());
-      return reply.redirect(`${frontendUrl}/auth/callback#access_token=${accessToken}`);
-    }
+      if (!profile.email) {
+        return reply.status(502).send({ error: 'Google did not return an email address' });
+      }
 
-    // Case 3: Existing local user — generate link token and redirect to link page
-    const linkToken = app.jwt.sign(
-      { userId: existing.id, googleAvatarUrl: profile.picture ?? '' },
-      { expiresIn: '10m' },
-    );
-    return reply.redirect(`${frontendUrl}/auth/link#link_token=${linkToken}`);
-  });
+      const existing = await findUserByEmail(profile.email);
+
+      // Case 1: New user — create with google auth_provider
+      if (!existing) {
+        const row = await createUser({
+          email: profile.email,
+          displayName: profile.name ?? profile.email,
+          avatarUrl: profile.picture ?? null,
+          authProvider: 'google',
+          passwordHash: null,
+        });
+        const user = toUser(row);
+        const accessToken = generateAccessToken(app, {
+          id: user.id,
+          email: user.email,
+          displayName: user.displayName,
+        });
+        const refreshToken = generateRefreshToken(app, { id: user.id });
+        void reply.setCookie('refresh_token', refreshToken, getRefreshCookieOptions());
+        return reply.redirect(`${frontendUrl}/auth/callback#access_token=${accessToken}`);
+      }
+
+      // Case 2: Existing Google user — update avatar, generate tokens
+      if (existing.auth_provider === 'google') {
+        await updateUserAvatar(existing.id, profile.picture ?? existing.avatar_url ?? '');
+        const user = toUser(existing);
+        const accessToken = generateAccessToken(app, {
+          id: user.id,
+          email: user.email,
+          displayName: user.displayName,
+        });
+        const refreshToken = generateRefreshToken(app, { id: user.id });
+        void reply.setCookie('refresh_token', refreshToken, getRefreshCookieOptions());
+        return reply.redirect(`${frontendUrl}/auth/callback#access_token=${accessToken}`);
+      }
+
+      // Case 3: Existing local user — generate link token and redirect to link page
+      const linkToken = app.jwt.sign(
+        { userId: existing.id, googleAvatarUrl: profile.picture ?? '' },
+        { expiresIn: '10m' },
+      );
+      return reply.redirect(`${frontendUrl}/auth/link#link_token=${linkToken}`);
+    },
+  );
 
   // POST /link-google — links a local account to Google
   app.post('/link-google', async (request, reply) => {

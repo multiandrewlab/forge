@@ -4,6 +4,7 @@ import cookie from '@fastify/cookie';
 import jwt from '@fastify/jwt';
 import oauthPlugin from '@fastify/oauth2';
 import { authPlugin } from './plugins/auth.js';
+import { rateLimitPlugin } from './plugins/rate-limit.js';
 import { healthRoutes } from './routes/health.js';
 import { authRoutes } from './routes/auth.js';
 
@@ -41,6 +42,7 @@ export async function buildApp() {
     });
   }
 
+  await app.register(rateLimitPlugin);
   await app.register(authPlugin);
   await app.register(healthRoutes);
   await app.register(authRoutes, { prefix: '/api/auth' });
