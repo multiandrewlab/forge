@@ -49,5 +49,11 @@ describe('vote queries', () => {
       const result = await deleteVote('u1', 'p1');
       expect(result).toBe(false);
     });
+
+    it('returns false when rowCount is null', async () => {
+      mockQuery.mockResolvedValue({ rowCount: null });
+      const result = await deleteVote('u1', 'p1');
+      expect(result).toBe(false);
+    });
   });
 });

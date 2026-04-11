@@ -31,6 +31,12 @@ describe('bookmark queries', () => {
       );
       expect(result).toEqual(sampleBookmark);
     });
+
+    it('returns null when bookmark already exists (ON CONFLICT)', async () => {
+      mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });
+      const result = await createBookmark('u1', 'p1');
+      expect(result).toBeNull();
+    });
   });
 
   describe('deleteBookmark', () => {
@@ -46,6 +52,12 @@ describe('bookmark queries', () => {
 
     it('returns false when no bookmark existed', async () => {
       mockQuery.mockResolvedValue({ rowCount: 0 });
+      const result = await deleteBookmark('u1', 'p1');
+      expect(result).toBe(false);
+    });
+
+    it('returns false when rowCount is null', async () => {
+      mockQuery.mockResolvedValue({ rowCount: null });
       const result = await deleteBookmark('u1', 'p1');
       expect(result).toBe(false);
     });

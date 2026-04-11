@@ -58,6 +58,12 @@ describe('tag queries', () => {
       );
       expect(result).toEqual(row);
     });
+
+    it('returns null when post_tag already exists (ON CONFLICT)', async () => {
+      mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });
+      const result = await addPostTag('post-1', 'tag-1');
+      expect(result).toBeNull();
+    });
   });
 
   describe('removePostTag', () => {
@@ -73,6 +79,12 @@ describe('tag queries', () => {
 
     it('returns false when no row existed', async () => {
       mockQuery.mockResolvedValue({ rowCount: 0 });
+      const result = await removePostTag('post-1', 'tag-1');
+      expect(result).toBe(false);
+    });
+
+    it('returns false when rowCount is null', async () => {
+      mockQuery.mockResolvedValue({ rowCount: null });
       const result = await removePostTag('post-1', 'tag-1');
       expect(result).toBe(false);
     });
