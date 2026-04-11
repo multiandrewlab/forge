@@ -26,3 +26,33 @@ export async function createUser(input: CreateUserInput): Promise<UserRow> {
   );
   return result.rows[0] as UserRow;
 }
+
+export interface UpdateUserFields {
+  displayName?: string;
+  avatarUrl?: string | null;
+}
+
+export async function updateUser(id: string, fields: UpdateUserFields): Promise<UserRow | null> {
+  const setClauses: string[] = [];
+  const params: unknown[] = [];
+  let paramIndex = 1;
+
+  if (fields.displayName !== undefined) {
+    setClauses.push(`display_name = $${String(paramIndex)}`);
+    params.push(fields.displayName);
+    paramIndex++;
+  }
+
+  if (fields.avatarUrl !== undefined) {
+    setClauses.push(`avatar_url = $${String(paramIndex)}`);
+    params.push(fields.avatarUrl);
+    paramIndex++;
+  }
+
+  setClauses.push('updated_at = NOW()');
+  params.push(id);
+
+  const sql = `UPDATE users SET ${setClauses.join(', ')} WHERE id = $${String(paramIndex)} RETURNING *`;
+  const result = await query<UserRow>(sql, params);
+  return result.rows[0] ?? null;
+}

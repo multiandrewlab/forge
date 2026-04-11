@@ -4,6 +4,7 @@ import cookie from '@fastify/cookie';
 import jwt from '@fastify/jwt';
 import { authPlugin } from './plugins/auth.js';
 import { healthRoutes } from './routes/health.js';
+import { authRoutes } from './routes/auth.js';
 
 export async function buildApp() {
   const app = Fastify({
@@ -17,6 +18,7 @@ export async function buildApp() {
   });
   await app.register(authPlugin);
   await app.register(healthRoutes);
+  await app.register(authRoutes, { prefix: '/api/auth' });
 
   return app;
 }
