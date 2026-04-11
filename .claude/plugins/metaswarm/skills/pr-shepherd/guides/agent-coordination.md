@@ -74,6 +74,7 @@ Task Mode is the baseline coordination mechanism. It uses fire-and-forget `Task(
 ### When Task Mode Is Sufficient
 
 Task Mode works well for most workflows. The overhead of cold starts only becomes significant when:
+
 - The same agent needs to work on multiple sequential units (e.g., a coder across work units)
 - Design reviews require multiple iteration cycles (5 reviewers x 3 iterations = 15 cold starts)
 - A PR shepherd needs to persist through a long CI/review lifecycle
@@ -95,13 +96,13 @@ Team Mode uses persistent teammates with context retention and direct inter-agen
 
 ### Key Benefits Over Task Mode
 
-| Benefit                     | Description                                                                 |
-| --------------------------- | --------------------------------------------------------------------------- |
-| **No cold starts**          | Coder retains context from WU-001 when starting WU-002                     |
-| **Direct handoffs**         | Researcher sends findings directly to architect via `SendMessage`           |
-| **Persistent PR shepherd**  | Stays alive through entire PR lifecycle without `run_in_background`         |
-| **Efficient review cycles** | Design reviewers retain context across iterations (saves N cold starts)     |
-| **Async coordination**      | Teammates send status updates without blocking the orchestrator             |
+| Benefit                     | Description                                                             |
+| --------------------------- | ----------------------------------------------------------------------- |
+| **No cold starts**          | Coder retains context from WU-001 when starting WU-002                  |
+| **Direct handoffs**         | Researcher sends findings directly to architect via `SendMessage`       |
+| **Persistent PR shepherd**  | Stays alive through entire PR lifecycle without `run_in_background`     |
+| **Efficient review cycles** | Design reviewers retain context across iterations (saves N cold starts) |
+| **Async coordination**      | Teammates send status updates without blocking the orchestrator         |
 
 ### Swarm Coordinator as Team Lead
 
@@ -210,18 +211,18 @@ See Section 6. ALWAYS a fresh `Task()` instance on every single review pass. Nev
 
 ### Mode-Agnostic Rules
 
-| Invariant                       | Description                                                                    |
-| ------------------------------- | ------------------------------------------------------------------------------ |
-| **Orchestrator-run validation** | Validation is always run directly by the orchestrator, never delegated         |
-| **BEADS lifecycle**             | Create --> in_progress --> close lifecycle is identical in both modes           |
-| **4-phase execution loop**      | IMPLEMENT --> VALIDATE --> ADVERSARIAL REVIEW --> COMMIT is mode-agnostic      |
-| **Knowledge priming**           | `bd prime` runs before all agent work in both modes                            |
-| **Human checkpoints**           | Planned pauses require explicit human approval in both modes                   |
-| **Quality gates**               | Coverage, lint, typecheck, tests -- all blocking state transitions             |
-| **Pipeline pattern**            | Push + PR + shepherd immediately after each agent completes, don't batch       |
-| **Phase gate rule**             | Next phase starts only after ALL previous phase PRs are squash-merged          |
-| **Max retry + escalation**      | 3 retries per gate, then escalate to human with full failure history           |
-| **File scope verification**     | `git diff --name-only` check after every implementation                        |
+| Invariant                       | Description                                                               |
+| ------------------------------- | ------------------------------------------------------------------------- |
+| **Orchestrator-run validation** | Validation is always run directly by the orchestrator, never delegated    |
+| **BEADS lifecycle**             | Create --> in_progress --> close lifecycle is identical in both modes     |
+| **4-phase execution loop**      | IMPLEMENT --> VALIDATE --> ADVERSARIAL REVIEW --> COMMIT is mode-agnostic |
+| **Knowledge priming**           | `bd prime` runs before all agent work in both modes                       |
+| **Human checkpoints**           | Planned pauses require explicit human approval in both modes              |
+| **Quality gates**               | Coverage, lint, typecheck, tests -- all blocking state transitions        |
+| **Pipeline pattern**            | Push + PR + shepherd immediately after each agent completes, don't batch  |
+| **Phase gate rule**             | Next phase starts only after ALL previous phase PRs are squash-merged     |
+| **Max retry + escalation**      | 3 retries per gate, then escalate to human with full failure history      |
+| **File scope verification**     | `git diff --name-only` check after every implementation                   |
 
 ### Invariant Rationale
 

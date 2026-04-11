@@ -165,6 +165,7 @@ When the task has a spec with Definition of Done items, use the orchestrated exe
 6. **Create PR** — knowledge base changes are included in the PR
 
 See the `orchestrated-execution` skill for the full pattern. Key principles:
+
 - **Trust nothing, verify everything**: Run quality gates independently, never trust subagent self-reports
 - **Adversarial review**: Fresh reviewer checks each DoD item with file:line evidence
 - **Human checkpoints**: Pause at planned review points before continuing

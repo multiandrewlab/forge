@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       pr_number:
-        description: "PR number to check"
+        description: 'PR number to check'
         required: true
         type: number
 
@@ -30,7 +30,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: '3.13'
 
       - name: Install gtg
         run: |

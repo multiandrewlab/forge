@@ -313,7 +313,7 @@ const userId = request.body.userId; // ❌ NEVER trust this
 const contact = await getContact(userId, contactId);
 
 // GOOD: userId from Clerk auth middleware only
-const auth = c.get("auth"); // ✅ From Clerk JWT verification
+const auth = c.get('auth'); // ✅ From Clerk JWT verification
 const userId = auth.userId;
 const contact = await getContact(userId, contactId);
 ```
@@ -338,22 +338,22 @@ async function getContact(userId: string, contactId: string) {
 
 ```typescript
 // BAD: Logging sensitive data
-logger.info("User login", { email, password, apiKey });
+logger.info('User login', { email, password, apiKey });
 
 // GOOD: Redact sensitive fields
-logger.info("User login", { email: maskEmail(email), userId });
+logger.info('User login', { email: maskEmail(email), userId });
 ```
 
 ### 4. Enumeration Attacks
 
 ```typescript
 // BAD: Reveals if email exists
-if (!user) return { error: "Email not found" };
-if (!validPassword) return { error: "Invalid password" };
+if (!user) return { error: 'Email not found' };
+if (!validPassword) return { error: 'Invalid password' };
 
 // GOOD: Generic message prevents enumeration
 if (!user || !validPassword) {
-  return { error: "Invalid credentials" };
+  return { error: 'Invalid credentials' };
 }
 ```
 

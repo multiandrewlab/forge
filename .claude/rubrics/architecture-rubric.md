@@ -14,13 +14,13 @@ This rubric evaluates implementation plans for architectural fit. It ensures new
 
 ## Key Reference Documents
 
-| Document                                | Purpose                                 |
-| --------------------------------------- | --------------------------------------- |
-| `CLAUDE.md`                             | Architecture overview, coding standards |
-| `./guides/testing-patterns.md`    | Testing philosophy, mock factories, TDD |
-| `test-quality-anti-patterns.md (project-specific)` | Common testing mistakes to avoid        |
-| `docs/SERVICE_INVENTORY.md`             | Existing services & factory catalog     |
-| TypeScript strict mode                  | Follow conventions from tsconfig.json and ESLint configuration |
+| Document                                           | Purpose                                                        |
+| -------------------------------------------------- | -------------------------------------------------------------- |
+| `CLAUDE.md`                                        | Architecture overview, coding standards                        |
+| `./guides/testing-patterns.md`                     | Testing philosophy, mock factories, TDD                        |
+| `test-quality-anti-patterns.md (project-specific)` | Common testing mistakes to avoid                               |
+| `docs/SERVICE_INVENTORY.md`                        | Existing services & factory catalog                            |
+| TypeScript strict mode                             | Follow conventions from tsconfig.json and ESLint configuration |
 
 ---
 

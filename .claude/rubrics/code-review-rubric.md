@@ -25,15 +25,15 @@ This rubric ensures code changes meet quality standards before being submitted a
 
 ## Reference Standards
 
-| Document                                | Purpose                                  |
-| --------------------------------------- | ---------------------------------------- |
-| `./guides/coding-standards.md`    | Coding standards (source of truth)       |
-| `CLAUDE.md`                             | Architecture, coding standards, key locs |
-| `./guides/testing-patterns.md`    | Testing philosophy, mock factories, TDD  |
-| `test-quality-anti-patterns.md (project-specific)` | Common testing mistakes to avoid         |
-| TypeScript strict mode                  | Follow conventions from tsconfig.json and ESLint configuration |
-| `docs/SERVICE_INVENTORY.md`             | Service catalog & factory inventory      |
-| `templates/task-completion-checklist.md`  | Pre-completion validation steps          |
+| Document                                           | Purpose                                                        |
+| -------------------------------------------------- | -------------------------------------------------------------- |
+| `./guides/coding-standards.md`                     | Coding standards (source of truth)                             |
+| `CLAUDE.md`                                        | Architecture, coding standards, key locs                       |
+| `./guides/testing-patterns.md`                     | Testing philosophy, mock factories, TDD                        |
+| `test-quality-anti-patterns.md (project-specific)` | Common testing mistakes to avoid                               |
+| TypeScript strict mode                             | Follow conventions from tsconfig.json and ESLint configuration |
+| `docs/SERVICE_INVENTORY.md`                        | Service catalog & factory inventory                            |
+| `templates/task-completion-checklist.md`           | Pre-completion validation steps                                |
 
 ---
 
@@ -354,13 +354,13 @@ const API_URL = "https://api.example.com"; // MEDIUM - use env
 try {
   await service.process();
 } catch (error) {
-  logger.error({ error }, "Processing failed");
-  throw new ServiceError("Processing failed", { cause: error });
+  logger.error({ error }, 'Processing failed');
+  throw new ServiceError('Processing failed', { cause: error });
 }
 
 // 2. Type guards
 function isUser(obj: unknown): obj is User {
-  return typeof obj === "object" && obj !== null && "id" in obj;
+  return typeof obj === 'object' && obj !== null && 'id' in obj;
 }
 
 // 3. Zod validation

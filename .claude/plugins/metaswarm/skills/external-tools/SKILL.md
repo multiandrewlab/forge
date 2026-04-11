@@ -3,10 +3,10 @@ name: external-tools
 description: Delegate implementation and review tasks to external AI CLI tools (Codex, Gemini) with cross-model adversarial review
 auto_activate: false
 triggers:
-  - "use external tools"
-  - "delegate to codex"
-  - "delegate to gemini"
-  - "cross-model review"
+  - 'use external tools'
+  - 'delegate to codex'
+  - 'delegate to gemini'
+  - 'cross-model review'
 ---
 
 # External Tools Skill
@@ -21,9 +21,9 @@ This skill delegates implementation and review tasks to external AI CLI tools (O
 
 ### Required Tools
 
-| Tool | Install | Auth |
-|------|---------|------|
-| OpenAI Codex CLI | `npm i -g @openai/codex` | API key or ChatGPT subscription |
+| Tool              | Install                       | Auth                                      |
+| ----------------- | ----------------------------- | ----------------------------------------- |
+| OpenAI Codex CLI  | `npm i -g @openai/codex`      | API key or ChatGPT subscription           |
 | Google Gemini CLI | `npm i -g @google/gemini-cli` | Google login (free 1K req/day) or API key |
 
 Neither tool is strictly required. The skill adapts based on what is available (see Escalation Model below).
@@ -36,22 +36,22 @@ Per-project config at `.metaswarm/external-tools.yaml` (optional -- if absent, e
 adapters:
   codex:
     enabled: true
-    model: "gpt-5.3-codex"
+    model: 'gpt-5.3-codex'
     timeout_seconds: 300
-    sandbox: docker          # docker | platform | none
+    sandbox: docker # docker | platform | none
   gemini:
     enabled: true
-    model: "pro"
+    model: 'pro'
     timeout_seconds: 300
     sandbox: docker
 
 routing:
-  default_implementer: "cheapest-available"
-  escalation_order: ["codex", "gemini", "claude"]
+  default_implementer: 'cheapest-available'
+  escalation_order: ['codex', 'gemini', 'claude']
 
 budget:
-  per_task_usd: 2.00        # circuit breaker per task
-  per_session_usd: 20.00    # circuit breaker per session
+  per_task_usd: 2.00 # circuit breaker per task
+  per_session_usd: 20.00 # circuit breaker per session
 ```
 
 ### Fallback Behavior
@@ -150,11 +150,11 @@ This phase is identical whether the implementer was an external tool or Claude. 
 
 The key advantage of external tools: the writer is always reviewed by a **different model**.
 
-| Implementer | Reviewer 1 | Reviewer 2 |
-|-------------|-----------|-----------|
-| Codex | Gemini (via adapter) | Claude (via Task) |
-| Gemini | Codex (via adapter) | Claude (via Task) |
-| Claude | Codex (via adapter) | Gemini (via adapter) |
+| Implementer | Reviewer 1           | Reviewer 2           |
+| ----------- | -------------------- | -------------------- |
+| Codex       | Gemini (via adapter) | Claude (via Task)    |
+| Gemini      | Codex (via adapter)  | Claude (via Task)    |
+| Claude      | Codex (via adapter)  | Gemini (via adapter) |
 
 Review is invoked via the adapter's `review` command. The orchestrator reads the reviewer's raw log and evaluates it independently -- the adapter never returns a pass/fail verdict.
 
@@ -267,28 +267,34 @@ The prompt file is the key interface between the orchestrator and external tools
 # Task: [task title]
 
 ## Acceptance Criteria
+
 - [ ] criterion 1
 - [ ] criterion 2
 - [ ] criterion 3
 
 ## Context
+
 [relevant file contents, token-budgeted]
 [prioritized: changed files > test files > imports > surrounding context]
 
 ## Coding Standards
+
 [extracted from project's CLAUDE.md / coding standards guide]
 [language-specific rules, naming conventions, patterns]
 
 ## Test Expectations
+
 [what tests should pass after implementation]
 [coverage requirements from .coverage-thresholds.json]
 [test runner command: e.g., npx vitest run]
 
 ## Previous Attempt (if retry)
+
 [review feedback from last attempt -- what to fix]
 [DO NOT include full prior output, only the actionable feedback summary]
 
 ## Prior Model's Attempt (if escalation)
+
 [diff summary from previous model's branch -- what was tried, why it failed]
 [DO NOT include full branch, only the relevant diff summary]
 ```
@@ -307,18 +313,18 @@ The prompt file is the key interface between the orchestrator and external tools
 
 When an adapter returns `exit_code != 0`, the `error_type` field determines the orchestrator's response:
 
-| Error Type | Meaning | Orchestrator Action |
-|---|---|---|
-| `tool_not_installed` | Binary not found | Skip adapter, try next in escalation chain |
-| `auth_expired` | API key invalid or expired | Escalate to user with setup instructions |
-| `auth_missing` | No API key configured | Escalate to user with setup instructions |
-| `network_error` | Cannot reach API | Retry with exponential backoff, then skip adapter |
-| `rate_limited` | API rate limit hit | Wait and retry (respect Retry-After if provided) |
-| `timeout` | Tool exceeded time limit | Retry once with increased timeout, then skip adapter |
-| `context_too_large` | Input exceeds context window | Reduce context via `package_context()`, retry |
-| `cost_limit_exceeded` | Would exceed budget | Skip adapter, alert user about budget status |
-| `tool_crash` | Unexpected exit | Retry once, then skip adapter |
-| `output_parse_error` | Malformed JSON output | Log raw output for debugging, treat as failure |
+| Error Type            | Meaning                      | Orchestrator Action                                  |
+| --------------------- | ---------------------------- | ---------------------------------------------------- |
+| `tool_not_installed`  | Binary not found             | Skip adapter, try next in escalation chain           |
+| `auth_expired`        | API key invalid or expired   | Escalate to user with setup instructions             |
+| `auth_missing`        | No API key configured        | Escalate to user with setup instructions             |
+| `network_error`       | Cannot reach API             | Retry with exponential backoff, then skip adapter    |
+| `rate_limited`        | API rate limit hit           | Wait and retry (respect Retry-After if provided)     |
+| `timeout`             | Tool exceeded time limit     | Retry once with increased timeout, then skip adapter |
+| `context_too_large`   | Input exceeds context window | Reduce context via `package_context()`, retry        |
+| `cost_limit_exceeded` | Would exceed budget          | Skip adapter, alert user about budget status         |
+| `tool_crash`          | Unexpected exit              | Retry once, then skip adapter                        |
+| `output_parse_error`  | Malformed JSON output        | Log raw output for debugging, treat as failure       |
 
 **General rules:**
 
@@ -366,13 +372,13 @@ Cost is extracted post-execution from the adapter's JSON output (`cost.input_tok
 
 ## Anti-Patterns
 
-| # | Anti-Pattern | Why It's Wrong | What to Do Instead |
-|---|---|---|---|
-| 1 | **Trusting external tool self-reports** -- tool says "all tests pass" and orchestrator believes it | External tools can hallucinate, skip steps, or misinterpret results; same reasoning as the no-self-certification rule for subagents | Orchestrator runs Phase 2 (VALIDATE) independently; adapter output contains facts only, never verdicts |
-| 2 | **Skipping cross-model review** -- "the external tool's code looks fine, committing directly" | Single-model blind spots are the whole reason this skill exists; bypassing review defeats the purpose | Always run Phase 3 with a different model as reviewer; cross-model review is mandatory |
-| 3 | **Running without timeout** -- invoking an adapter without `safe_invoke()` timeout wrapper | External CLIs can hang on rate limits, network issues, or infinite loops; an unmonitored invocation blocks the entire pipeline | Always use `safe_invoke()` with the configured `timeout_seconds`; handle timeout as a retryable error |
-| 4 | **Passing the full environment** -- running the external tool with the orchestrator's full env vars | Leaks API keys, session tokens, and internal state to an external process that only needs its own credentials | Use `env -i` to pass only `HOME`, `PATH`, and the tool's own API key; see Minimal Environment in the design doc |
-| 5 | **Working in the main repo** -- running external tools directly in the project working directory instead of a worktree | Concurrent invocations corrupt each other's state; failed attempts leave dirty files; no clean rollback path | Always create an isolated git worktree per invocation; merge only after all phases pass |
+| #   | Anti-Pattern                                                                                                           | Why It's Wrong                                                                                                                      | What to Do Instead                                                                                              |
+| --- | ---------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| 1   | **Trusting external tool self-reports** -- tool says "all tests pass" and orchestrator believes it                     | External tools can hallucinate, skip steps, or misinterpret results; same reasoning as the no-self-certification rule for subagents | Orchestrator runs Phase 2 (VALIDATE) independently; adapter output contains facts only, never verdicts          |
+| 2   | **Skipping cross-model review** -- "the external tool's code looks fine, committing directly"                          | Single-model blind spots are the whole reason this skill exists; bypassing review defeats the purpose                               | Always run Phase 3 with a different model as reviewer; cross-model review is mandatory                          |
+| 3   | **Running without timeout** -- invoking an adapter without `safe_invoke()` timeout wrapper                             | External CLIs can hang on rate limits, network issues, or infinite loops; an unmonitored invocation blocks the entire pipeline      | Always use `safe_invoke()` with the configured `timeout_seconds`; handle timeout as a retryable error           |
+| 4   | **Passing the full environment** -- running the external tool with the orchestrator's full env vars                    | Leaks API keys, session tokens, and internal state to an external process that only needs its own credentials                       | Use `env -i` to pass only `HOME`, `PATH`, and the tool's own API key; see Minimal Environment in the design doc |
+| 5   | **Working in the main repo** -- running external tools directly in the project working directory instead of a worktree | Concurrent invocations corrupt each other's state; failed attempts leave dirty files; no clean rollback path                        | Always create an isolated git worktree per invocation; merge only after all phases pass                         |
 
 ---
 

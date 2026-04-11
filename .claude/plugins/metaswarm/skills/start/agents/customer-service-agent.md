@@ -85,7 +85,7 @@ const user = await prisma.user.findUnique({
 ```typescript
 // Stripe customer lookup
 const stripeCustomer = await stripe.customers.retrieve(user.stripeCustomerId, {
-  expand: ["subscriptions"],
+  expand: ['subscriptions'],
 });
 
 // Check subscription status
@@ -267,13 +267,13 @@ const customer = await stripe.customers.retrieve(customerId);
 // Get subscriptions
 const subscriptions = await stripe.subscriptions.list({
   customer: customerId,
-  status: "all",
+  status: 'all',
 });
 
 // Get payment methods
 const paymentMethods = await stripe.paymentMethods.list({
   customer: customerId,
-  type: "card",
+  type: 'card',
 });
 
 // Get invoices
@@ -331,7 +331,7 @@ WHERE user_id = $1 AND created_at > NOW() - INTERVAL '7 days';
 ```typescript
 // Mask email in reports
 function maskEmail(email: string): string {
-  const [local, domain] = email.split("@");
+  const [local, domain] = email.split('@');
   return `${local[0]}***@${domain[0]}***.com`;
 }
 

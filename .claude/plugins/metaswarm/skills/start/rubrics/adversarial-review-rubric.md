@@ -11,6 +11,7 @@
 This rubric is for **adversarial review** — a fundamentally different mode from collaborative code review. Your job is to **find failures**, not to help improve the code. You are checking whether the implementation meets its written contract (the spec and DoD items), not whether the code is "good."
 
 **Key distinction:**
+
 - **Collaborative review** (`code-review-rubric.md`): "How can this code be better?"
 - **Adversarial review** (this rubric): "Does this code meet its contract? Prove it."
 
@@ -20,9 +21,9 @@ This rubric is for **adversarial review** — a fundamentally different mode fro
 
 Every adversarial review produces exactly one verdict:
 
-| Verdict | Meaning | Criteria |
-| --- | --- | --- |
-| **PASS** | Implementation meets its contract | Zero BLOCKING issues |
+| Verdict  | Meaning                              | Criteria                    |
+| -------- | ------------------------------------ | --------------------------- |
+| **PASS** | Implementation meets its contract    | Zero BLOCKING issues        |
 | **FAIL** | Implementation violates its contract | One or more BLOCKING issues |
 
 There is no "APPROVED WITH COMMENTS." There is no "CHANGES SUGGESTED." PASS or FAIL.
@@ -33,10 +34,10 @@ There is no "APPROVED WITH COMMENTS." There is no "CHANGES SUGGESTED." PASS or F
 
 Every issue found is classified as BLOCKING or WARNING:
 
-| Classification | Meaning | Impact on Verdict |
-| --- | --- | --- |
-| **BLOCKING** | Contract violation — spec says X, code does not do X | Causes FAIL |
-| **WARNING** | Quality concern — not a spec violation but worth noting | Does NOT cause FAIL |
+| Classification | Meaning                                                 | Impact on Verdict   |
+| -------------- | ------------------------------------------------------- | ------------------- |
+| **BLOCKING**   | Contract violation — spec says X, code does not do X    | Causes FAIL         |
+| **WARNING**    | Quality concern — not a spec violation but worth noting | Does NOT cause FAIL |
 
 **When in doubt, it's BLOCKING.** The threshold for PASS should be high. Err on the side of FAIL.
 
@@ -52,6 +53,7 @@ Every finding — whether PASS or FAIL — requires **cited evidence**. Assertio
 **DoD #1**: "Middleware rejects expired tokens"
 **Verdict**: PASS
 **Evidence**:
+
 - Implementation: `src/middleware/auth.ts:34` — checks `token.exp < Date.now()`
 - Test: `src/middleware/auth.test.ts:67` — test case "rejects expired token" asserts 401 response
 ```
@@ -81,10 +83,10 @@ Every finding — whether PASS or FAIL — requires **cited evidence**. Assertio
 
 The primary check. For each DoD item:
 
-| Check | Classification | Criteria |
-| --- | --- | --- |
-| DoD item fully implemented | BLOCKING if missing | Implementation exists AND handles all specified cases |
-| DoD item tested | BLOCKING if untested | At least one test directly verifies the DoD item's behavior |
+| Check                          | Classification        | Criteria                                                                          |
+| ------------------------------ | --------------------- | --------------------------------------------------------------------------------- |
+| DoD item fully implemented     | BLOCKING if missing   | Implementation exists AND handles all specified cases                             |
+| DoD item tested                | BLOCKING if untested  | At least one test directly verifies the DoD item's behavior                       |
 | DoD item matches spec language | BLOCKING if divergent | Implementation does what the spec SAYS, not what the reviewer thinks it should do |
 
 **Process:**
@@ -97,27 +99,27 @@ The primary check. For each DoD item:
 
 ### 2. Test Quality (BLOCKING / WARNING threshold)
 
-| Check | Classification | Criteria |
-| --- | --- | --- |
-| Tests verify behavior, not presence | BLOCKING | No `toBeDefined()` as sole assertion for DoD-critical behavior |
-| Tests cover error paths | WARNING | Happy path alone is insufficient for DoD items mentioning errors |
-| Tests don't test mock behavior | BLOCKING | Tests must exercise real logic, not just verify mocks were called |
-| Tests are deterministic | WARNING | No timing-dependent, order-dependent, or flaky patterns |
+| Check                               | Classification | Criteria                                                          |
+| ----------------------------------- | -------------- | ----------------------------------------------------------------- |
+| Tests verify behavior, not presence | BLOCKING       | No `toBeDefined()` as sole assertion for DoD-critical behavior    |
+| Tests cover error paths             | WARNING        | Happy path alone is insufficient for DoD items mentioning errors  |
+| Tests don't test mock behavior      | BLOCKING       | Tests must exercise real logic, not just verify mocks were called |
+| Tests are deterministic             | WARNING        | No timing-dependent, order-dependent, or flaky patterns           |
 
 ### 3. Type Safety (BLOCKING / WARNING threshold)
 
-| Check | Classification | Criteria |
-| --- | --- | --- |
-| No `any` types | BLOCKING | `any` in new code is always a contract violation |
-| No unsafe type assertions | WARNING | `as` casts without type guards noted but not blocking |
-| Types match runtime behavior | BLOCKING | Type says X but runtime can produce Y |
+| Check                        | Classification | Criteria                                              |
+| ---------------------------- | -------------- | ----------------------------------------------------- |
+| No `any` types               | BLOCKING       | `any` in new code is always a contract violation      |
+| No unsafe type assertions    | WARNING        | `as` casts without type guards noted but not blocking |
+| Types match runtime behavior | BLOCKING       | Type says X but runtime can produce Y                 |
 
 ### 4. File Scope (BLOCKING threshold)
 
-| Check | Classification | Criteria |
-| --- | --- | --- |
+| Check                              | Classification       | Criteria                                     |
+| ---------------------------------- | -------------------- | -------------------------------------------- |
 | Changes within declared file scope | BLOCKING if violated | Work unit may only modify its declared files |
-| No unrelated changes | BLOCKING | No "while I was here" modifications |
+| No unrelated changes               | BLOCKING             | No "while I was here" modifications          |
 
 **How to check:**
 
@@ -131,13 +133,13 @@ git diff main..HEAD --name-only
 
 ### 5. Security (BLOCKING threshold)
 
-| Check | Classification | Criteria |
-| --- | --- | --- |
-| No injection vulnerabilities | BLOCKING | SQL, NoSQL, command injection |
-| No XSS vulnerabilities | BLOCKING | Unescaped user input in output |
-| Auth/authz enforced | BLOCKING | If spec mentions access control, it must be implemented |
-| No secrets in code | BLOCKING | No hardcoded credentials, API keys, tokens |
-| Input validation present | WARNING | If spec mentions validation, must exist |
+| Check                        | Classification | Criteria                                                |
+| ---------------------------- | -------------- | ------------------------------------------------------- |
+| No injection vulnerabilities | BLOCKING       | SQL, NoSQL, command injection                           |
+| No XSS vulnerabilities       | BLOCKING       | Unescaped user input in output                          |
+| Auth/authz enforced          | BLOCKING       | If spec mentions access control, it must be implemented |
+| No secrets in code           | BLOCKING       | No hardcoded credentials, API keys, tokens              |
+| Input validation present     | WARNING        | If spec mentions validation, must exist                 |
 
 ---
 
@@ -152,11 +154,11 @@ The adversarial review MUST produce output in this exact format:
 
 ### DoD Verification
 
-| # | DoD Item | Verdict | Evidence |
-| --- | --- | --- | --- |
-| 1 | <item text> | PASS | impl: `file:line`, test: `file:line` |
-| 2 | <item text> | FAIL (BLOCKING) | Expected: <X>, Found: <Y> at `file:line` |
-| 3 | <item text> | PASS | impl: `file:line`, test: `file:line` |
+| #   | DoD Item    | Verdict         | Evidence                                 |
+| --- | ----------- | --------------- | ---------------------------------------- |
+| 1   | <item text> | PASS            | impl: `file:line`, test: `file:line`     |
+| 2   | <item text> | FAIL (BLOCKING) | Expected: <X>, Found: <Y> at `file:line` |
+| 3   | <item text> | PASS            | impl: `file:line`, test: `file:line`     |
 
 ### BLOCKING Issues
 
@@ -187,14 +189,14 @@ The adversarial review MUST produce output in this exact format:
 
 ## Comparison: Collaborative vs Adversarial
 
-| Dimension | Collaborative (`code-review-rubric.md`) | Adversarial (this rubric) |
-| --- | --- | --- |
-| **Goal** | Improve code quality | Verify contract compliance |
-| **Verdict** | APPROVED / CHANGES REQUIRED | PASS / FAIL |
-| **Issue severity** | CRITICAL / HIGH / MEDIUM / LOW | BLOCKING / WARNING |
-| **Contract** | General coding standards | Specific DoD items from spec |
-| **Evidence** | Helpful but optional | Mandatory (file:line) |
-| **Suggestions** | Encouraged | Prohibited |
-| **Re-review** | Same reviewer OK | Fresh reviewer required |
-| **Tone** | Collaborative partner | Independent auditor |
-| **When used** | Before PR creation | During orchestrated execution loop |
+| Dimension          | Collaborative (`code-review-rubric.md`) | Adversarial (this rubric)          |
+| ------------------ | --------------------------------------- | ---------------------------------- |
+| **Goal**           | Improve code quality                    | Verify contract compliance         |
+| **Verdict**        | APPROVED / CHANGES REQUIRED             | PASS / FAIL                        |
+| **Issue severity** | CRITICAL / HIGH / MEDIUM / LOW          | BLOCKING / WARNING                 |
+| **Contract**       | General coding standards                | Specific DoD items from spec       |
+| **Evidence**       | Helpful but optional                    | Mandatory (file:line)              |
+| **Suggestions**    | Encouraged                              | Prohibited                         |
+| **Re-review**      | Same reviewer OK                        | Fresh reviewer required            |
+| **Tone**           | Collaborative partner                   | Independent auditor                |
+| **When used**      | Before PR creation                      | During orchestrated execution loop |

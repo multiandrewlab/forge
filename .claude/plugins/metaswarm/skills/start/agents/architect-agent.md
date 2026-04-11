@@ -364,7 +364,7 @@ export class ContactOrchestratorService {
   constructor(
     private readonly persistence: ContactPersistenceService,
     private readonly scoring: PureScoringService,
-    private readonly notifications: NotificationService
+    private readonly notifications: NotificationService,
   ) {}
 
   async processContact(input: ContactInput): Promise<Contact> {
@@ -375,7 +375,7 @@ export class ContactOrchestratorService {
     const score = this.scoring.calculateScore(contact);
 
     // 3. Send notification
-    await this.notifications.notify({ type: "contact_created", contact });
+    await this.notifications.notify({ type: 'contact_created', contact });
 
     return { ...contact, score };
   }

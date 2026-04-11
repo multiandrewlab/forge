@@ -3,8 +3,8 @@ name: design-review-gate
 description: Automatic review gate that runs after brainstorming completes - spawns PM, Architect, Designer, Security, and CTO agents in parallel, iterates until all approve
 auto_activate: true
 triggers:
-  - "design document created"
-  - "docs/plans/*-design.md committed"
+  - 'design document created'
+  - 'docs/plans/*-design.md committed'
   - after:superpowers:brainstorming
 ---
 
@@ -53,28 +53,28 @@ This skill auto-activates when:
 // Spawn all five agents in parallel for efficiency
 const [pmResult, architectResult, designerResult, securityResult, ctoResult] = await Promise.all([
   Task({
-    subagent_type: "general-purpose",
-    description: "PM review",
+    subagent_type: 'general-purpose',
+    description: 'PM review',
     prompt: pmReviewPrompt(designDocPath),
   }),
   Task({
-    subagent_type: "general-purpose",
-    description: "Architect review",
+    subagent_type: 'general-purpose',
+    description: 'Architect review',
     prompt: architectReviewPrompt(designDocPath),
   }),
   Task({
-    subagent_type: "general-purpose",
-    description: "Designer review",
+    subagent_type: 'general-purpose',
+    description: 'Designer review',
     prompt: designerReviewPrompt(designDocPath),
   }),
   Task({
-    subagent_type: "general-purpose",
-    description: "Security design review",
+    subagent_type: 'general-purpose',
+    description: 'Security design review',
     prompt: securityDesignReviewPrompt(designDocPath),
   }),
   Task({
-    subagent_type: "general-purpose",
-    description: "CTO review",
+    subagent_type: 'general-purpose',
+    description: 'CTO review',
     prompt: ctoReviewPrompt(designDocPath),
   }),
 ]);
@@ -86,8 +86,8 @@ Each agent returns a structured review:
 
 ```typescript
 interface ReviewResult {
-  agent: "product-manager" | "architect" | "designer" | "security-design" | "cto";
-  verdict: "APPROVED" | "NEEDS_REVISION";
+  agent: 'product-manager' | 'architect' | 'designer' | 'security-design' | 'cto';
+  verdict: 'APPROVED' | 'NEEDS_REVISION';
   blockers: string[]; // MUST fix before implementation
   suggestions: string[]; // Nice to have
   questions: string[]; // Clarifications needed

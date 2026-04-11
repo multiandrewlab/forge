@@ -15,6 +15,7 @@ Invoke the metaswarm brainstorming extension skill, which wraps `superpowers:bra
 3. Wait for all 5 review agents to approve before proceeding to planning
 
 If superpowers is not installed, provide standalone brainstorming guidance:
+
 - Ask clarifying questions one at a time
 - Propose 2-3 approaches with trade-offs
 - Present design sections for approval

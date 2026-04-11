@@ -133,11 +133,11 @@ For EACH feature/component:
 // 1. Create test file first
 // src/lib/services/my-feature.service.test.ts
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
-import { MyFeatureService } from "./my-feature.service";
-import { createMockDependency } from "@/lib/services/mock-factories";
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { MyFeatureService } from './my-feature.service';
+import { createMockDependency } from '@/lib/services/mock-factories';
 
-describe("MyFeatureService", () => {
+describe('MyFeatureService', () => {
   let service: MyFeatureService;
   let mockDep: ReturnType<typeof createMockDependency>;
 
@@ -146,26 +146,26 @@ describe("MyFeatureService", () => {
     service = new MyFeatureService(mockDep);
   });
 
-  describe("processData", () => {
-    it("should process valid input and return result", async () => {
+  describe('processData', () => {
+    it('should process valid input and return result', async () => {
       // Arrange
-      const input = { value: "test" };
-      mockDep.fetch.mockResolvedValue({ data: "processed" });
+      const input = { value: 'test' };
+      mockDep.fetch.mockResolvedValue({ data: 'processed' });
 
       // Act
       const result = await service.processData(input);
 
       // Assert
-      expect(result).toEqual({ data: "processed" });
+      expect(result).toEqual({ data: 'processed' });
       expect(mockDep.fetch).toHaveBeenCalledWith(input);
     });
 
-    it("should throw ValidationError for invalid input", async () => {
+    it('should throw ValidationError for invalid input', async () => {
       // Arrange
-      const input = { value: "" };
+      const input = { value: '' };
 
       // Act & Assert
-      await expect(service.processData(input)).rejects.toThrow("Validation failed");
+      await expect(service.processData(input)).rejects.toThrow('Validation failed');
     });
   });
 });
@@ -184,10 +184,10 @@ pnpm test src/lib/services/my-feature.service.test.ts --run
 // 3. Create service with MINIMAL code to pass tests
 // src/lib/services/my-feature.service.ts
 
-import { z } from "zod";
+import { z } from 'zod';
 
 const InputSchema = z.object({
-  value: z.string().min(1, "Validation failed"),
+  value: z.string().min(1, 'Validation failed'),
 });
 
 export class MyFeatureService {
@@ -258,16 +258,16 @@ git diff --name-only main..HEAD
 
 ```typescript
 // CORRECT: Use shared mock factories
-import { createMockUser, createMockOrganization } from "@/test-utils/factories";
+import { createMockUser, createMockOrganization } from '@/test-utils/factories';
 
-const user = createMockUser({ email: "test@example.com" });
-const org = createMockOrganization({ name: "Test Org" });
+const user = createMockUser({ email: 'test@example.com' });
+const org = createMockOrganization({ name: 'Test Org' });
 
 // WRONG: Manual mock data (inline mock objects)
-const user = { id: "1", email: "test@example.com" } as User;
+const user = { id: '1', email: 'test@example.com' } as User;
 
 // WRONG: Inline mock objects in each test file
-const mockUser = { id: "1", email: "a@b.com", name: "Test" }; // Duplicated across tests
+const mockUser = { id: '1', email: 'a@b.com', name: 'Test' }; // Duplicated across tests
 ```
 
 ### 2. Dependency Injection
@@ -277,12 +277,12 @@ const mockUser = { id: "1", email: "a@b.com", name: "Test" }; // Duplicated acro
 export class MyService {
   constructor(
     private readonly prisma: PrismaClient,
-    private readonly logger: Logger
+    private readonly logger: Logger,
   ) {}
 }
 
 // WRONG: Direct imports of singletons
-import { prisma } from "@/lib/prisma";
+import { prisma } from '@/lib/prisma';
 ```
 
 ### 3. Zod Validation
@@ -342,11 +342,11 @@ try {
   return result;
 } catch (error) {
   if (error instanceof RateLimitError) {
-    logger.warn({ error }, "Rate limited, will retry");
-    throw new RetryableError("Rate limited", { cause: error });
+    logger.warn({ error }, 'Rate limited, will retry');
+    throw new RetryableError('Rate limited', { cause: error });
   }
-  logger.error({ error }, "External service failed");
-  throw new ServiceError("External call failed", { cause: error });
+  logger.error({ error }, 'External service failed');
+  throw new ServiceError('External call failed', { cause: error });
 }
 
 // WRONG: Silent failure or generic catch
@@ -385,7 +385,7 @@ src/lib/services/├── my-feature.service.ts
 ### Unit Test Structure
 
 ```typescript
-describe("ServiceName", () => {
+describe('ServiceName', () => {
   // Setup
   let service: ServiceName;
   let mockDep: { fetch: ReturnType<typeof vi.fn> };
@@ -395,8 +395,8 @@ describe("ServiceName", () => {
     service = new ServiceName(mockDep as never);
   });
 
-  describe("methodName", () => {
-    it("should <expected behavior> when <condition>", async () => {
+  describe('methodName', () => {
+    it('should <expected behavior> when <condition>', async () => {
       // Arrange
       const input = createMockInput();
 
@@ -413,18 +413,18 @@ describe("ServiceName", () => {
 ### Testing Async Operations
 
 ```typescript
-it("should handle async errors", async () => {
-  mockDep.fetch.mockRejectedValue(new Error("Network error"));
+it('should handle async errors', async () => {
+  mockDep.fetch.mockRejectedValue(new Error('Network error'));
 
-  await expect(service.fetchData()).rejects.toThrow("Network error");
+  await expect(service.fetchData()).rejects.toThrow('Network error');
 });
 ```
 
 ### Testing with Prisma
 
 ```typescript
-import { mockDeep } from "vitest-mock-extended";
-import { PrismaClient } from "@prisma/client";
+import { mockDeep } from 'vitest-mock-extended';
+import { PrismaClient } from '@prisma/client';
 
 const mockPrisma = mockDeep<PrismaClient>();
 
@@ -441,7 +441,7 @@ mockPrisma.user.findUnique.mockResolvedValue(createMockUser());
 export class ExternalApiService {
   constructor(
     private readonly httpClient: HttpClient,
-    private readonly logger: Logger
+    private readonly logger: Logger,
   ) {}
 
   async fetchData(id: string): Promise<ExternalData> {
@@ -450,8 +450,8 @@ export class ExternalApiService {
       return ExternalDataSchema.parse(response.data);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        this.logger.error({ error, id }, "Invalid response schema");
-        throw new SchemaValidationError("Invalid external data");
+        this.logger.error({ error, id }, 'Invalid response schema');
+        throw new SchemaValidationError('Invalid external data');
       }
       throw error;
     }
@@ -466,7 +466,7 @@ export class FeatureOrchestratorService {
   constructor(
     private readonly dataService: DataService,
     private readonly notificationService: NotificationService,
-    private readonly logger: Logger
+    private readonly logger: Logger,
   ) {}
 
   async processFeature(input: FeatureInput): Promise<FeatureResult> {
@@ -478,7 +478,7 @@ export class FeatureOrchestratorService {
 
     // 3. Notify
     await this.notificationService.send({
-      type: "feature_processed",
+      type: 'feature_processed',
       data,
     });
 

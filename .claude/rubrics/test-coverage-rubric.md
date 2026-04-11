@@ -14,14 +14,14 @@ This rubric evaluates test quality beyond just coverage percentages. Good tests 
 
 ## Reference Standards
 
-| Document                                | Purpose                                                        |
-| --------------------------------------- | -------------------------------------------------------------- |
-| `./guides/testing-patterns.md`    | Canonical test writing guide (philosophy, patterns, checklist) |
+| Document                                           | Purpose                                                        |
+| -------------------------------------------------- | -------------------------------------------------------------- |
+| `./guides/testing-patterns.md`                     | Canonical test writing guide (philosophy, patterns, checklist) |
 | `test-quality-anti-patterns.md (project-specific)` | Cascading failures, mock factory anti-patterns                 |
 | `test-quality-anti-patterns.md (project-specific)` | Common testing mistakes to avoid                               |
-| `docs/SERVICE_INVENTORY.md`             | Mock factory inventory & usage rules                           |
-| `src/test-utils/factories/`             | Shared mock factories (single source of truth)                 |
-| `src/test-utils/mocks/prisma.ts`        | Prisma mock client                                             |
+| `docs/SERVICE_INVENTORY.md`                        | Mock factory inventory & usage rules                           |
+| `src/test-utils/factories/`                        | Shared mock factories (single source of truth)                 |
+| `src/test-utils/mocks/prisma.ts`                   | Prisma mock client                                             |
 
 ---
 
@@ -76,7 +76,7 @@ This project enforces 100% statement, branch, function, and line coverage. See `
 ### Good Test Structure
 
 ```typescript
-describe("UserService", () => {
+describe('UserService', () => {
   let service: UserService;
   let mockPrisma: MockPrismaClient;
 
@@ -85,10 +85,10 @@ describe("UserService", () => {
     service = new UserService(mockPrisma);
   });
 
-  describe("createUser", () => {
-    it("should create user with hashed password", async () => {
+  describe('createUser', () => {
+    it('should create user with hashed password', async () => {
       // Arrange
-      const input = { email: "test@example.com", password: "password123" };
+      const input = { email: 'test@example.com', password: 'password123' };
       mockPrisma.user.create.mockResolvedValue(createMockUser(input));
 
       // Act
@@ -102,8 +102,8 @@ describe("UserService", () => {
       });
     });
 
-    it("should throw ValidationError for invalid email", async () => {
-      const input = { email: "invalid", password: "password123" };
+    it('should throw ValidationError for invalid email', async () => {
+      const input = { email: 'invalid', password: 'password123' };
 
       await expect(service.createUser(input)).rejects.toThrow(ValidationError);
     });
@@ -115,24 +115,24 @@ describe("UserService", () => {
 
 ```typescript
 // BAD - Tests implementation, not behavior
-it("should call prisma", async () => {
-  await service.getUser("123");
+it('should call prisma', async () => {
+  await service.getUser('123');
   expect(mockPrisma.user.findUnique).toHaveBeenCalled();
   // Missing: what should the result be?
 });
 
 // BAD - No meaningful assertion
-it("should work", async () => {
+it('should work', async () => {
   const result = await service.process(data);
   expect(result).toBeTruthy(); // What is "truthy"?
 });
 
 // BAD - Manual mock data
-const mockUser = { id: "1", email: "a@b.com" } as User;
+const mockUser = { id: '1', email: 'a@b.com' } as User;
 // Should use: createMockUser({ email: "a@b.com" }) from @/test-utils/factories
 
 // BAD - Real API call
-it("should fetch data", async () => {
+it('should fetch data', async () => {
   const result = await service.fetchFromApi(); // Real HTTP!
 });
 ```
@@ -248,11 +248,11 @@ import {
   createMockUser,
   createMockOrganization,
   createMockMembership,
-} from "@/test-utils/factories";
+} from '@/test-utils/factories';
 
 // Usage
-const user = createMockUser({ email: "specific@email.com" });
-const org = createMockOrganization({ plan: "ENTERPRISE" });
+const user = createMockUser({ email: 'specific@email.com' });
+const org = createMockOrganization({ plan: 'ENTERPRISE' });
 ```
 
 ### When to Create New Factories

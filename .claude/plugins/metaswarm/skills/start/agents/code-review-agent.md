@@ -346,10 +346,10 @@ Use this exact format:
 
 ### DoD Verification
 
-| # | DoD Item | Verdict | Evidence |
-| --- | --- | --- | --- |
-| 1 | <item text> | PASS | impl: `file:line`, test: `file:line` |
-| 2 | <item text> | FAIL (BLOCKING) | Expected: <X>, Found: <Y> at `file:line` |
+| #   | DoD Item    | Verdict         | Evidence                                 |
+| --- | ----------- | --------------- | ---------------------------------------- |
+| 1   | <item text> | PASS            | impl: `file:line`, test: `file:line`     |
+| 2   | <item text> | FAIL (BLOCKING) | Expected: <X>, Found: <Y> at `file:line` |
 
 ### BLOCKING Issues
 

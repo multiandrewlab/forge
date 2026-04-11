@@ -22,6 +22,7 @@ Before presenting any migration preview or file list, ALWAYS lead with this fram
 > **Nothing is lost**: Your project-specific files (CLAUDE.md, .coverage-thresholds.json, .beads/, bin/, scripts/) are NEVER touched. Only duplicate metaswarm framework files are removed.
 >
 > **Fully reversible**: All removals are staged with `git rm` (not permanently deleted). Before you commit:
+>
 > - Undo everything: `git restore --staged . && git checkout -- .`
 > - After committing: `git revert HEAD`
 >
@@ -49,12 +50,12 @@ Scan for files installed by `npx metaswarm init` that are now provided by the ma
 
 **Candidates for removal:**
 
-| Category | Path pattern |
-|---|---|
-| Embedded plugin | `.claude/plugins/metaswarm/` (entire directory) |
-| Rubrics | `.claude/rubrics/*.md` |
-| Guides | `.claude/guides/*.md` |
-| Old commands | `.claude/commands/metaswarm-setup.md`, `.claude/commands/metaswarm-update-version.md` |
+| Category        | Path pattern                                                                          |
+| --------------- | ------------------------------------------------------------------------------------- |
+| Embedded plugin | `.claude/plugins/metaswarm/` (entire directory)                                       |
+| Rubrics         | `.claude/rubrics/*.md`                                                                |
+| Guides          | `.claude/guides/*.md`                                                                 |
+| Old commands    | `.claude/commands/metaswarm-setup.md`, `.claude/commands/metaswarm-update-version.md` |
 
 **NEVER removed** (project-local files): `CLAUDE.md`, `.coverage-thresholds.json`, `.metaswarm/project-profile.json`, `.beads/`, `bin/`, `scripts/`, `.github/workflows/`, `.claude/commands/` shims.
 
@@ -65,6 +66,7 @@ Scan for files installed by `npx metaswarm init` that are now provided by the ma
 For each removal candidate, verify it is an unmodified metaswarm file using SHA-256 hash comparison.
 
 **Hash protocol:**
+
 1. Read file content
 2. Normalize line endings to LF (`\r\n` -> `\n`, `\r` -> `\n`)
 3. Strip trailing whitespace from each line
@@ -76,11 +78,11 @@ Computing hashes from the plugin's live files ensures the hash list stays curren
 
 **Classification:**
 
-| Result | Action |
-|---|---|
-| Hash matches | **Unmodified** -- add to deletion list |
-| Hash differs | **User-modified** -- flag for user decision, never auto-delete |
-| Not in hash list | **Unknown file** -- skip entirely |
+| Result           | Action                                                         |
+| ---------------- | -------------------------------------------------------------- |
+| Hash matches     | **Unmodified** -- add to deletion list                         |
+| Hash differs     | **User-modified** -- flag for user decision, never auto-delete |
+| Not in hash list | **Unknown file** -- skip entirely                              |
 
 ---
 
@@ -121,6 +123,7 @@ git restore --staged . && git checkout -- .
 ## Step 5: User Confirmation
 
 Use `AskUserQuestion`:
+
 - Remind the user: "This stages the cleanup — nothing is committed yet. You can undo with `git restore --staged . && git checkout -- .`"
 - Ask: "Ready to clean up the redundant framework files?" (not "Ready to delete files?")
 - For each user-modified file, ask individually: keep, remove, or show diff
@@ -131,6 +134,7 @@ Use `AskUserQuestion`:
 ## Step 6: Git Safety
 
 Before executing removals:
+
 1. Run `git status` to check for uncommitted changes
 2. If uncommitted changes exist, warn: "Recommended to commit or stash before migrating so changes are in their own commit. Continue anyway?"
 3. If the user declines, exit
@@ -140,9 +144,11 @@ Before executing removals:
 ## Step 7: Cleanup
 
 **Announce what you're doing**: Before running any commands, say:
+
 > "Staging the redundant files for removal. These are all framework copies — your project files are untouched. Nothing is committed yet."
 
 **Git-tracked files** -- use `git rm` (staged, reversible via `git checkout`):
+
 ```bash
 git rm -rf .claude/plugins/metaswarm/
 git rm .claude/rubrics/<each confirmed file>
@@ -163,18 +169,20 @@ git rm .claude/commands/metaswarm-update-version.md
 
 Write 6 shims to `.claude/commands/` (same as setup skill):
 
-| Shim | Routes to |
-|---|---|
-| `start-task.md` | `/metaswarm:start-task` |
-| `prime.md` | `/metaswarm:prime` |
+| Shim               | Routes to                  |
+| ------------------ | -------------------------- |
+| `start-task.md`    | `/metaswarm:start-task`    |
+| `prime.md`         | `/metaswarm:prime`         |
 | `review-design.md` | `/metaswarm:review-design` |
-| `self-reflect.md` | `/metaswarm:self-reflect` |
-| `pr-shepherd.md` | `/metaswarm:pr-shepherd` |
-| `brainstorm.md` | `/metaswarm:brainstorm` |
+| `self-reflect.md`  | `/metaswarm:self-reflect`  |
+| `pr-shepherd.md`   | `/metaswarm:pr-shepherd`   |
+| `brainstorm.md`    | `/metaswarm:brainstorm`    |
 
 Each shim:
+
 ```markdown
 <!-- Created by metaswarm setup. Routes to the metaswarm plugin. Safe to delete if you uninstall metaswarm. -->
+
 Invoke the `/metaswarm:<command-name>` skill with any arguments the user provided.
 ```
 
@@ -185,6 +193,7 @@ If a shim already exists with different content, ask before overwriting.
 ## Step 9: Profile Update
 
 Merge these fields into `.metaswarm/project-profile.json` (preserve existing fields):
+
 ```json
 {
   "distribution": "plugin",
@@ -198,6 +207,7 @@ Merge these fields into `.metaswarm/project-profile.json` (preserve existing fie
 ## Step 10: Post-Migration Summary
 
 Display what was done and next steps:
+
 ```
 ## Migration Complete
 
@@ -235,25 +245,25 @@ All removals use `git rm`, which only stages changes — files are NOT deleted f
 
 ## Error Handling
 
-| Error | Action |
-|---|---|
-| `.metaswarm/project-profile.json` missing | Create with minimal fields, proceed |
-| `git rm` fails on a file | Log error, skip file, continue |
-| Permission denied | Warn user, skip file, continue |
-| Plugin not loaded | Exit with install instructions |
-| `metaswarm_version < 0.8.0` | Warn manual intervention may be needed |
+| Error                                     | Action                                 |
+| ----------------------------------------- | -------------------------------------- |
+| `.metaswarm/project-profile.json` missing | Create with minimal fields, proceed    |
+| `git rm` fails on a file                  | Log error, skip file, continue         |
+| Permission denied                         | Warn user, skip file, continue         |
+| Plugin not loaded                         | Exit with install instructions         |
+| `metaswarm_version < 0.8.0`               | Warn manual intervention may be needed |
 
 ---
 
 ## Anti-Patterns
 
-| Anti-Pattern | Do Instead |
-|---|---|
-| Auto-deleting modified files | Flag and ask explicitly |
-| Deleting before confirming plugin works | Pre-flight check first |
-| Using `rm -rf` on tracked files | Use `git rm` (reversible) |
-| Skipping dry run preview | Always show full preview |
-| Removing project-local files | Never touch CLAUDE.md, .beads/, bin/, scripts/ |
-| Saying "deleting XX files" or "removing XX files" | Say "cleaning up XX redundant copies" |
-| Showing file list without safety context | Always lead with the safety framing |
-| Jumping straight to `git rm` commands | Explain what you're doing and why it's safe first |
+| Anti-Pattern                                      | Do Instead                                        |
+| ------------------------------------------------- | ------------------------------------------------- |
+| Auto-deleting modified files                      | Flag and ask explicitly                           |
+| Deleting before confirming plugin works           | Pre-flight check first                            |
+| Using `rm -rf` on tracked files                   | Use `git rm` (reversible)                         |
+| Skipping dry run preview                          | Always show full preview                          |
+| Removing project-local files                      | Never touch CLAUDE.md, .beads/, bin/, scripts/    |
+| Saying "deleting XX files" or "removing XX files" | Say "cleaning up XX redundant copies"             |
+| Showing file list without safety context          | Always lead with the safety framing               |
+| Jumping straight to `git rm` commands             | Explain what you're doing and why it's safe first |

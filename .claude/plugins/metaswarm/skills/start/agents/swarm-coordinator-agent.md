@@ -265,10 +265,10 @@ swarm:
   conflict_detection: true
 
   worktree_config:
-    base_dir: "../your-project-worktrees"
-    naming_pattern: "agent-{n}"
+    base_dir: '../your-project-worktrees'
+    naming_pattern: 'agent-{n}'
     port_range: [3001, 3010]
-    redis_prefix: "worktree_{n}"
+    redis_prefix: 'worktree_{n}'
 ```
 
 ## Recursive Swarm Orchestration
@@ -316,8 +316,8 @@ The Swarm Coordinator spawns Issue Orchestrators:
 // Spawn new orchestrator
 const orchestrator = await spawnOrchestrator({
   issueNumber: 123,
-  worktree: "agent-1",
-  epicId: "your-project-abc",
+  worktree: 'agent-1',
+  epicId: 'your-project-abc',
   priority: 2,
 });
 
@@ -334,8 +334,8 @@ The Swarm Coordinator produces status reports:
 
 ### Active Assignments
 
-| Issue | Epic          | Worktree | Status | Duration |
-| ----- | ------------- | -------- | ------ | -------- |
+| Issue | Epic             | Worktree | Status | Duration |
+| ----- | ---------------- | -------- | ------ | -------- |
 | #123  | your-project-abc | agent-1  | active | 2h 15m   |
 | #456  | your-project-def | agent-2  | active | 45m      |
 

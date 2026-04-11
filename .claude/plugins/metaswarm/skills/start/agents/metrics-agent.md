@@ -64,7 +64,7 @@ Parse and aggregate:
 ```typescript
 interface AgentMetrics {
   agentType: string;
-  period: "daily" | "weekly";
+  period: 'daily' | 'weekly';
   tasksAssigned: number;
   tasksCompleted: number;
   tasksFailed: number;
@@ -150,17 +150,17 @@ gh pr list --state merged --json number,createdAt,mergedAt
 
 ```typescript
 // Use PostHog API to get product metrics
-import { getPostHogMetrics } from "@/lib/services/posthog";
+import { getPostHogMetrics } from '@/lib/services/posthog';
 
 const posthogMetrics = {
   // Agent-related events
-  agentSessionsStarted: await queryPostHog("agent_session_started", { period: "7d" }),
-  agentTasksCompleted: await queryPostHog("agent_task_completed", { period: "7d" }),
+  agentSessionsStarted: await queryPostHog('agent_session_started', { period: '7d' }),
+  agentTasksCompleted: await queryPostHog('agent_task_completed', { period: '7d' }),
 
   // Product health (context for agent work)
-  activeUsers: await queryPostHog("$active_users", { period: "7d" }),
-  errorRate: await queryPostHog("error_occurred", { period: "7d" }),
-  featureUsage: await queryPostHog("feature_flags", { period: "7d" }),
+  activeUsers: await queryPostHog('$active_users', { period: '7d' }),
+  errorRate: await queryPostHog('error_occurred', { period: '7d' }),
+  featureUsage: await queryPostHog('feature_flags', { period: '7d' }),
 };
 ```
 
@@ -168,18 +168,18 @@ const posthogMetrics = {
 
 ```typescript
 // Use Stripe API for business context
-import Stripe from "stripe";
+import Stripe from 'stripe';
 
 const stripeMetrics = {
   // Revenue context for prioritization
   activeSubscriptions: await stripe.subscriptions
-    .list({ status: "active", limit: 1 })
-    .then(r => r.data.length),
+    .list({ status: 'active', limit: 1 })
+    .then((r) => r.data.length),
   mrr: await calculateMRR(),
 
   // Churn context (may affect agent priorities)
   recentCancellations: await stripe.subscriptions.list({
-    status: "canceled",
+    status: 'canceled',
     created: { gte: sevenDaysAgo },
   }),
 };
@@ -189,16 +189,16 @@ const stripeMetrics = {
 
 ```typescript
 // CloudWatch metrics for infrastructure health
-import { CloudWatch } from "@aws-sdk/client-cloudwatch";
+import { CloudWatch } from '@aws-sdk/client-cloudwatch';
 
 const awsMetrics = {
   // S3 storage (attachments, exports)
-  s3ObjectCount: await getS3Metrics("NumberOfObjects"),
-  s3StorageBytes: await getS3Metrics("BucketSizeBytes"),
+  s3ObjectCount: await getS3Metrics('NumberOfObjects'),
+  s3StorageBytes: await getS3Metrics('BucketSizeBytes'),
 
   // Lambda/API performance (if applicable)
-  apiLatencyP99: await getCloudWatchMetric("Latency", "p99"),
-  apiErrorRate: await getCloudWatchMetric("5XXError", "Average"),
+  apiLatencyP99: await getCloudWatchMetric('Latency', 'p99'),
+  apiErrorRate: await getCloudWatchMetric('5XXError', 'Average'),
 };
 ```
 
@@ -225,13 +225,13 @@ Compare current metrics to historical averages:
 ```typescript
 const trends = {
   throughputChange: ((currentWeek.prsMerged - lastWeek.prsMerged) / lastWeek.prsMerged) * 100,
-  blockerTrend: currentWeek.blockedTasks > lastWeek.blockedTasks * 1.5 ? "increasing" : "stable",
+  blockerTrend: currentWeek.blockedTasks > lastWeek.blockedTasks * 1.5 ? 'increasing' : 'stable',
   knowledgeGrowth: (factsAddedThisWeek / totalFacts) * 100,
 };
 
 // Flag anomalies
-if (trends.blockerTrend === "increasing") {
-  flagAnomaly("Blocked tasks increasing - investigate causes");
+if (trends.blockerTrend === 'increasing') {
+  flagAnomaly('Blocked tasks increasing - investigate causes');
 }
 ```
 

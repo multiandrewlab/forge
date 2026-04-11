@@ -11,6 +11,7 @@ Check the status of external AI tools (Codex CLI, Gemini CLI) and their configur
 ## Steps
 
 1. **Check CLI availability**:
+
    ```bash
    command -v codex >/dev/null 2>&1 && echo "codex: available" || echo "codex: not found"
    command -v gemini >/dev/null 2>&1 && echo "gemini: available" || echo "gemini: not found"
@@ -19,6 +20,7 @@ Check the status of external AI tools (Codex CLI, Gemini CLI) and their configur
 2. **Check configuration**: Read `.metaswarm/external-tools.yaml` if it exists. Report which adapters are enabled/disabled.
 
 3. **Run verification scripts** (if available):
+
    ```bash
    bash bin/external-tools-verify.sh
    ```

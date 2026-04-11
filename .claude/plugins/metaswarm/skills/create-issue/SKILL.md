@@ -126,7 +126,7 @@ Based on inputs, generate the full issue using the appropriate template below.
 ### Cycle 1: [Happy Path]
 
 ```typescript
-it("should [expected behavior]", async () => {
+it('should [expected behavior]', async () => {
   // Test code
 });
 ```
@@ -134,7 +134,7 @@ it("should [expected behavior]", async () => {
 ### Cycle 2: [Error Handling]
 
 ```typescript
-it("should handle [error case]", async () => {
+it('should handle [error case]', async () => {
   // Test code
 });
 ```
@@ -247,12 +247,12 @@ For EACH code review iteration:
 
 2. **Address ALL comments by category**:
 
-   | Type                   | Action                                               |
-   | ---------------------- | ---------------------------------------------------- |
-   | Critical/Major         | Fix immediately                                      |
-   | Medium/Minor           | Fix before merge                                     |
-   | **Trivial/Nitpick**    | **Fix these too!** Do NOT skip                       |
-   | **Out-of-scope**       | **Investigate thoroughly** - often the BEST insights |
+   | Type                | Action                                               |
+   | ------------------- | ---------------------------------------------------- |
+   | Critical/Major      | Fix immediately                                      |
+   | Medium/Minor        | Fix before merge                                     |
+   | **Trivial/Nitpick** | **Fix these too!** Do NOT skip                       |
+   | **Out-of-scope**    | **Investigate thoroughly** - often the BEST insights |
 
 3. **For each comment**:
    - **< 1 day of work** → Implement the fix in this PR
@@ -405,7 +405,7 @@ Use the Feature template with these modifications:
 ### Test 1: Verify fix for reported issue
 
 ```typescript
-it("should [correct behavior] when [condition]", async () => {
+it('should [correct behavior] when [condition]', async () => {
   // Reproduce the bug scenario
   // Verify it's now fixed
 });
@@ -415,7 +415,7 @@ it("should [correct behavior] when [condition]", async () => {
 ### Test 2: Regression test
 
 ```typescript
-it("should not regress [related functionality]", async () => {
+it('should not regress [related functionality]', async () => {
   // Ensure fix doesn't break other things
 });
 ```

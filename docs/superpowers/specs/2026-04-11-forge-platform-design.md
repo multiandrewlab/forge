@@ -371,6 +371,7 @@ Auth:            LoginForm, RegisterForm
 ### LangChain.js Abstraction
 
 Provider factory reads `LLM_PROVIDER` env var and returns the appropriate LangChain `BaseChatModel`:
+
 - `ollama` → `ChatOllama` (default for local dev, gemma4 model)
 - `openai` → `ChatOpenAI`
 - `vertex` → `ChatVertexAI`
@@ -387,6 +388,7 @@ Three chains: `autocomplete` (code/markdown completion), `generate` (content fro
 ### AI Rate Limiting
 
 All AI endpoints enforce per-user concurrency limits:
+
 - **1 in-flight AI request per user** — second request returns HTTP 429 with `Retry-After` header
 - **Request timeout:** 60 seconds max streaming duration, then server closes the SSE connection
 - **Token budget (production):** When using OpenAI/Vertex, a daily per-user token budget is enforced (configurable via env). Ollama has no budget limit since it's local.
@@ -443,6 +445,7 @@ Local auth passwords MUST be hashed with **bcrypt (cost factor >= 12)** or **Arg
 ### Authentication Rate Limiting
 
 Auth endpoints enforce per-IP rate limits to prevent credential stuffing:
+
 - `POST /api/auth/login`: 5 attempts per minute per IP. After 10 consecutive failures on the same account, impose a 15-minute account lockout (responded as HTTP 429 with `Retry-After`).
 - `POST /api/auth/register`: 3 registrations per hour per IP.
 - `GET /api/auth/google/callback`: 10 per minute per IP.
@@ -452,6 +455,7 @@ Rate limiting is implemented as a Fastify `onRequest` hook using an in-memory ra
 ### Link Preview SSRF Protection
 
 When `content_type='link'`, the server fetches Open Graph metadata from `link_url`. This fetch is an SSRF vector. Mitigations:
+
 - **Scheme allowlist**: Only `https://` URLs are fetched. `http://`, `file://`, `ftp://`, and other schemes are rejected.
 - **IP blocklist**: After DNS resolution, the resolved IP is checked against blocked ranges before the request is made: `127.0.0.0/8`, `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `169.254.0.0/16`, `::1/128`, `fc00::/7`. If the resolved IP falls in any blocked range, the fetch is aborted and `link_preview` is set to NULL.
 - **Timeout & size cap**: Fetch timeout of 5 seconds, response body capped at 1 MB. Redirect limit of 3 hops, each hop re-checked against the IP blocklist.
@@ -471,47 +475,47 @@ Access tokens are stored in memory (Pinia store) and sent via `Authorization: Be
 
 ### Phase 1: MVP (Issues 1-7)
 
-| # | Issue | Depends On |
-|---|-------|-----------|
-| 1 | Project scaffolding & Docker Compose | — |
-| 2 | Database schema & migrations | 1 |
-| 3 | Authentication (Google SSO + local) | 1, 2 |
-| 4 | Core post CRUD & editor | 2, 3 |
-| 5 | App shell & feed UI | 3, 4 |
-| 6 | Voting, bookmarks & tags | 4, 5 |
-| 7 | Comments & inline commenting | 4, 5 |
+| #   | Issue                                | Depends On |
+| --- | ------------------------------------ | ---------- |
+| 1   | Project scaffolding & Docker Compose | —          |
+| 2   | Database schema & migrations         | 1          |
+| 3   | Authentication (Google SSO + local)  | 1, 2       |
+| 4   | Core post CRUD & editor              | 2, 3       |
+| 5   | App shell & feed UI                  | 3, 4       |
+| 6   | Voting, bookmarks & tags             | 4, 5       |
+| 7   | Comments & inline commenting         | 4, 5       |
 
 ### Phase 2: Real-Time & Search (Issues 8-9)
 
-| # | Issue | Depends On |
-|---|-------|-----------|
-| 8 | WebSocket infrastructure & real-time events | 5 |
-| 9 | Search (PostgreSQL full-text + Cmd+K modal) | 4, 5 |
+| #   | Issue                                       | Depends On |
+| --- | ------------------------------------------- | ---------- |
+| 8   | WebSocket infrastructure & real-time events | 5          |
+| 9   | Search (PostgreSQL full-text + Cmd+K modal) | 4, 5       |
 
 ### Phase 3: AI Features (Issues 10-13)
 
-| # | Issue | Depends On |
-|---|-------|-----------|
-| 10 | LangChain integration & AI autocomplete | 4 |
-| 11 | AI content generation | 10 |
-| 12 | AI-powered search | 9, 10 |
-| 13 | Prompt playground | 10 |
+| #   | Issue                                   | Depends On |
+| --- | --------------------------------------- | ---------- |
+| 10  | LangChain integration & AI autocomplete | 4          |
+| 11  | AI content generation                   | 10         |
+| 12  | AI-powered search                       | 9, 10      |
+| 13  | Prompt playground                       | 10         |
 
 ### Phase 4: Collaboration & Polish (Issues 14-18)
 
-| # | Issue | Depends On |
-|---|-------|-----------|
-| 14 | Revision history & visual diffs | 4 |
-| 15 | Forking system | 4, 6 |
-| 16 | Multi-file posts & file uploads | 4 |
-| 17 | Link sharing & rich previews | 4 |
-| 18 | User profiles & gamification | 6 |
+| #   | Issue                           | Depends On |
+| --- | ------------------------------- | ---------- |
+| 14  | Revision history & visual diffs | 4          |
+| 15  | Forking system                  | 4, 6       |
+| 16  | Multi-file posts & file uploads | 4          |
+| 17  | Link sharing & rich previews    | 4          |
+| 18  | User profiles & gamification    | 6          |
 
 ### Future
 
-| # | Issue | Depends On |
-|---|-------|-----------|
-| 19 | Code execution sandbox | 13 |
+| #   | Issue                  | Depends On |
+| --- | ---------------------- | ---------- |
+| 19  | Code execution sandbox | 13         |
 
 **Decision: Code execution sandbox deferred.** The brief lists code execution as part of the Playground feature. This is intentionally deferred because: (1) secure sandboxed code execution requires significant infrastructure decisions (Firecracker microVMs, Docker-in-Docker, WASM runtimes) that are orthogonal to the rest of the platform, (2) the prompt playground delivers the higher-value part of the Playground feature first, and (3) the sandbox can be added as a self-contained feature without modifying existing code. Issue 19 should spec the sandbox runtime when it's picked up.
 

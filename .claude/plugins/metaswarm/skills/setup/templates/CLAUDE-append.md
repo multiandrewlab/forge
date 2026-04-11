@@ -1,4 +1,3 @@
-
 ## metaswarm
 
 This project uses [metaswarm](https://github.com/dsifry/metaswarm) for multi-agent orchestration with Claude Code. It provides 18 specialized agents, a 9-phase development workflow, and quality gates that enforce TDD, coverage thresholds, and spec-driven development.
@@ -10,16 +9,16 @@ This project uses [metaswarm](https://github.com/dsifry/metaswarm) for multi-age
 
 ### Available Commands
 
-| Command | Purpose |
-|---|---|
-| `/start-task` | Begin tracked work on a task |
-| `/prime` | Load relevant knowledge before starting |
-| `/review-design` | Trigger parallel design review gate (5 agents) |
-| `/pr-shepherd <pr>` | Monitor a PR through to merge |
-| `/self-reflect` | Extract learnings after a PR merge |
-| `/handle-pr-comments` | Handle PR review comments |
-| `/brainstorm` | Refine an idea before implementation |
-| `/create-issue` | Create a well-structured GitHub Issue |
+| Command               | Purpose                                        |
+| --------------------- | ---------------------------------------------- |
+| `/start-task`         | Begin tracked work on a task                   |
+| `/prime`              | Load relevant knowledge before starting        |
+| `/review-design`      | Trigger parallel design review gate (5 agents) |
+| `/pr-shepherd <pr>`   | Monitor a PR through to merge                  |
+| `/self-reflect`       | Extract learnings after a PR merge             |
+| `/handle-pr-comments` | Handle PR review comments                      |
+| `/brainstorm`         | Refine an idea before implementation           |
+| `/create-issue`       | Create a well-structured GitHub Issue          |
 
 ### Quality Gates
 

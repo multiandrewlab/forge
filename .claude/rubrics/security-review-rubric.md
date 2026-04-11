@@ -39,7 +39,7 @@ This rubric ensures code changes don't introduce security vulnerabilities. Based
 
 ```typescript
 // CRITICAL - No auth check
-app.get("/api/users", async c => {
+app.get('/api/users', async (c) => {
   const users = await prisma.user.findMany(); // No auth middleware!
 });
 
@@ -70,13 +70,13 @@ const account = await prisma.emailAccount.findUnique({
 
 ```typescript
 // CRITICAL - Hardcoded secret
-const API_KEY = "sk_live_abc123...";
+const API_KEY = 'sk_live_abc123...';
 
 // CRITICAL - Secret in logs
-logger.info({ apiKey, token }, "Making request");
+logger.info({ apiKey, token }, 'Making request');
 
 // HIGH - Weak hashing
-const hash = crypto.createHash("md5").update(password);
+const hash = crypto.createHash('md5').update(password);
 ```
 
 ---
@@ -192,7 +192,7 @@ pnpm audit
 const response = await fetch(userProvidedUrl); // No validation!
 
 // CRITICAL - Internal network access
-if (url.includes("localhost") || url.includes("127.0.0.1")) {
+if (url.includes('localhost') || url.includes('127.0.0.1')) {
   // This check is bypassable!
 }
 ```
@@ -201,12 +201,12 @@ if (url.includes("localhost") || url.includes("127.0.0.1")) {
 
 ## Reference Standards
 
-| Document                                | Purpose                                 |
-| --------------------------------------- | --------------------------------------- |
-| `CLAUDE.md`                             | Architecture, auth patterns, guidelines |
-| `./guides/testing-patterns.md`    | Testing philosophy, mock factories      |
-| TypeScript strict mode                  | Follow conventions from tsconfig.json and ESLint configuration |
-| `docs/SERVICE_INVENTORY.md`             | Service catalog                         |
+| Document                       | Purpose                                                        |
+| ------------------------------ | -------------------------------------------------------------- |
+| `CLAUDE.md`                    | Architecture, auth patterns, guidelines                        |
+| `./guides/testing-patterns.md` | Testing philosophy, mock factories                             |
+| TypeScript strict mode         | Follow conventions from tsconfig.json and ESLint configuration |
+| `docs/SERVICE_INVENTORY.md`    | Service catalog                                                |
 
 ---
 
@@ -214,20 +214,20 @@ if (url.includes("localhost") || url.includes("127.0.0.1")) {
 
 ### Auth Security
 
-| Check              | Severity | What to Look For                    |
-| ------------------ | -------- | ----------------------------------- |
-| JWT verification   | CRITICAL | All API routes use auth middleware  |
-| Org scoping        | CRITICAL | All queries scoped to organization  |
-| Webhook signatures | CRITICAL | Webhooks verified via signatures    |
-| Role checks        | HIGH     | RBAC enforced for admin operations  |
+| Check              | Severity | What to Look For                   |
+| ------------------ | -------- | ---------------------------------- |
+| JWT verification   | CRITICAL | All API routes use auth middleware |
+| Org scoping        | CRITICAL | All queries scoped to organization |
+| Webhook signatures | CRITICAL | Webhooks verified via signatures   |
+| Role checks        | HIGH     | RBAC enforced for admin operations |
 
 ### Payment Security
 
-| Check             | Severity | What to Look For                        |
-| ----------------- | -------- | --------------------------------------- |
+| Check             | Severity | What to Look For                         |
+| ----------------- | -------- | ---------------------------------------- |
 | Webhook signature | CRITICAL | Always verify payment webhook signatures |
-| PCI compliance    | HIGH     | Never log or store full card numbers    |
-| Idempotency       | MEDIUM   | Use idempotency keys for payments       |
+| PCI compliance    | HIGH     | Never log or store full card numbers     |
+| Idempotency       | MEDIUM   | Use idempotency keys for payments        |
 
 ### Analytics
 

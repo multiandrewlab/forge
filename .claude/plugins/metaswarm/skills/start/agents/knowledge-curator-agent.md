@@ -65,7 +65,7 @@ gh api "repos/owner/repo/pulls/<pr-number>/comments" --paginate
 
 ```typescript
 // Look for patterns in CodeRabbit comments
-const codeRabbitComments = comments.filter(c => c.user.login.includes("coderabbit"));
+const codeRabbitComments = comments.filter((c) => c.user.login.includes('coderabbit'));
 
 for (const comment of codeRabbitComments) {
   // Parse the comment for actionable insights
@@ -86,7 +86,7 @@ for (const comment of codeRabbitComments) {
 ```typescript
 // Look for educational comments from humans
 const humanComments = comments.filter(
-  c => !c.user.login.includes("coderabbit") && !c.user.login.includes("bot")
+  (c) => !c.user.login.includes('coderabbit') && !c.user.login.includes('bot'),
 );
 
 for (const comment of humanComments) {
@@ -187,7 +187,7 @@ if (similarity > 0.8) {
 
   // Increase confidence if multiple sources agree
   if (existingFact.provenance.length >= 3) {
-    existingFact.confidence = "high";
+    existingFact.confidence = 'high';
   }
 } else {
   // Create new fact

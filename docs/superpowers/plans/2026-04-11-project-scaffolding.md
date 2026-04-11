@@ -18,6 +18,7 @@
 ### Task 1: Root Workspace Configuration
 
 **Files:**
+
 - Modify: `package.json`
 - Create: `tsconfig.base.json`
 - Modify: `.gitignore`
@@ -29,11 +30,7 @@
   "name": "forge",
   "version": "1.0.0",
   "private": true,
-  "workspaces": [
-    "packages/shared",
-    "packages/server",
-    "packages/client"
-  ],
+  "workspaces": ["packages/shared", "packages/server", "packages/client"],
   "scripts": {
     "build": "npm run build --workspaces",
     "pretest": "npm run build --workspace=packages/shared",
@@ -58,13 +55,8 @@
     "vitest": "^3.0.0"
   },
   "lint-staged": {
-    "*.{ts,vue,js}": [
-      "eslint --fix",
-      "prettier --write"
-    ],
-    "*.{json,md,css,yaml,yml}": [
-      "prettier --write"
-    ]
+    "*.{ts,vue,js}": ["eslint --fix", "prettier --write"],
+    "*.{json,md,css,yaml,yml}": ["prettier --write"]
   }
 }
 ```
@@ -98,6 +90,7 @@ Note: Keep existing `repository`, `bugs`, `homepage` fields from current package
 - [ ] **Step 3: Update `.gitignore`**
 
 Append to existing `.gitignore`:
+
 ```
 # TypeScript build info
 *.tsbuildinfo
@@ -115,6 +108,7 @@ git commit -m "feat: configure npm workspaces and TypeScript base config"
 ### Task 2: Shared Package
 
 **Files:**
+
 - Create: `packages/shared/package.json`
 - Create: `packages/shared/tsconfig.json`
 - Create: `packages/shared/src/constants/index.ts`
@@ -248,9 +242,7 @@ export const createPostSchema = z.object({
     ContentType.Link,
   ]),
   language: z.string().nullable().optional(),
-  visibility: z
-    .enum([Visibility.Public, Visibility.Private])
-    .default(Visibility.Public),
+  visibility: z.enum([Visibility.Public, Visibility.Private]).default(Visibility.Public),
   isDraft: z.boolean().default(true),
 });
 
@@ -294,6 +286,7 @@ git commit -m "feat: add shared package with types, validators, and constants"
 ### Task 3: Server Package Setup & Health Endpoint
 
 **Files:**
+
 - Create: `packages/server/package.json`
 - Create: `packages/server/tsconfig.json`
 - Create: `packages/server/vitest.config.ts`
@@ -505,6 +498,7 @@ git commit -m "feat: add server package with Fastify health endpoint"
 ### Task 4: Client Package Setup & Placeholder Page
 
 **Files:**
+
 - Create: `packages/client/package.json`
 - Create: `packages/client/tsconfig.json`
 - Create: `packages/client/vite.config.ts`
@@ -736,9 +730,7 @@ export default router;
   <div class="min-h-screen flex items-center justify-center bg-surface">
     <div class="text-center">
       <h1 class="text-4xl font-bold text-primary">Forge</h1>
-      <p class="mt-4 text-lg text-gray-400">
-        Internal Developer Knowledge-Sharing Platform
-      </p>
+      <p class="mt-4 text-lg text-gray-400">Internal Developer Knowledge-Sharing Platform</p>
     </div>
   </div>
 </template>
@@ -822,6 +814,7 @@ git commit -m "feat: add client package with Vue 3, Tailwind v4, and PrimeVue"
 ### Task 5: Docker Compose & Infrastructure
 
 **Files:**
+
 - Create: `docker-compose.yml`
 - Create: `docker/init-db.sql`
 - Create: `docker/Dockerfile.client`
@@ -952,6 +945,7 @@ git commit -m "feat: add Docker Compose with PostgreSQL, MinIO, and Ollama"
 ### Task 6: Vitest Workspace & Coverage Configuration
 
 **Files:**
+
 - Create: `vitest.workspace.ts`
 - Create: `vitest.config.ts`
 
@@ -1018,6 +1012,7 @@ git commit -m "feat: add Vitest workspace configuration with coverage thresholds
 ### Task 7: ESLint & Prettier Configuration
 
 **Files:**
+
 - Create: `eslint.config.js`
 - Create: `.prettierrc`
 - Modify: `.husky/pre-commit`
@@ -1044,10 +1039,7 @@ export default tseslint.config(
   {
     rules: {
       '@typescript-eslint/no-explicit-any': 'error',
-      '@typescript-eslint/no-unused-vars': [
-        'error',
-        { argsIgnorePattern: '^_' },
-      ],
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
     },
   },
   {
@@ -1071,6 +1063,7 @@ export default tseslint.config(
 - [ ] **Step 3: Update `.husky/pre-commit`**
 
 Replace contents with:
+
 ```
 npx lint-staged
 ```
@@ -1097,11 +1090,13 @@ git commit -m "feat: add ESLint flat config, Prettier, and lint-staged pre-commi
 ### Task 8: Environment Configuration
 
 **Files:**
+
 - Modify: `.env.example`
 
 - [ ] **Step 1: Update `.env.example`**
 
 Replace the current contents with:
+
 ```bash
 # Copy this file to .env and fill in your values
 # NEVER commit .env — it is in .gitignore

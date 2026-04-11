@@ -10,9 +10,7 @@ export const createPostSchema = z.object({
     ContentType.Link,
   ]),
   language: z.string().nullable().optional(),
-  visibility: z
-    .enum([Visibility.Public, Visibility.Private])
-    .default(Visibility.Public),
+  visibility: z.enum([Visibility.Public, Visibility.Private]).default(Visibility.Public),
   isDraft: z.boolean().default(true),
 });
 

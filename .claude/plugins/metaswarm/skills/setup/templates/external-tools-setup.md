@@ -9,10 +9,10 @@ metaswarm can delegate implementation and review tasks to external AI models,
 enabling cost savings and cross-model adversarial review. Two tools are
 supported in v1:
 
-| Tool | Cost | Best For |
-|------|------|----------|
-| **OpenAI Codex CLI** | ChatGPT Plus ($20/mo), Pro ($200/mo), or API key (pay-per-token) | Fast implementation with structured JSON output, strong at single-file TypeScript/Python tasks |
-| **Google Gemini CLI** | Free with Google login (1,000 req/day, 60/min on Gemini 2.5 Pro) or API key (free tier: 250 req/day, Flash only) | Cost-effective review and implementation, large context window, zero-cost entry point |
+| Tool                  | Cost                                                                                                             | Best For                                                                                       |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| **OpenAI Codex CLI**  | ChatGPT Plus ($20/mo), Pro ($200/mo), or API key (pay-per-token)                                                 | Fast implementation with structured JSON output, strong at single-file TypeScript/Python tasks |
+| **Google Gemini CLI** | Free with Google login (1,000 req/day, 60/min on Gemini 2.5 Pro) or API key (free tier: 250 req/day, Flash only) | Cost-effective review and implementation, large context window, zero-cost entry point          |
 
 You can install **one or both**. metaswarm adapts automatically based on what is
 available:
@@ -75,12 +75,12 @@ codex exec "print hello world in python" --ephemeral
 
 ### Troubleshooting
 
-| Problem | Cause | Solution |
-|---------|-------|----------|
-| `command not found: codex` | npm global bin directory is not in PATH | Run `npm bin -g` to find the path, then add it to your shell profile: `export PATH="$(npm bin -g):$PATH"` |
-| `rate_limit_exceeded` or 429 errors | Free/Go API tier has low rate limits | Upgrade your OpenAI plan, or switch to ChatGPT subscription auth (Option B) which has higher limits |
-| Codex hangs indefinitely | Known issue with some rate-limit responses; CLI waits instead of erroring | Press Ctrl+C, then update to the latest version: `npm update -g @openai/codex`. The metaswarm adapter wraps all invocations with a timeout to prevent hangs. |
-| `OPENAI_API_KEY` is set but auth fails | Key may be revoked, expired, or from a different org | Verify at https://platform.openai.com/api-keys. Generate a new key if needed. |
+| Problem                                | Cause                                                                     | Solution                                                                                                                                                     |
+| -------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `command not found: codex`             | npm global bin directory is not in PATH                                   | Run `npm bin -g` to find the path, then add it to your shell profile: `export PATH="$(npm bin -g):$PATH"`                                                    |
+| `rate_limit_exceeded` or 429 errors    | Free/Go API tier has low rate limits                                      | Upgrade your OpenAI plan, or switch to ChatGPT subscription auth (Option B) which has higher limits                                                          |
+| Codex hangs indefinitely               | Known issue with some rate-limit responses; CLI waits instead of erroring | Press Ctrl+C, then update to the latest version: `npm update -g @openai/codex`. The metaswarm adapter wraps all invocations with a timeout to prevent hangs. |
+| `OPENAI_API_KEY` is set but auth fails | Key may be revoked, expired, or from a different org                      | Verify at https://platform.openai.com/api-keys. Generate a new key if needed.                                                                                |
 
 ---
 
@@ -135,12 +135,12 @@ gemini "print hello world in python" --output-format json | jq .response
 
 ### Troubleshooting
 
-| Problem | Cause | Solution |
-|---------|-------|----------|
-| `command not found: gemini` | npm global bin directory is not in PATH | Run `npm bin -g` to find the path, then add it to your shell profile: `export PATH="$(npm bin -g):$PATH"` |
-| Rate limit loop (CLI freezes or retries endlessly) | Exceeded daily or per-minute quota | Press Ctrl+C, wait a few minutes, and try again. Check your quota at https://aistudio.google.com/. The metaswarm adapter wraps invocations with a timeout to prevent infinite loops. |
-| Node.js version error | Gemini CLI requires Node.js 20 or higher | Check your version: `node --version`. Upgrade if below v20. Use `nvm install 20` if you use nvm. |
-| Google login credentials not found | OAuth tokens may have expired or `~/.gemini/` was deleted | Run `gemini` interactively and re-authenticate with "Login with Google". |
+| Problem                                            | Cause                                                     | Solution                                                                                                                                                                             |
+| -------------------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `command not found: gemini`                        | npm global bin directory is not in PATH                   | Run `npm bin -g` to find the path, then add it to your shell profile: `export PATH="$(npm bin -g):$PATH"`                                                                            |
+| Rate limit loop (CLI freezes or retries endlessly) | Exceeded daily or per-minute quota                        | Press Ctrl+C, wait a few minutes, and try again. Check your quota at https://aistudio.google.com/. The metaswarm adapter wraps invocations with a timeout to prevent infinite loops. |
+| Node.js version error                              | Gemini CLI requires Node.js 20 or higher                  | Check your version: `node --version`. Upgrade if below v20. Use `nvm install 20` if you use nvm.                                                                                     |
+| Google login credentials not found                 | OAuth tokens may have expired or `~/.gemini/` was deleted | Run `gemini` interactively and re-authenticate with "Login with Google".                                                                                                             |
 
 ---
 
@@ -166,31 +166,31 @@ Edit `.metaswarm/external-tools.yaml` to customize:
 ```yaml
 adapters:
   codex:
-    enabled: true                # Set to false to disable Codex
-    model: "gpt-5.3-codex"      # Model for Codex CLI invocations
-    timeout_seconds: 300         # Max seconds per invocation (5 min default)
-    sandbox: none                # docker | platform | none
-    auth_env_var: "OPENAI_API_KEY"
+    enabled: true # Set to false to disable Codex
+    model: 'gpt-5.3-codex' # Model for Codex CLI invocations
+    timeout_seconds: 300 # Max seconds per invocation (5 min default)
+    sandbox: none # docker | platform | none
+    auth_env_var: 'OPENAI_API_KEY'
   gemini:
-    enabled: true                # Set to false to disable Gemini
-    model: "pro"                 # Model alias: pro | flash | flash-lite
+    enabled: true # Set to false to disable Gemini
+    model: 'pro' # Model alias: pro | flash | flash-lite
     timeout_seconds: 300
     sandbox: none
-    auth_env_var: "GEMINI_API_KEY"
+    auth_env_var: 'GEMINI_API_KEY'
 
 routing:
   # How to pick the implementer for a task:
   #   cheapest-available  — prefer the cheapest tool that passes health check
   #   round-robin         — alternate between tools
   #   codex / gemini      — always use a specific tool
-  default_implementer: "cheapest-available"
+  default_implementer: 'cheapest-available'
 
   # Order for escalation when a tool fails after max retries
-  escalation_order: ["codex", "gemini", "claude"]
+  escalation_order: ['codex', 'gemini', 'claude']
 
 budget:
-  per_task_usd: 2.00             # Max spend per task before alerting the user
-  per_session_usd: 20.00         # Max total spend per session
+  per_task_usd: 2.00 # Max spend per task before alerting the user
+  per_session_usd: 20.00 # Max total spend per session
 ```
 
 **Important**: If `.metaswarm/external-tools.yaml` is absent, metaswarm works
@@ -266,10 +266,10 @@ When the orchestrator receives a work unit, it:
 After implementation, the output is reviewed by **different** models:
 
 | Writer | Reviewer 1 | Reviewer 2 |
-|--------|------------|------------|
-| Codex | Gemini | Claude |
-| Gemini | Codex | Claude |
-| Claude | Codex | Gemini |
+| ------ | ---------- | ---------- |
+| Codex  | Gemini     | Claude     |
+| Gemini | Codex      | Claude     |
+| Claude | Codex      | Gemini     |
 
 The writer never reviews its own output. This catches model-specific blind spots
 that same-model review would miss.

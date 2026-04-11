@@ -3,9 +3,9 @@ name: orchestrated-execution
 description: 4-phase execution loop for work units - IMPLEMENT, VALIDATE, ADVERSARIAL REVIEW, COMMIT
 auto_activate: false
 triggers:
-  - "orchestrated execution"
-  - "4-phase loop"
-  - "adversarial review"
+  - 'orchestrated execution'
+  - '4-phase loop'
+  - 'adversarial review'
 ---
 
 # Orchestrated Execution Skill
@@ -52,25 +52,30 @@ Before submitting a plan to the Design Review Gate, the orchestrator MUST verify
 > **Note**: The `Plan` subagent type cannot write files (it has read-only access by design). If you spawn an Architect as a Plan subagent, it will return the plan as text in its response. The orchestrator must write the plan to `PLAN.md` itself.
 
 ### Architecture Checklist
+
 - [ ] Every data access goes through a service layer (no direct DB calls from routes/handlers)
 - [ ] Each work unit has a single responsibility (max ~5 files created/modified)
 - [ ] Error handling strategy specified (typed error hierarchy, how errors cross layer boundaries)
 - [ ] No hard-coded configuration — environment variables for all external service config
 
 ### Dependency Graph Checklist
+
 - [ ] Each WU's dependencies are minimal (only depends on what it actually imports/uses)
 - [ ] No unnecessary serialization — WUs that CAN be parallel ARE marked parallel
 - [ ] No circular dependencies
 - [ ] Integration WUs exist to wire components into the app shell (not just built in isolation)
 
 ### API Contract Checklist
+
 If the plan includes HTTP endpoints or WebSocket protocols, verify:
+
 - [ ] Every HTTP endpoint specifies: method, path, request schema, all response status codes, error response shapes
 - [ ] WebSocket message types fully specified (client-to-server AND server-to-client message type tables)
 - [ ] Protocol concerns documented: heartbeat, reconnection, acknowledgment strategy
 - [ ] Response codes are explicit (not "returns the todo" but "returns 201 with the created todo")
 
 ### Security Checklist
+
 - [ ] Trust boundaries identified (which inputs are untrusted?)
 - [ ] Input validation specified for every endpoint/handler (schema, max size)
 - [ ] Rate limiting specified for expensive operations (AI API calls, file uploads)
@@ -78,7 +83,9 @@ If the plan includes HTTP endpoints or WebSocket protocols, verify:
 - [ ] Secrets management documented (.env pattern, .gitignore verification)
 
 ### UI/UX Checklist
+
 If the plan includes a user interface:
+
 - [ ] User flows documented with trigger, steps, and visible outcome (see UI-FLOWS.md template)
 - [ ] Text-based wireframes for each screen showing layout and interactive elements
 - [ ] Empty states, loading states, and error states defined for each view
@@ -86,6 +93,7 @@ If the plan includes a user interface:
 - [ ] Component hierarchy documented (what renders what, where)
 
 ### External Dependencies Checklist
+
 - [ ] All external services identified (APIs, SDKs, third-party services)
 - [ ] Required credentials/config documented (env var names, how to obtain)
 - [ ] Human checkpoint planned BEFORE work units that depend on external services
@@ -93,6 +101,7 @@ If the plan includes a user interface:
 - [ ] `.env.example` includes all required env vars
 
 ### Completeness Checklist
+
 - [ ] All human checkpoints from the spec are included
 - [ ] All features from the spec have at least one work unit
 - [ ] Tooling is consistent (one package manager, matching config files across WUs)
@@ -107,12 +116,15 @@ Every plan submitted for Design Review MUST include these sections:
 
 1. **Work Unit Decomposition** — WU list with DoD items, file scopes, dependencies
 2. **API Contract** (if applicable) — structured endpoint/protocol specs:
+
    ```markdown
    ### POST /api/todos
+
    - **Request Body**: `{ title: string }` (required, 1-500 chars, trimmed)
    - **Success**: `201 Created` -> `{ id, title, completed, createdAt, updatedAt }`
    - **Errors**: `400` (validation) / `500` (internal)
    ```
+
 3. **Security Considerations** — trust boundaries, input validation table, rate limiting table, secrets management
 4. **User Flows** (if UI exists) — text wireframes and interaction flows (use UI-FLOWS.md template)
 5. **External Dependencies** — services, credentials, setup instructions
@@ -128,15 +140,15 @@ A **work unit** is the atomic unit of orchestrated execution. Before entering th
 
 Each work unit contains:
 
-| Field | Description | Example |
-| --- | --- | --- |
-| **ID** | Unique identifier (BEADS task ID) | `bd-wu-001` |
-| **Title** | Human-readable name | "Implement auth middleware" |
-| **Spec** | Written specification with acceptance criteria | Link to design doc section |
-| **DoD Items** | Enumerated, verifiable done criteria | `[ ] Middleware rejects expired tokens` |
-| **Dependencies** | Other work units that must complete first | `[bd-wu-000]` |
-| **File Scope** | Files this work unit may touch | `src/middleware/auth.ts, src/middleware/auth.test.ts` |
-| **Human Checkpoint** | Whether to pause for human review after completion | `true` for risky changes |
+| Field                | Description                                        | Example                                               |
+| -------------------- | -------------------------------------------------- | ----------------------------------------------------- |
+| **ID**               | Unique identifier (BEADS task ID)                  | `bd-wu-001`                                           |
+| **Title**            | Human-readable name                                | "Implement auth middleware"                           |
+| **Spec**             | Written specification with acceptance criteria     | Link to design doc section                            |
+| **DoD Items**        | Enumerated, verifiable done criteria               | `[ ] Middleware rejects expired tokens`               |
+| **Dependencies**     | Other work units that must complete first          | `[bd-wu-000]`                                         |
+| **File Scope**       | Files this work unit may touch                     | `src/middleware/auth.ts, src/middleware/auth.test.ts` |
+| **Human Checkpoint** | Whether to pause for human review after completion | `true` for risky changes                              |
 
 ### Constructing Dependency Graphs
 
@@ -276,13 +288,13 @@ A **separate review subagent** checks the implementation against the spec contra
 
 **Key differences from collaborative review:**
 
-| Collaborative Review | Adversarial Review |
-| --- | --- |
-| APPROVED / CHANGES REQUIRED | PASS / FAIL |
-| Subjective quality assessment | Binary spec compliance check |
-| Reviewer suggests improvements | Reviewer finds contract violations |
-| Same reviewer can re-review | Fresh reviewer required on re-review |
-| Uses `code-review-rubric.md` | Uses `adversarial-review-rubric.md` |
+| Collaborative Review           | Adversarial Review                   |
+| ------------------------------ | ------------------------------------ |
+| APPROVED / CHANGES REQUIRED    | PASS / FAIL                          |
+| Subjective quality assessment  | Binary spec compliance check         |
+| Reviewer suggests improvements | Reviewer finds contract violations   |
+| Same reviewer can re-review    | Fresh reviewer required on re-review |
+| Uses `code-review-rubric.md`   | Uses `adversarial-review-rubric.md`  |
 
 **Orchestrator actions:**
 
@@ -344,6 +356,7 @@ Reviewed-by: adversarial-review (PASS)"
 ```
 
 **After commit:**
+
 - Update BEADS task status: `bd close <wu-task-id> --reason "4-phase loop complete. PASS."`
 - If this work unit has a **human checkpoint** flag, pause and report before continuing
 - Update the **Project Context Document** with completed work unit details
@@ -455,24 +468,29 @@ The orchestrator MUST maintain a project context document that grows with each w
 # Project Context (Maintained by Orchestrator)
 
 ## Tooling
+
 - Package manager: <npm/pnpm/yarn>
 - Test runner: <vitest/jest> (<config-file>)
 - Linter: <eslint> (<config-file>)
 - Build: <vite/webpack/tsc> (<config-file>)
 
 ## Completed Work Units
-| WU | Title | Key Files | Services Created |
-|----|-------|-----------|-----------------|
+
+| WU  | Title | Key Files | Services Created |
+| --- | ----- | --------- | ---------------- |
 
 ## Established Patterns
+
 - <pattern-1>: <description>
 - <pattern-2>: <description>
 
 ## Active Services
+
 See SERVICE-INVENTORY.md
 ```
 
 **Update rules:**
+
 - After each Phase 4 (COMMIT), add the completed work unit to the table
 - After each Phase 1 (IMPLEMENT), update patterns if new ones emerge
 - Pass this document to every coder subagent alongside the work unit spec
@@ -490,6 +508,7 @@ mkdir -p .beads/context
 ```
 
 **When to write:**
+
 - At orchestration start (initial creation)
 - After each Phase 4 (COMMIT) — add the completed work unit
 - After each Phase 1 (IMPLEMENT) — update patterns if new ones emerge
@@ -505,11 +524,11 @@ Approved plans and execution state are persisted to `.beads/` so agents can reco
 
 ### What Gets Persisted
 
-| File | Contents | Written When |
-|------|----------|-------------|
-| `.beads/plans/active-plan.md` | The adversarially-reviewed, user-approved implementation plan | After plan review gate PASS + user approval |
-| `.beads/context/project-context.md` | Project Context Document (tooling, completed WUs, patterns) | After each Phase 4 COMMIT |
-| `.beads/context/execution-state.md` | Current work unit, phase, retry count | After each phase transition |
+| File                                | Contents                                                      | Written When                                |
+| ----------------------------------- | ------------------------------------------------------------- | ------------------------------------------- |
+| `.beads/plans/active-plan.md`       | The adversarially-reviewed, user-approved implementation plan | After plan review gate PASS + user approval |
+| `.beads/context/project-context.md` | Project Context Document (tooling, completed WUs, patterns)   | After each Phase 4 COMMIT                   |
+| `.beads/context/execution-state.md` | Current work unit, phase, retry count                         | After each phase transition                 |
 
 ### Writing the Approved Plan
 
@@ -621,23 +640,28 @@ When reaching a checkpoint, present this report and **wait for explicit human ap
 ## Checkpoint: <checkpoint-name>
 
 ### Completed Work Units
-| WU | Title | Status | Review |
-| --- | --- | --- | --- |
-| WU-001 | Schema migration | PASS | Adversarial PASS |
-| WU-002 | Service layer | PASS | Adversarial PASS |
+
+| WU     | Title            | Status | Review           |
+| ------ | ---------------- | ------ | ---------------- |
+| WU-001 | Schema migration | PASS   | Adversarial PASS |
+| WU-002 | Service layer    | PASS   | Adversarial PASS |
 
 ### Key Decisions Made
+
 - <decision-1>: <rationale>
 - <decision-2>: <rationale>
 
 ### What Comes Next
+
 - WU-003: <description>
 - WU-004: <description>
 
 ### Questions for Human (if any)
+
 - <question>
 
 ---
+
 **Action required**: Reply to continue, or provide feedback to adjust course.
 ```
 
@@ -692,12 +716,14 @@ git log main..HEAD --oneline
 ### Overall Verdict: PASS / FAIL
 
 ### Work Units Summary
-| WU | Title | Impl | Validate | Review | Commit |
-| --- | --- | --- | --- | --- | --- |
-| WU-001 | <title> | Done | Pass | Pass | <sha> |
-| WU-002 | <title> | Done | Pass | Pass | <sha> |
+
+| WU     | Title   | Impl | Validate | Review | Commit |
+| ------ | ------- | ---- | -------- | ------ | ------ |
+| WU-001 | <title> | Done | Pass     | Pass   | <sha>  |
+| WU-002 | <title> | Done | Pass     | Pass   | <sha>  |
 
 ### Quality Gates
+
 - [ ] All tests pass
 - [ ] Type check clean
 - [ ] Lint clean
@@ -705,6 +731,7 @@ git log main..HEAD --oneline
 - [ ] No cross-unit integration issues
 
 ### Remaining Issues
+
 <any issues found during final review>
 
 ### Ready for PR: YES / NO
@@ -753,11 +780,11 @@ Identify what failed and gather evidence:
 
 Categorize the failure:
 
-| Classification | Description | Action |
-| --- | --- | --- |
-| **Fixable** | Clear error, known fix | Retry with specific fix instructions |
-| **Ambiguous** | Unclear root cause | Investigate before retrying |
-| **External** | Dependency, access, or environment issue | Escalate immediately |
+| Classification | Description                              | Action                               |
+| -------------- | ---------------------------------------- | ------------------------------------ |
+| **Fixable**    | Clear error, known fix                   | Retry with specific fix instructions |
+| **Ambiguous**  | Unclear root cause                       | Investigate before retrying          |
+| **External**   | Dependency, access, or environment issue | Escalate immediately                 |
 
 ### Step 3: RETRY (max 3 attempts)
 
@@ -781,21 +808,25 @@ After 3 failed attempts, escalate to human with full context:
 ## Escalation: Work Unit <wu-id> Failed After 3 Attempts
 
 ### Failure History
-| Attempt | Phase | Error | Fix Tried |
-| --- | --- | --- | --- |
-| 1 | VALIDATE | Tests fail: auth.test.ts:34 | Fixed mock setup |
-| 2 | REVIEW | DoD #3 not met: missing edge case | Added edge case test |
-| 3 | VALIDATE | Type error in cross-module import | Restructured imports |
+
+| Attempt | Phase    | Error                             | Fix Tried            |
+| ------- | -------- | --------------------------------- | -------------------- |
+| 1       | VALIDATE | Tests fail: auth.test.ts:34       | Fixed mock setup     |
+| 2       | REVIEW   | DoD #3 not met: missing edge case | Added edge case test |
+| 3       | VALIDATE | Type error in cross-module import | Restructured imports |
 
 ### Root Cause Assessment
+
 <best understanding of why this keeps failing>
 
 ### Options
+
 1. <option-1>
 2. <option-2>
 3. Abandon this work unit and restructure
 
 ### Recommendation
+
 <which option and why>
 ```
 
@@ -805,23 +836,23 @@ After 3 failed attempts, escalate to human with full context:
 
 These are explicit DON'Ts. Violating any of these undermines the entire orchestration pattern.
 
-| # | Anti-Pattern | Why It's Wrong | What to Do Instead |
-| --- | --- | --- | --- |
-| 1 | **Self-certifying** — coding subagent says "tests pass" and you believe it | Subagents can hallucinate, skip tests, or misinterpret results | Orchestrator runs validation commands independently |
-| 2 | **Skipping adversarial review** — "the code looks fine, let's commit" | Visual inspection misses spec violations; confirmation bias | Always run adversarial review against DoD items |
-| 3 | **Reusing a reviewer** — same subagent re-reviews after FAIL | Anchoring bias: reviewer remembers previous findings and checks for those specifically instead of reviewing fresh | Spawn a new reviewer instance with no prior context |
-| 4 | **Passing previous findings to new reviewer** — "last reviewer found X, check if fixed" | Creates anchoring bias; new reviewer should find issues independently | Pass only: spec, DoD items, diff. Nothing about previous reviews |
-| 5 | **Trusting subagent file scope claims** — "I only changed the files in scope" | Subagents may accidentally modify files outside scope | Run `git diff --name-only` and verify each file independently |
-| 6 | **Combining phases** — "implement and validate in one step" | Removes the independence that makes validation meaningful | Run each phase as a distinct step with its own output |
-| 7 | **Continuing past a checkpoint without human response** | Defeats the purpose of proactive checkpoints | Wait. If urgent, escalate — don't skip |
-| 8 | **Skipping final comprehensive review** — "all units passed individually" | Per-unit reviews can't catch cross-unit integration issues | Always run the final review after all units are committed |
-| 9 | **Skipping coverage enforcement** — "tests pass, coverage doesn't matter" | Coverage thresholds exist for a reason; low coverage means untested paths | Read .coverage-thresholds.json and run the enforcement command. Block on failure. |
-| 10 | **Building UI components in isolation** — all components tested but never wired into the app | Users can't interact with components that aren't rendered | Plan must include integration WUs that wire components into the app shell |
-| 11 | **Proceeding without external credentials** — building features that require API keys without verifying the user has them | Features will fail at runtime; user discovers this after 10+ commits | Checkpoint before external-service WUs to verify credentials are configured |
-| 12 | **Advisory quality gates** — treating FAIL as a suggestion rather than a blocking transition | Undermines the entire trust model; equivalent to skipping the gate | Quality gates are state transitions. FAIL means retry or escalate, never skip. |
-| 13 | **Using `--no-verify`** — bypassing pre-commit hooks on git commits | Pre-commit hooks catch lint errors, type errors, and formatting issues before they enter history | Never use `--no-verify`. Fix the underlying issue instead. |
-| 14 | **Skipping design review gate after brainstorming** — going directly from brainstorming to writing-plans | Expensive implementation work begins on unreviewed designs | Always run the 5-agent design review gate between brainstorming and planning |
-| 15 | **Skipping plan review gate** — presenting a plan to the user without adversarial review | Plans with feasibility gaps, missing requirements, or scope creep reach implementation | Always run the 3-reviewer plan review gate before presenting any plan |
+| #   | Anti-Pattern                                                                                                              | Why It's Wrong                                                                                                    | What to Do Instead                                                                |
+| --- | ------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| 1   | **Self-certifying** — coding subagent says "tests pass" and you believe it                                                | Subagents can hallucinate, skip tests, or misinterpret results                                                    | Orchestrator runs validation commands independently                               |
+| 2   | **Skipping adversarial review** — "the code looks fine, let's commit"                                                     | Visual inspection misses spec violations; confirmation bias                                                       | Always run adversarial review against DoD items                                   |
+| 3   | **Reusing a reviewer** — same subagent re-reviews after FAIL                                                              | Anchoring bias: reviewer remembers previous findings and checks for those specifically instead of reviewing fresh | Spawn a new reviewer instance with no prior context                               |
+| 4   | **Passing previous findings to new reviewer** — "last reviewer found X, check if fixed"                                   | Creates anchoring bias; new reviewer should find issues independently                                             | Pass only: spec, DoD items, diff. Nothing about previous reviews                  |
+| 5   | **Trusting subagent file scope claims** — "I only changed the files in scope"                                             | Subagents may accidentally modify files outside scope                                                             | Run `git diff --name-only` and verify each file independently                     |
+| 6   | **Combining phases** — "implement and validate in one step"                                                               | Removes the independence that makes validation meaningful                                                         | Run each phase as a distinct step with its own output                             |
+| 7   | **Continuing past a checkpoint without human response**                                                                   | Defeats the purpose of proactive checkpoints                                                                      | Wait. If urgent, escalate — don't skip                                            |
+| 8   | **Skipping final comprehensive review** — "all units passed individually"                                                 | Per-unit reviews can't catch cross-unit integration issues                                                        | Always run the final review after all units are committed                         |
+| 9   | **Skipping coverage enforcement** — "tests pass, coverage doesn't matter"                                                 | Coverage thresholds exist for a reason; low coverage means untested paths                                         | Read .coverage-thresholds.json and run the enforcement command. Block on failure. |
+| 10  | **Building UI components in isolation** — all components tested but never wired into the app                              | Users can't interact with components that aren't rendered                                                         | Plan must include integration WUs that wire components into the app shell         |
+| 11  | **Proceeding without external credentials** — building features that require API keys without verifying the user has them | Features will fail at runtime; user discovers this after 10+ commits                                              | Checkpoint before external-service WUs to verify credentials are configured       |
+| 12  | **Advisory quality gates** — treating FAIL as a suggestion rather than a blocking transition                              | Undermines the entire trust model; equivalent to skipping the gate                                                | Quality gates are state transitions. FAIL means retry or escalate, never skip.    |
+| 13  | **Using `--no-verify`** — bypassing pre-commit hooks on git commits                                                       | Pre-commit hooks catch lint errors, type errors, and formatting issues before they enter history                  | Never use `--no-verify`. Fix the underlying issue instead.                        |
+| 14  | **Skipping design review gate after brainstorming** — going directly from brainstorming to writing-plans                  | Expensive implementation work begins on unreviewed designs                                                        | Always run the 5-agent design review gate between brainstorming and planning      |
+| 15  | **Skipping plan review gate** — presenting a plan to the user without adversarial review                                  | Plans with feasibility gaps, missing requirements, or scope creep reach implementation                            | Always run the 3-reviewer plan review gate before presenting any plan             |
 
 ---
 

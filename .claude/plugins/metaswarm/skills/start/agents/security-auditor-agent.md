@@ -95,9 +95,9 @@ For each changed file, check against all OWASP categories:
 // 4. Role/permission checks via RBAC middleware
 
 // Pattern to find:
-const auth = c.get("auth"); // Clerk auth from Hono middleware
+const auth = c.get('auth'); // Clerk auth from Hono middleware
 if (!auth?.userId) {
-  return c.json({ error: "Unauthorized" }, 401);
+  return c.json({ error: 'Unauthorized' }, 401);
 }
 
 // Pattern to verify (org-scoped queries):
@@ -359,10 +359,10 @@ export async function GET(req, { params }) {
 }
 
 // RIGHT - Ownership verified via org-scoped query
-app.get("/api/contacts/:id", async c => {
-  const auth = c.get("auth");
+app.get('/api/contacts/:id', async (c) => {
+  const auth = c.get('auth');
   const contact = await prisma.contact.findUnique({
-    where: { id: c.req.param("id"), organizationId: auth.orgId },
+    where: { id: c.req.param('id'), organizationId: auth.orgId },
   });
 });
 ```
@@ -379,7 +379,7 @@ export async function POST(req) {
 // RIGHT - Signature verified
 export async function POST(req) {
   const body = await req.text();
-  const sig = req.headers.get("stripe-signature");
+  const sig = req.headers.get('stripe-signature');
   const event = stripe.webhooks.constructEvent(body, sig, webhookSecret);
 }
 ```

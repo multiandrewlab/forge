@@ -29,14 +29,14 @@ Run each check below and present results in a single formatted report.
 
 Check these 6 files in `.claude/commands/`:
 
-| Shim | Expected |
-|---|---|
-| `start-task.md` | Routes to `/metaswarm:start-task` |
-| `prime.md` | Routes to `/metaswarm:prime` |
+| Shim               | Expected                             |
+| ------------------ | ------------------------------------ |
+| `start-task.md`    | Routes to `/metaswarm:start-task`    |
+| `prime.md`         | Routes to `/metaswarm:prime`         |
 | `review-design.md` | Routes to `/metaswarm:review-design` |
-| `self-reflect.md` | Routes to `/metaswarm:self-reflect` |
-| `pr-shepherd.md` | Routes to `/metaswarm:pr-shepherd` |
-| `brainstorm.md` | Routes to `/metaswarm:brainstorm` |
+| `self-reflect.md`  | Routes to `/metaswarm:self-reflect`  |
+| `pr-shepherd.md`   | Routes to `/metaswarm:pr-shepherd`   |
+| `brainstorm.md`    | Routes to `/metaswarm:brainstorm`    |
 
 For each: report Present/Missing. If the file exists but does not contain "metaswarm" routing, flag as `present (non-metaswarm content)`.
 
@@ -94,22 +94,24 @@ node --version 2>/dev/null
 ```markdown
 ## Metaswarm Status Report
 
-| Component | Status |
-|---|---|
-| Plugin version | 1.0.0 |
-| Project setup | Configured (distribution: plugin) |
-| Command shims | 6/6 present |
-| Legacy embedded plugin | Not detected |
-| BEADS plugin | Not separately installed |
-| bd CLI | Available (v0.5.2) |
-| External tools | Codex: available, Gemini: not installed |
-| Coverage thresholds | 100% (all categories) |
-| Node.js | Available (v22.4.0) |
+| Component              | Status                                  |
+| ---------------------- | --------------------------------------- |
+| Plugin version         | 1.0.0                                   |
+| Project setup          | Configured (distribution: plugin)       |
+| Command shims          | 6/6 present                             |
+| Legacy embedded plugin | Not detected                            |
+| BEADS plugin           | Not separately installed                |
+| bd CLI                 | Available (v0.5.2)                      |
+| External tools         | Codex: available, Gemini: not installed |
+| Coverage thresholds    | 100% (all categories)                   |
+| Node.js                | Available (v22.4.0)                     |
 
 ### Issues Found
+
 - None
 
 ### Recommendations
+
 - None
 ```
 
@@ -117,10 +119,12 @@ When issues are found:
 
 ```markdown
 ### Issues Found
+
 1. Legacy embedded plugin detected alongside marketplace plugin -- run `/metaswarm:migrate`
 2. Command shim `start-task.md` missing -- run `/metaswarm:setup`
 
 ### Recommendations
+
 1. Install `bd` CLI for knowledge priming and self-reflect
 2. Configure external tools for cross-model review (`.metaswarm/external-tools.yaml`)
 ```

@@ -78,17 +78,17 @@ git push -u origin "$(git branch --show-current)"
 
 Use prefixed branch names that communicate intent:
 
-| Prefix      | Purpose                          | Example                          |
-| ----------- | -------------------------------- | -------------------------------- |
-| `feature/`  | New functionality                | `feature/user-authentication`    |
-| `feat/`     | Short form of feature            | `feat/add-search`                |
-| `fix/`      | Bug fixes                        | `fix/null-reference-in-loader`   |
-| `chore/`    | Maintenance, deps, config        | `chore/update-dependencies`      |
-| `refactor/` | Code restructuring (no behavior change) | `refactor/extract-service` |
-| `docs/`     | Documentation changes            | `docs/api-reference`             |
-| `test/`     | Test additions or fixes          | `test/add-integration-tests`     |
-| `ci/`       | CI/CD pipeline changes           | `ci/add-coverage-gate`           |
-| `hotfix/`   | Urgent production fixes          | `hotfix/security-patch`          |
+| Prefix      | Purpose                                 | Example                        |
+| ----------- | --------------------------------------- | ------------------------------ |
+| `feature/`  | New functionality                       | `feature/user-authentication`  |
+| `feat/`     | Short form of feature                   | `feat/add-search`              |
+| `fix/`      | Bug fixes                               | `fix/null-reference-in-loader` |
+| `chore/`    | Maintenance, deps, config               | `chore/update-dependencies`    |
+| `refactor/` | Code restructuring (no behavior change) | `refactor/extract-service`     |
+| `docs/`     | Documentation changes                   | `docs/api-reference`           |
+| `test/`     | Test additions or fixes                 | `test/add-integration-tests`   |
+| `ci/`       | CI/CD pipeline changes                  | `ci/add-coverage-gate`         |
+| `hotfix/`   | Urgent production fixes                 | `hotfix/security-patch`        |
 
 Rules:
 
@@ -115,18 +115,18 @@ Use the [Conventional Commits](https://www.conventionalcommits.org/) specificati
 
 Types:
 
-| Type         | When to Use                                  |
-| ------------ | -------------------------------------------- |
-| `feat`       | New feature                                  |
-| `fix`        | Bug fix                                      |
-| `chore`      | Maintenance (deps, config, build)            |
-| `refactor`   | Code change that neither fixes nor adds      |
-| `test`       | Adding or correcting tests                   |
-| `docs`       | Documentation only                           |
-| `style`      | Formatting, whitespace (no logic change)     |
-| `perf`       | Performance improvement                      |
-| `ci`         | CI/CD configuration changes                  |
-| `revert`     | Reverting a previous commit                  |
+| Type       | When to Use                              |
+| ---------- | ---------------------------------------- |
+| `feat`     | New feature                              |
+| `fix`      | Bug fix                                  |
+| `chore`    | Maintenance (deps, config, build)        |
+| `refactor` | Code change that neither fixes nor adds  |
+| `test`     | Adding or correcting tests               |
+| `docs`     | Documentation only                       |
+| `style`    | Formatting, whitespace (no logic change) |
+| `perf`     | Performance improvement                  |
+| `ci`       | CI/CD configuration changes              |
+| `revert`   | Reverting a previous commit              |
 
 ### AI Attribution
 

@@ -169,23 +169,23 @@ SLACK_BEADS_ALERTS_CHANNEL=C0XXXXXXXX # Critical alerts channel
 The `BeadsSlackNotificationService` can still be used for programmatic notifications:
 
 ```typescript
-import { getBeadsSlackNotificationService } from "@/lib/services/beads";
+import { getBeadsSlackNotificationService } from '@/lib/services/beads';
 
 const slack = getBeadsSlackNotificationService();
 
 // Send task update
 await slack.notifyTaskUpdate({
-  taskId: "bd-a1b2",
-  title: "Implement feature X",
-  status: "closed",
-  agentType: "coder-agent",
+  taskId: 'bd-a1b2',
+  title: 'Implement feature X',
+  status: 'closed',
+  agentType: 'coder-agent',
 });
 
 // Send alert
 await slack.notifyAlert({
-  level: "error",
-  title: "Build failed",
-  message: "TypeScript compilation errors",
+  level: 'error',
+  title: 'Build failed',
+  message: 'TypeScript compilation errors',
   actionRequired: true,
 });
 ```
@@ -199,7 +199,7 @@ await slack.notifyAlert({
 ```typescript
 // If Slack unavailable, log but don't fail
 if (!slackService.isAvailable()) {
-  logger.warn("Slack not configured - notification skipped");
+  logger.warn('Slack not configured - notification skipped');
   return; // Continue processing without Slack
 }
 ```
@@ -210,7 +210,7 @@ The daemon validates user IDs against `BEADS_ALLOWED_USERS`:
 
 ```typescript
 if (config.allowedUsers.length > 0 && !config.allowedUsers.includes(userId)) {
-  return { text: "❌ Unauthorized" };
+  return { text: '❌ Unauthorized' };
 }
 ```
 

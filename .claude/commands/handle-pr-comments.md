@@ -29,14 +29,14 @@ This command helps systematically address PR review comments from automated tool
 
 ### Mandatory Comment Handling Rules
 
-| Comment Type           | Action                     | DO NOT Skip                 |
-| ---------------------- | -------------------------- | --------------------------- |
-| Critical/Major         | Fix immediately            | Never                       |
-| High/Medium            | Fix before merge           | Never                       |
-| Minor                  | Fix                        | Never                       |
-| **Trivial/Nitpick**    | **FIX THESE TOO**          | These matter!               |
-| **Out-of-scope**       | **INVESTIGATE THOROUGHLY** | Often the BEST insights!    |
-| Human comments         | Always address             | Never                       |
+| Comment Type        | Action                     | DO NOT Skip              |
+| ------------------- | -------------------------- | ------------------------ |
+| Critical/Major      | Fix immediately            | Never                    |
+| High/Medium         | Fix before merge           | Never                    |
+| Minor               | Fix                        | Never                    |
+| **Trivial/Nitpick** | **FIX THESE TOO**          | These matter!            |
+| **Out-of-scope**    | **INVESTIGATE THOROUGHLY** | Often the BEST insights! |
+| Human comments      | Always address             | Never                    |
 
 ### Work Sizing Decision
 
@@ -357,13 +357,13 @@ This script:
 
 **Priority levels:**
 
-| Priority     | Marker                                              | Action           |
-| ------------ | --------------------------------------------------- | ---------------- |
-| **CRITICAL** | `_Potential issue_ \| _Critical_`                   | Fix immediately  |
-| **HIGH**     | `_Potential issue_ \| _Major_`                      | Fix before merge |
-| **MEDIUM**   | `_Minor_` or `_Refactor suggestion_ \| _Major_`     | Fix              |
-| **LOW**      | `_Trivial_` / `_Nitpick_`                           | **Fix**          |
-| **HUMAN**    | Non-bot comments                                    | Always process   |
+| Priority     | Marker                                          | Action           |
+| ------------ | ----------------------------------------------- | ---------------- |
+| **CRITICAL** | `_Potential issue_ \| _Critical_`               | Fix immediately  |
+| **HIGH**     | `_Potential issue_ \| _Major_`                  | Fix before merge |
+| **MEDIUM**   | `_Minor_` or `_Refactor suggestion_ \| _Major_` | Fix              |
+| **LOW**      | `_Trivial_` / `_Nitpick_`                       | **Fix**          |
+| **HUMAN**    | Non-bot comments                                | Always process   |
 
 > **Note**: ALL comment types require fixes. See Complete PR Lifecycle Protocol - trivial/nitpicks are NOT optional.
 

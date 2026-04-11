@@ -68,7 +68,7 @@ class OrderService {
   constructor(
     private readonly db: DatabaseClient,
     private readonly paymentGateway: PaymentGateway,
-    private readonly logger: Logger
+    private readonly logger: Logger,
   ) {}
 }
 
@@ -112,14 +112,12 @@ Use typed, domain-specific error classes -- not raw `throw new Error("something 
 class OrderNotFoundError extends Error {
   constructor(public readonly orderId: string) {
     super(`Order not found: ${orderId}`);
-    this.name = "OrderNotFoundError";
+    this.name = 'OrderNotFoundError';
   }
 }
 
 // GOOD -- Result type for expected failures
-type Result<T, E = Error> =
-  | { success: true; data: T }
-  | { success: false; error: E };
+type Result<T, E = Error> = { success: true; data: T } | { success: false; error: E };
 ```
 
 Rules:
@@ -166,19 +164,19 @@ Organize imports in consistent groups, separated by blank lines:
 
 ```typescript
 // 1. Node built-ins
-import { readFile } from "node:fs/promises";
-import path from "node:path";
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
 
 // 2. External packages
-import { z } from "zod";
+import { z } from 'zod';
 
 // 3. Internal aliases (@/ or ~/)
-import { OrderService } from "@/services/order.service";
-import { Logger } from "@/lib/logger";
+import { OrderService } from '@/services/order.service';
+import { Logger } from '@/lib/logger';
 
 // 4. Relative imports
-import { validateInput } from "./validators";
-import type { OrderInput } from "./types";
+import { validateInput } from './validators';
+import type { OrderInput } from './types';
 ```
 
 Rules:

@@ -11,6 +11,7 @@
 This rubric is for **adversarial plan review** — a fundamentally different mode from collaborative plan review. Your job is to **find failures** in the plan, not to improve it. You are checking whether the plan meets its contract (the user's request, executed against the real codebase), not whether the plan is "good."
 
 **Key distinction:**
+
 - **Collaborative review** (`plan-review-rubric.md`): "How can this plan be better?" APPROVED / NEEDS REVISION.
 - **Adversarial review** (this rubric): "Does this plan meet its contract? Prove it." PASS / FAIL.
 
@@ -20,9 +21,9 @@ This rubric is for **adversarial plan review** — a fundamentally different mod
 
 Every adversarial plan review produces exactly one verdict:
 
-| Verdict | Meaning | Criteria |
-| --- | --- | --- |
-| **PASS** | Plan meets its contract | Zero BLOCKING issues found |
+| Verdict  | Meaning                    | Criteria                          |
+| -------- | -------------------------- | --------------------------------- |
+| **PASS** | Plan meets its contract    | Zero BLOCKING issues found        |
 | **FAIL** | Plan violates its contract | One or more BLOCKING issues found |
 
 There is no "APPROVED WITH COMMENTS." There is no "CHANGES SUGGESTED." PASS or FAIL.
@@ -33,10 +34,10 @@ There is no "APPROVED WITH COMMENTS." There is no "CHANGES SUGGESTED." PASS or F
 
 Every issue found is classified as BLOCKING or WARNING:
 
-| Classification | Meaning | Impact on Verdict |
-| --- | --- | --- |
-| **BLOCKING** | Contract violation — plan claims X, codebase says otherwise, or user asked for X and plan omits it | Causes FAIL |
-| **WARNING** | Quality concern — not a contract violation but worth noting | Does NOT cause FAIL |
+| Classification | Meaning                                                                                            | Impact on Verdict   |
+| -------------- | -------------------------------------------------------------------------------------------------- | ------------------- |
+| **BLOCKING**   | Contract violation — plan claims X, codebase says otherwise, or user asked for X and plan omits it | Causes FAIL         |
+| **WARNING**    | Quality concern — not a contract violation but worth noting                                        | Does NOT cause FAIL |
 
 **When in doubt, it's BLOCKING.** The threshold for PASS should be high. Err on the side of FAIL.
 
@@ -52,6 +53,7 @@ Every finding — whether PASS or FAIL — requires **cited evidence**. Assertio
 **Criterion**: "All file paths exist"
 **Verdict**: PASS
 **Evidence**:
+
 - Plan references `src/services/auth.ts` — verified via glob, file exists
 - Plan references `src/middleware/rate-limit.ts` — verified via glob, file exists
 - Plan references `src/utils/token.ts` — verified via glob, file exists
@@ -82,13 +84,13 @@ Every finding — whether PASS or FAIL — requires **cited evidence**. Assertio
 
 Can this plan actually be executed against the real codebase?
 
-| Check | Classification | Criteria |
-| --- | --- | --- |
-| File paths exist | BLOCKING if fabricated | Every file path in the plan must be verified with glob/grep against the real codebase |
-| Dependency ordering correct | BLOCKING if circular or forward-ref | Work units must not depend on outputs of later work units; no circular dependencies |
-| Technical approach matches codebase | BLOCKING if incompatible | Proposed patterns, libraries, frameworks, and conventions must match what the codebase actually uses (verify by reading existing code) |
-| No unstated assumptions | BLOCKING if critical assumption missing | Plan must not silently depend on services, env vars, configs, or infrastructure that doesn't exist |
-| Build/test commands valid | WARNING | Referenced commands (npm scripts, test runners, build tools) should exist in package.json or equivalent |
+| Check                               | Classification                          | Criteria                                                                                                                               |
+| ----------------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| File paths exist                    | BLOCKING if fabricated                  | Every file path in the plan must be verified with glob/grep against the real codebase                                                  |
+| Dependency ordering correct         | BLOCKING if circular or forward-ref     | Work units must not depend on outputs of later work units; no circular dependencies                                                    |
+| Technical approach matches codebase | BLOCKING if incompatible                | Proposed patterns, libraries, frameworks, and conventions must match what the codebase actually uses (verify by reading existing code) |
+| No unstated assumptions             | BLOCKING if critical assumption missing | Plan must not silently depend on services, env vars, configs, or infrastructure that doesn't exist                                     |
+| Build/test commands valid           | WARNING                                 | Referenced commands (npm scripts, test runners, build tools) should exist in package.json or equivalent                                |
 
 **How to verify:**
 
@@ -101,13 +103,13 @@ Can this plan actually be executed against the real codebase?
 
 Does the plan fully address every aspect of the user's request?
 
-| Check | Classification | Criteria |
-| --- | --- | --- |
-| All requirements mapped | BLOCKING if gap exists | Extract each distinct requirement from user request; map each to a plan item; report unmapped requirements |
-| Verification steps defined | BLOCKING if missing | Each planned change must specify how to verify it works (test name, manual check, or assertion) |
-| Edge cases considered | BLOCKING if obvious gaps | Error scenarios, empty/null states, boundary conditions, concurrent access (where relevant) |
-| Rollback/backward compatibility | WARNING | Plan should note if changes are reversible and if they break existing behavior |
-| Cross-file integration points | BLOCKING if missing | Files that import or depend on changed files must be accounted for in the plan |
+| Check                           | Classification           | Criteria                                                                                                   |
+| ------------------------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| All requirements mapped         | BLOCKING if gap exists   | Extract each distinct requirement from user request; map each to a plan item; report unmapped requirements |
+| Verification steps defined      | BLOCKING if missing      | Each planned change must specify how to verify it works (test name, manual check, or assertion)            |
+| Edge cases considered           | BLOCKING if obvious gaps | Error scenarios, empty/null states, boundary conditions, concurrent access (where relevant)                |
+| Rollback/backward compatibility | WARNING                  | Plan should note if changes are reversible and if they break existing behavior                             |
+| Cross-file integration points   | BLOCKING if missing      | Files that import or depend on changed files must be accounted for in the plan                             |
 
 **How to verify:**
 
@@ -121,13 +123,13 @@ Does the plan fully address every aspect of the user's request?
 
 Is the plan right-sized for what the user actually asked?
 
-| Check | Classification | Criteria |
-| --- | --- | --- |
-| Matches user request | BLOCKING if divergent | Plan scope must align with what was asked — not with what the planner finds interesting or wants to refactor |
-| No scope creep | BLOCKING if present | Plan items not traceable to user requirements are scope creep (unless they are necessary technical prerequisites) |
-| No under-scoping | BLOCKING if present | Obvious implications of the request that are omitted (e.g., user asks for API endpoint but plan omits tests) |
-| Complexity proportional | WARNING | A 10-line config change shouldn't produce a 15-work-unit plan |
-| Simpler alternative not considered | WARNING | If a significantly simpler approach exists, note it |
+| Check                              | Classification        | Criteria                                                                                                          |
+| ---------------------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Matches user request               | BLOCKING if divergent | Plan scope must align with what was asked — not with what the planner finds interesting or wants to refactor      |
+| No scope creep                     | BLOCKING if present   | Plan items not traceable to user requirements are scope creep (unless they are necessary technical prerequisites) |
+| No under-scoping                   | BLOCKING if present   | Obvious implications of the request that are omitted (e.g., user asks for API endpoint but plan omits tests)      |
+| Complexity proportional            | WARNING               | A 10-line config change shouldn't produce a 15-work-unit plan                                                     |
+| Simpler alternative not considered | WARNING               | If a significantly simpler approach exists, note it                                                               |
 
 **How to verify:**
 
@@ -146,11 +148,13 @@ Each reviewer MUST produce output in this exact format:
 ## [Reviewer Name] — [PASS/FAIL]
 
 ### Evidence
+
 - [Finding 1]: [file:line, glob result, or specific gap with evidence]
 - [Finding 2]: [file:line, glob result, or specific gap with evidence]
 - ...
 
 ### Verdict
+
 [PASS: All criteria met — no blocking issues found]
 OR
 [FAIL: {numbered list of blocking issues with evidence}]
@@ -171,13 +175,13 @@ OR
 
 ## Comparison: Collaborative vs Adversarial Plan Review
 
-| Dimension | Collaborative (`plan-review-rubric.md`) | Adversarial (this rubric) |
-| --- | --- | --- |
-| **Goal** | Improve plan quality | Verify plan contract compliance |
-| **Verdict** | APPROVED / NEEDS REVISION | PASS / FAIL |
-| **Evidence** | Helpful but optional | Mandatory (file paths, requirements, plan items) |
-| **Suggestions** | Encouraged | Prohibited |
-| **Re-review** | Same reviewer focuses on previously identified issues | Fresh reviewer required — no prior context |
-| **Tone** | Collaborative partner | Independent auditor |
-| **Reviewer count** | 1 (CTO Agent) | 3 (Feasibility, Completeness, Scope & Alignment) |
-| **When used** | Single-reviewer plan quality check | Gate before presenting plan to user |
+| Dimension          | Collaborative (`plan-review-rubric.md`)               | Adversarial (this rubric)                        |
+| ------------------ | ----------------------------------------------------- | ------------------------------------------------ |
+| **Goal**           | Improve plan quality                                  | Verify plan contract compliance                  |
+| **Verdict**        | APPROVED / NEEDS REVISION                             | PASS / FAIL                                      |
+| **Evidence**       | Helpful but optional                                  | Mandatory (file paths, requirements, plan items) |
+| **Suggestions**    | Encouraged                                            | Prohibited                                       |
+| **Re-review**      | Same reviewer focuses on previously identified issues | Fresh reviewer required — no prior context       |
+| **Tone**           | Collaborative partner                                 | Independent auditor                              |
+| **Reviewer count** | 1 (CTO Agent)                                         | 3 (Feasibility, Completeness, Scope & Alignment) |
+| **When used**      | Single-reviewer plan quality check                    | Gate before presenting plan to user              |

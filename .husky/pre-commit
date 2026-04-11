@@ -1,2 +1,1 @@
-[ -f node_modules/.bin/vitest ] || exit 0
-npm test
+npx lint-staged

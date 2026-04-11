@@ -3,12 +3,12 @@ name: start
 description: Use when starting work on any task, when the user mentions metaswarm, or when the user wants to begin tracked development work
 auto_activate: true
 triggers:
-  - "work on issue"
-  - "start issue"
-  - "start task"
-  - "use metaswarm"
-  - "@metaswarm"
-  - "agent-ready label"
+  - 'work on issue'
+  - 'start issue'
+  - 'start task'
+  - 'use metaswarm'
+  - '@metaswarm'
+  - 'agent-ready label'
 ---
 
 # BEADS Multi-Agent Orchestration Skill
@@ -96,14 +96,14 @@ The gate is automatically triggered when:
 
 ### Review Criteria by Agent
 
-| Agent           | Focus Areas                                                |
-| --------------- | ---------------------------------------------------------- |
-| Product Manager | Use case clarity, user benefits, scope, success metrics    |
-| Architect       | Service architecture, dependencies, patterns, integration  |
-| Designer        | API design, UX flows, developer experience, consistency    |
-| Security Design | Threat modeling, auth/authz, data protection, OWASP Top 10 |
+| Agent           | Focus Areas                                                      |
+| --------------- | ---------------------------------------------------------------- |
+| Product Manager | Use case clarity, user benefits, scope, success metrics          |
+| Architect       | Service architecture, dependencies, patterns, integration        |
+| Designer        | API design, UX flows, developer experience, consistency          |
+| Security Design | Threat modeling, auth/authz, data protection, OWASP Top 10       |
 | UX Reviewer     | User flows, text wireframes, integration WUs, empty/error states |
-| CTO             | TDD readiness, codebase alignment, completeness, risks     |
+| CTO             | TDD readiness, codebase alignment, completeness, risks           |
 
 ### Iteration Protocol
 
@@ -127,11 +127,11 @@ For the full Team Mode protocol — including message routing, context sharing, 
 
 After the Architect creates an implementation plan and before it reaches the Design Review Gate, the plan passes through the **Plan Review Gate**. Three adversarial reviewers validate the plan independently:
 
-| Reviewer | Focus |
-| --- | --- |
-| **Feasibility** | Technical viability, dependency risks, resource constraints |
-| **Completeness** | Missing work units, untested edge cases, gaps in Definition of Done |
-| **Scope & Alignment** | Plan stays within issue scope, aligns with codebase conventions |
+| Reviewer              | Focus                                                               |
+| --------------------- | ------------------------------------------------------------------- |
+| **Feasibility**       | Technical viability, dependency risks, resource constraints         |
+| **Completeness**      | Missing work units, untested edge cases, gaps in Definition of Done |
+| **Scope & Alignment** | Plan stays within issue scope, aligns with codebase conventions     |
 
 All 3 must APPROVE before the plan proceeds. See the `plan-review-gate` skill for the full skill definition.
 
@@ -180,6 +180,7 @@ For simple tasks, the standard linear flow (implement → code review → PR) wo
 ### Key Concepts
 
 **Work Unit Decomposition**: Break the implementation plan into discrete work units, each with:
+
 - A spec section and enumerated DoD items
 - A declared file scope (which files it may modify)
 - Dependencies on other work units
@@ -216,11 +217,11 @@ External tools slot directly into the existing 4-phase execution loop:
 
 The orchestrator adapts based on tool availability:
 
-| Available Tools | Escalation Chain | Max Attempts |
-|---|---|---|
-| Both Codex + Gemini | A(2) → B(2) → Claude(1) → user | 5 |
-| One tool only | Tool(2) → Claude(1) → user | 3 |
-| No tools | Claude → user (existing behavior) | unchanged |
+| Available Tools     | Escalation Chain                  | Max Attempts |
+| ------------------- | --------------------------------- | ------------ |
+| Both Codex + Gemini | A(2) → B(2) → Claude(1) → user    | 5            |
+| One tool only       | Tool(2) → Claude(1) → user        | 3            |
+| No tools            | Claude → user (existing behavior) | unchanged    |
 
 Each escalated model receives the previous model's branch as a reference. See the `external-tools` skill for the full skill definition.
 
@@ -497,8 +498,8 @@ Use the Task tool to spawn the Issue Orchestrator agent:
 
 ```typescript
 Task({
-  subagent_type: "general-purpose",
-  description: "Issue Orchestrator for #123",
+  subagent_type: 'general-purpose',
+  description: 'Issue Orchestrator for #123',
   prompt: `You are the ISSUE ORCHESTRATOR agent.
 
 Read the agent definition at:
@@ -577,15 +578,15 @@ EOF
 ```typescript
 // Spawn Researcher first
 const researchResult = await Task({
-  subagent_type: "general-purpose",
-  description: "Research for issue #123",
+  subagent_type: 'general-purpose',
+  description: 'Research for issue #123',
   prompt: researcherPrompt,
 });
 
 // Then spawn Architect with research output
 const planResult = await Task({
-  subagent_type: "general-purpose",
-  description: "Planning for issue #123",
+  subagent_type: 'general-purpose',
+  description: 'Planning for issue #123',
   prompt: architectPrompt + researchResult,
 });
 ```
@@ -596,13 +597,13 @@ const planResult = await Task({
 // Spawn Code Review and Security Audit in parallel
 const [reviewResult, securityResult] = await Promise.all([
   Task({
-    subagent_type: "general-purpose",
-    description: "Code review for #123",
+    subagent_type: 'general-purpose',
+    description: 'Code review for #123',
     prompt: codeReviewPrompt,
   }),
   Task({
-    subagent_type: "general-purpose",
-    description: "Security audit for #123",
+    subagent_type: 'general-purpose',
+    description: 'Security audit for #123',
     prompt: securityAuditPrompt,
   }),
 ]);
@@ -659,8 +660,8 @@ Or spawn Knowledge Curator agent:
 
 ```typescript
 Task({
-  subagent_type: "general-purpose",
-  description: "Extract learnings from epic",
+  subagent_type: 'general-purpose',
+  description: 'Extract learnings from epic',
   prompt: `Review completed epic <epic-id> and extract learnings.
 
 FIRST: Run \`bd prime --work-type review\` to load context.

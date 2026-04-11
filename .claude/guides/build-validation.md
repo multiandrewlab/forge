@@ -27,16 +27,16 @@ This guide covers build processes, validation workflows, and systematic error re
 
 ### Recommended Timeouts
 
-| Command                      | Timeout (ms) | Duration   | Usage                         |
-| ---------------------------- | ------------ | ---------- | ----------------------------- |
-| Full build                   | 300000       | 5 minutes  | Complete build with typechecking |
-| Test suite                   | 240000       | 4 minutes  | Full test execution           |
-| Test coverage                | 300000       | 5 minutes  | Tests + coverage report       |
-| Type checking                | 120000       | 2 minutes  | TypeScript compilation check  |
-| Linting                      | 120000       | 2 minutes  | Full ESLint pass              |
-| Database migrations          | 180000       | 3 minutes  | Large schema changes          |
-| Container builds             | 600000       | 10 minutes | Docker image builds           |
-| Large file processing        | 300000       | 5 minutes  | Bulk data operations          |
+| Command               | Timeout (ms) | Duration   | Usage                            |
+| --------------------- | ------------ | ---------- | -------------------------------- |
+| Full build            | 300000       | 5 minutes  | Complete build with typechecking |
+| Test suite            | 240000       | 4 minutes  | Full test execution              |
+| Test coverage         | 300000       | 5 minutes  | Tests + coverage report          |
+| Type checking         | 120000       | 2 minutes  | TypeScript compilation check     |
+| Linting               | 120000       | 2 minutes  | Full ESLint pass                 |
+| Database migrations   | 180000       | 3 minutes  | Large schema changes             |
+| Container builds      | 600000       | 10 minutes | Docker image builds              |
+| Large file processing | 300000       | 5 minutes  | Bulk data operations             |
 
 **Note**: Maximum timeout is 600000ms (10 minutes). For operations longer than 10 minutes, break them into smaller steps.
 
@@ -72,27 +72,30 @@ If any step fails, stop and fix before proceeding. Do not skip steps.
 
 ### Quick Check Commands
 
-| Approach            | Time     | Purpose                              |
-| ------------------- | -------- | ------------------------------------ |
-| `tsc --noEmit`      | 5-15s    | Check TypeScript errors only         |
-| Watch mode          | Instant  | Continuous monitoring during dev     |
-| Lint changed files  | 1-3s     | Lint only modified files             |
-| Parallel check      | 15-20s   | Lint + typecheck + tests in parallel |
-| Full build          | 1-5 min  | Complete production build            |
+| Approach           | Time    | Purpose                              |
+| ------------------ | ------- | ------------------------------------ |
+| `tsc --noEmit`     | 5-15s   | Check TypeScript errors only         |
+| Watch mode         | Instant | Continuous monitoring during dev     |
+| Lint changed files | 1-3s    | Lint only modified files             |
+| Parallel check     | 15-20s  | Lint + typecheck + tests in parallel |
+| Full build         | 1-5 min | Complete production build            |
 
 ### When to Use Each
 
 1. **During development**: Use watch mode for instant feedback
+
    ```bash
    npx tsc --noEmit --watch
    ```
 
 2. **Before committing**: Quick typecheck + lint changed files
+
    ```bash
    npx tsc --noEmit && npx eslint $(git diff --name-only --diff-filter=ACM | grep -E '\.(ts|tsx)$')
    ```
 
 3. **Before creating a PR**: Full validation suite
+
    ```bash
    npx tsc --noEmit && npm run lint && npm run test:coverage && npm run build
    ```
@@ -279,14 +282,14 @@ Common TypeScript patterns to remember:
 
 ### Build Failure Triage
 
-| Error Type             | First Action                                    | Common Cause                         |
-| ---------------------- | ----------------------------------------------- | ------------------------------------ |
-| TypeScript errors      | `npx tsc --noEmit`                              | Type mismatches, missing properties  |
-| ESLint errors          | `npx eslint <file> --max-warnings 0`            | Unused imports, style violations     |
-| Test failures          | `npx vitest run <file>` (or jest)               | Logic bugs, stale mocks             |
-| Coverage drops         | `npm run test:coverage`                         | Untested branches or new code        |
-| Build/bundle errors    | `npm run build`                                 | Import resolution, missing exports   |
-| Missing dependencies   | `npm install`                                   | Package not installed                |
+| Error Type           | First Action                         | Common Cause                        |
+| -------------------- | ------------------------------------ | ----------------------------------- |
+| TypeScript errors    | `npx tsc --noEmit`                   | Type mismatches, missing properties |
+| ESLint errors        | `npx eslint <file> --max-warnings 0` | Unused imports, style violations    |
+| Test failures        | `npx vitest run <file>` (or jest)    | Logic bugs, stale mocks             |
+| Coverage drops       | `npm run test:coverage`              | Untested branches or new code       |
+| Build/bundle errors  | `npm run build`                      | Import resolution, missing exports  |
+| Missing dependencies | `npm install`                        | Package not installed               |
 
 ---
 
@@ -310,8 +313,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
-          cache: "npm"
+          node-version: '20'
+          cache: 'npm'
 
       - name: Install dependencies
         run: npm ci

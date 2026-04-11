@@ -15,10 +15,10 @@
  *   npx tsx scripts/beads-fetch-conversation-history.ts --project /path/to/project
  */
 
-import { parseArgs } from "util";
-import { writeFileSync, readFileSync, readdirSync, existsSync, mkdirSync } from "fs";
-import { dirname, join, basename } from "path";
-import { homedir } from "os";
+import { parseArgs } from 'util';
+import { writeFileSync, readFileSync, readdirSync, existsSync, mkdirSync } from 'fs';
+import { dirname, join, basename } from 'path';
+import { homedir } from 'os';
 
 // =============================================================================
 // CLI Arguments
@@ -26,10 +26,10 @@ import { homedir } from "os";
 
 const { values: args } = parseArgs({
   options: {
-    days: { type: "string", default: "7" },
-    project: { type: "string" },
-    output: { type: "string", default: ".beads/temp/conversation-history.json" },
-    help: { type: "boolean", short: "h", default: false },
+    days: { type: 'string', default: '7' },
+    project: { type: 'string' },
+    output: { type: 'string', default: '.beads/temp/conversation-history.json' },
+    help: { type: 'boolean', short: 'h', default: false },
   },
 });
 
@@ -60,7 +60,7 @@ What it finds:
 // =============================================================================
 
 interface ConversationMessage {
-  type: "user" | "assistant";
+  type: 'user' | 'assistant';
   content: string;
   timestamp: string;
   sessionId: string;
@@ -68,18 +68,18 @@ interface ConversationMessage {
 
 interface LearningTrigger {
   type:
-    | "correction"
-    | "disagreement"
-    | "clarification"
-    | "discovery"
-    | "decision"
-    | "misconception";
+    | 'correction'
+    | 'disagreement'
+    | 'clarification'
+    | 'discovery'
+    | 'decision'
+    | 'misconception';
   userMessage: string;
   assistantContext?: string;
   sessionId: string;
   sessionSummary: string;
   timestamp: string;
-  confidence: "high" | "medium" | "low";
+  confidence: 'high' | 'medium' | 'low';
 }
 
 interface SessionIndex {
@@ -177,66 +177,69 @@ const DECISION_PATTERNS = [
 // =============================================================================
 
 function encodeProjectPath(projectPath: string): string {
-  return projectPath.replace(/\//g, "-");
+  return projectPath.replace(/\//g, '-');
 }
 
 function getClaudeProjectsDir(): string {
-  return join(homedir(), ".claude", "projects");
+  return join(homedir(), '.claude', 'projects');
 }
 
 function extractTextContent(content: unknown): string {
-  if (typeof content === "string") {
+  if (typeof content === 'string') {
     return content;
   }
 
   if (Array.isArray(content)) {
     return content
-      .filter((item): item is { type: string; text?: string } => typeof item === "object" && item !== null)
-      .filter(item => item.type === "text" && item.text)
-      .map(item => item.text)
-      .join("\n");
+      .filter(
+        (item): item is { type: string; text?: string } =>
+          typeof item === 'object' && item !== null,
+      )
+      .filter((item) => item.type === 'text' && item.text)
+      .map((item) => item.text)
+      .join('\n');
   }
 
-  return "";
+  return '';
 }
 
 function detectTriggerType(
-  text: string
-): { type: LearningTrigger["type"]; confidence: "high" | "medium" | "low" } | null {
+  text: string,
+): { type: LearningTrigger['type']; confidence: 'high' | 'medium' | 'low' } | null {
   const lowerText = text.toLowerCase();
 
   // Check for corrections (high value)
   for (const pattern of CORRECTION_PATTERNS) {
     if (pattern.test(text)) {
-      return { type: "correction", confidence: "high" };
+      return { type: 'correction', confidence: 'high' };
     }
   }
 
   // Check for disagreements
   for (const pattern of DISAGREEMENT_PATTERNS) {
     if (pattern.test(text)) {
-      return { type: "disagreement", confidence: "medium" };
+      return { type: 'disagreement', confidence: 'medium' };
     }
   }
 
   // Check for clarifications
   for (const pattern of CLARIFICATION_PATTERNS) {
     if (pattern.test(text)) {
-      return { type: "clarification", confidence: "medium" };
+      return { type: 'clarification', confidence: 'medium' };
     }
   }
 
   // Check for discoveries
   for (const pattern of DISCOVERY_PATTERNS) {
     if (pattern.test(text)) {
-      return { type: "discovery", confidence: "high" };
+      return { type: 'discovery', confidence: 'high' };
     }
   }
 
   // Check for decisions
   for (const pattern of DECISION_PATTERNS) {
     if (pattern.test(text)) {
-      return { type: "decision", confidence: "medium" };
+      return { type: 'decision', confidence: 'medium' };
     }
   }
 
@@ -247,24 +250,24 @@ function parseConversationFile(
   filePath: string,
   sessionId: string,
   sessionSummary: string,
-  sinceDateMs: number
+  sinceDateMs: number,
 ): LearningTrigger[] {
   const triggers: LearningTrigger[] = [];
-  const content = readFileSync(filePath, "utf-8");
-  const lines = content.split("\n").filter(line => line.trim());
+  const content = readFileSync(filePath, 'utf-8');
+  const lines = content.split('\n').filter((line) => line.trim());
 
-  let lastAssistantContent = "";
+  let lastAssistantContent = '';
 
   for (const line of lines) {
     try {
       const entry = JSON.parse(line);
 
       // Track assistant messages for context
-      if (entry.type === "assistant" && entry.message?.content) {
+      if (entry.type === 'assistant' && entry.message?.content) {
         const content = entry.message.content;
         if (Array.isArray(content)) {
           const textContent = content.find(
-            (c: { type: string; text?: string }) => c.type === "text" && c.text
+            (c: { type: string; text?: string }) => c.type === 'text' && c.text,
           );
           if (textContent) {
             lastAssistantContent = textContent.text.slice(0, 500);
@@ -273,7 +276,7 @@ function parseConversationFile(
       }
 
       // Analyze user messages
-      if (entry.type === "user" && entry.userType === "external") {
+      if (entry.type === 'user' && entry.userType === 'external') {
         const timestamp = entry.timestamp;
 
         // Skip if older than our date range
@@ -288,7 +291,7 @@ function parseConversationFile(
         }
 
         // Skip messages that are mostly whitespace (formatted/structured text)
-        const trimmedContent = textContent.replace(/\s+/g, " ").trim();
+        const trimmedContent = textContent.replace(/\s+/g, ' ').trim();
         if (trimmedContent.length < textContent.length * 0.5) {
           continue;
         }
@@ -321,10 +324,10 @@ function parseConversationFile(
 // =============================================================================
 
 async function main() {
-  console.log("BEADS Conversation History Fetcher\n");
+  console.log('BEADS Conversation History Fetcher\n');
 
-  const DAYS = parseInt(args.days || "7", 10);
-  const OUTPUT_PATH = args.output || ".beads/temp/conversation-history.json";
+  const DAYS = parseInt(args.days || '7', 10);
+  const OUTPUT_PATH = args.output || '.beads/temp/conversation-history.json';
   const projectPath = args.project || process.cwd();
 
   console.log(`Project: ${projectPath}`);
@@ -348,13 +351,13 @@ async function main() {
   }
 
   // Read sessions index
-  const indexPath = join(projectDir, "sessions-index.json");
+  const indexPath = join(projectDir, 'sessions-index.json');
   if (!existsSync(indexPath)) {
-    console.log("No sessions-index.json found");
+    console.log('No sessions-index.json found');
     process.exit(0);
   }
 
-  const indexContent = readFileSync(indexPath, "utf-8");
+  const indexContent = readFileSync(indexPath, 'utf-8');
   const sessionIndex: SessionIndex = JSON.parse(indexContent);
 
   console.log(`Found ${sessionIndex.entries.length} sessions\n`);
@@ -380,15 +383,15 @@ async function main() {
     sessionsAnalyzed++;
 
     // Count messages
-    const content = readFileSync(sessionFile, "utf-8");
-    const lineCount = content.split("\n").filter(l => l.trim()).length;
+    const content = readFileSync(sessionFile, 'utf-8');
+    const lineCount = content.split('\n').filter((l) => l.trim()).length;
     messagesAnalyzed += lineCount;
 
     const triggers = parseConversationFile(
       sessionFile,
       entry.sessionId,
       entry.summary || entry.firstPrompt.slice(0, 100),
-      sinceDateMs
+      sinceDateMs,
     );
 
     for (const trigger of triggers) {
@@ -440,7 +443,7 @@ async function main() {
   console.log("\nNext: Run '/self-reflect' to analyze with Claude Code");
 }
 
-main().catch(error => {
-  console.error("Error:", error.message);
+main().catch((error) => {
+  console.error('Error:', error.message);
   process.exit(1);
 });

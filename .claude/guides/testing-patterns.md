@@ -72,13 +72,13 @@ expect(mockFn).toHaveBeenCalled();
 expect(output.length).toBeGreaterThan(0);
 
 // GOOD -- tests actual results
-expect(result).toEqual({ id: "item_123", status: "active" });
+expect(result).toEqual({ id: 'item_123', status: 'active' });
 expect(mockFn).toHaveBeenCalledWith({
-  id: "item_123",
+  id: 'item_123',
   amount: 500,
-  type: "GRANT",
+  type: 'GRANT',
 });
-expect(output).toEqual(["item_abc", "item_def"]);
+expect(output).toEqual(['item_abc', 'item_def']);
 ```
 
 A test that passes when the code returns the wrong value is worse than no test at all -- it gives false confidence.
@@ -145,7 +145,7 @@ Conventions:
 #### Database Mock
 
 ```typescript
-import { createMockDatabaseClient } from "@/test-utils/mocks/database";
+import { createMockDatabaseClient } from '@/test-utils/mocks/database';
 
 const mockDb = createMockDatabaseClient();
 // Provides mock stubs for all models/tables your ORM exposes
@@ -154,10 +154,10 @@ const mockDb = createMockDatabaseClient();
 #### ID Factories
 
 ```typescript
-import { testId } from "@/test-utils/factories/ids";
+import { testId } from '@/test-utils/factories/ids';
 
-const orderId = testId("order", "abc"); // "order_test_abc"
-const userId = testId("user", "def"); // "user_test_def"
+const orderId = testId('order', 'abc'); // "order_test_abc"
+const userId = testId('user', 'def'); // "user_test_def"
 ```
 
 #### Finding Existing Mocks
@@ -172,11 +172,11 @@ Before creating a new mock, check:
 ### Service Testing Pattern
 
 ```typescript
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { createMockDatabaseClient } from "@/test-utils/mocks/database";
-import { OrderService } from "../order.service";
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { createMockDatabaseClient } from '@/test-utils/mocks/database';
+import { OrderService } from '../order.service';
 
-describe("OrderService", () => {
+describe('OrderService', () => {
   let service: OrderService;
   let mockDb: ReturnType<typeof createMockDatabaseClient>;
   let mockPaymentClient: {
@@ -204,22 +204,20 @@ describe("OrderService", () => {
     } as never);
   });
 
-  it("creates an order with correct total", async () => {
+  it('creates an order with correct total', async () => {
     mockDb.order.create.mockResolvedValue({
-      id: "order_123",
+      id: 'order_123',
       total: 2500,
-      status: "PENDING",
+      status: 'PENDING',
     });
 
     const result = await service.createOrder({
-      items: [{ productId: "prod_1", quantity: 2, unitPrice: 1250 }],
+      items: [{ productId: 'prod_1', quantity: 2, unitPrice: 1250 }],
     });
 
     expect(result.total).toBe(2500);
-    expect(result.status).toBe("PENDING");
-    expect(mockDb.order.create).toHaveBeenCalledWith(
-      expect.objectContaining({ total: 2500 })
-    );
+    expect(result.status).toBe('PENDING');
+    expect(mockDb.order.create).toHaveBeenCalledWith(expect.objectContaining({ total: 2500 }));
   });
 });
 ```
@@ -236,23 +234,21 @@ Key points:
 function buildApp(mockService: MockOrderService) {
   // Build your application/router with mock dependencies injected
   const app = createApp();
-  app.route("/api/orders", createOrderRoutes(mockService));
+  app.route('/api/orders', createOrderRoutes(mockService));
   return app;
 }
 
-it("returns 201 on successful order creation", async () => {
+it('returns 201 on successful order creation', async () => {
   const app = buildApp(mockService);
-  const res = await app.request("/api/orders", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ items: [{ productId: "prod_1", quantity: 1 }] }),
+  const res = await app.request('/api/orders', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ items: [{ productId: 'prod_1', quantity: 1 }] }),
   });
 
   expect(res.status).toBe(201);
   const body = await res.json();
-  expect(body).toEqual(
-    expect.objectContaining({ id: expect.any(String), status: "PENDING" })
-  );
+  expect(body).toEqual(expect.objectContaining({ id: expect.any(String), status: 'PENDING' }));
 });
 ```
 
@@ -261,46 +257,42 @@ it("returns 201 on successful order creation", async () => {
 Every `if` branch and `catch` block needs a test. Error paths are where production bugs hide.
 
 ```typescript
-it("throws NotFoundError when order does not exist", async () => {
+it('throws NotFoundError when order does not exist', async () => {
   mockDb.order.findUnique.mockResolvedValue(null);
 
-  await expect(service.getOrder("order_nonexistent")).rejects.toThrow(
-    NotFoundError
-  );
+  await expect(service.getOrder('order_nonexistent')).rejects.toThrow(NotFoundError);
 });
 
-it("returns failed entry when single payment charge fails", async () => {
-  mockPaymentClient.charge.mockRejectedValue(new Error("Gateway timeout"));
+it('returns failed entry when single payment charge fails', async () => {
+  mockPaymentClient.charge.mockRejectedValue(new Error('Gateway timeout'));
 
-  const result = await service.processPayments(["order_123"]);
+  const result = await service.processPayments(['order_123']);
 
-  expect(result.failed).toEqual([
-    { orderId: "order_123", error: "Gateway timeout" },
-  ]);
+  expect(result.failed).toEqual([{ orderId: 'order_123', error: 'Gateway timeout' }]);
 });
 ```
 
 ### Testing Time-Dependent Code
 
 ```typescript
-import { vi, beforeEach, afterEach } from "vitest";
+import { vi, beforeEach, afterEach } from 'vitest';
 
 beforeEach(() => {
   vi.useFakeTimers();
-  vi.setSystemTime(new Date("2025-01-15T00:00:00Z"));
+  vi.setSystemTime(new Date('2025-01-15T00:00:00Z'));
 });
 
 afterEach(() => {
   vi.useRealTimers();
 });
 
-it("calculates days remaining correctly", async () => {
+it('calculates days remaining correctly', async () => {
   mockDb.subscription.findUnique.mockResolvedValue({
-    expiresAt: new Date("2025-01-25T00:00:00Z"),
-    status: "ACTIVE",
+    expiresAt: new Date('2025-01-25T00:00:00Z'),
+    status: 'ACTIVE',
   });
 
-  const status = await service.getSubscriptionStatus("sub_123");
+  const status = await service.getSubscriptionStatus('sub_123');
 
   expect(status.daysRemaining).toBe(10);
   expect(status.isActive).toBe(true);
@@ -327,39 +319,39 @@ Do **not** apply MC/DC to simple single-condition checks. Branch coverage is suf
 #### The Pattern: Baseline + Toggle Each Condition
 
 ```typescript
-describe("canPerformAction -- MC/DC", () => {
+describe('canPerformAction -- MC/DC', () => {
   // Baseline: all conditions true -> allowed
-  it("allows when all conditions met", () => {
+  it('allows when all conditions met', () => {
     const result = canPerformAction(
-      createMockUser({ role: "ADMIN" }),
-      createMockOrganization({ tier: "PRO", suspended: false })
+      createMockUser({ role: 'ADMIN' }),
+      createMockOrganization({ tier: 'PRO', suspended: false }),
     );
     expect(result).toBe(true);
   });
 
   // Toggle role alone -> denied
-  it("denies when non-admin (other conditions true)", () => {
+  it('denies when non-admin (other conditions true)', () => {
     const result = canPerformAction(
-      createMockUser({ role: "MEMBER" }),
-      createMockOrganization({ tier: "PRO", suspended: false })
+      createMockUser({ role: 'MEMBER' }),
+      createMockOrganization({ tier: 'PRO', suspended: false }),
     );
     expect(result).toBe(false);
   });
 
   // Toggle tier alone -> denied
-  it("denies when free tier (other conditions true)", () => {
+  it('denies when free tier (other conditions true)', () => {
     const result = canPerformAction(
-      createMockUser({ role: "ADMIN" }),
-      createMockOrganization({ tier: "FREE", suspended: false })
+      createMockUser({ role: 'ADMIN' }),
+      createMockOrganization({ tier: 'FREE', suspended: false }),
     );
     expect(result).toBe(false);
   });
 
   // Toggle suspended alone -> denied
-  it("denies when suspended (other conditions true)", () => {
+  it('denies when suspended (other conditions true)', () => {
     const result = canPerformAction(
-      createMockUser({ role: "ADMIN" }),
-      createMockOrganization({ tier: "PRO", suspended: true })
+      createMockUser({ role: 'ADMIN' }),
+      createMockOrganization({ tier: 'PRO', suspended: true }),
     );
     expect(result).toBe(false);
   });
@@ -379,16 +371,16 @@ Check your project's existing factory infrastructure before creating new ones. D
 
 ```typescript
 // GOOD -- import the shared factory
-import { createMockOrganization } from "@/test-utils/factories";
-const org = createMockOrganization({ tier: "ENTERPRISE" });
+import { createMockOrganization } from '@/test-utils/factories';
+const org = createMockOrganization({ tier: 'ENTERPRISE' });
 
 // BAD -- re-creating a factory that already exists
 function makeOrg(overrides = {}) {
-  return { id: "org_1", ...overrides };
+  return { id: 'org_1', ...overrides };
 }
 
 // BAD -- inline object with incomplete fields
-const org = { id: "org_1", name: "Test" }; // missing tier, status, dates, etc.
+const org = { id: 'org_1', name: 'Test' }; // missing tier, status, dates, etc.
 ```
 
 **When to create a local helper**: Only for test-specific _combinations_ of shared factories:
@@ -396,7 +388,7 @@ const org = { id: "org_1", name: "Test" }; // missing tier, status, dates, etc.
 ```typescript
 // GOOD -- composes shared factory, does not replace it
 function createTrialOrg() {
-  return createMockOrganization({ tier: "FREE", trialEndsAt: futureDate });
+  return createMockOrganization({ tier: 'FREE', trialEndsAt: futureDate });
 }
 ```
 
@@ -413,6 +405,7 @@ Never construct mock objects inline with incomplete fields. Never duplicate a fa
 **Scope**: Single function, class, or module in isolation.
 
 **Characteristics**:
+
 - All dependencies are mocked
 - No I/O (no database, no network, no filesystem)
 - Run in milliseconds
@@ -421,12 +414,12 @@ Never construct mock objects inline with incomplete fields. Never duplicate a fa
 **When to use**: Business logic, utility functions, transformations, validations, domain objects.
 
 ```typescript
-describe("calculateDiscount", () => {
-  it("applies 10% discount for orders over $100", () => {
+describe('calculateDiscount', () => {
+  it('applies 10% discount for orders over $100', () => {
     expect(calculateDiscount(15000)).toBe(1500); // cents
   });
 
-  it("applies no discount for orders under $100", () => {
+  it('applies no discount for orders under $100', () => {
     expect(calculateDiscount(9999)).toBe(0);
   });
 });
@@ -437,6 +430,7 @@ describe("calculateDiscount", () => {
 **Scope**: Multiple components working together, typically at an I/O boundary.
 
 **Characteristics**:
+
 - Test real interactions between components
 - May use test doubles for external services (test containers, in-memory databases)
 - Run in seconds
@@ -445,7 +439,7 @@ describe("calculateDiscount", () => {
 **When to use**: Database queries, API routes, middleware chains, service compositions.
 
 ```typescript
-describe("OrderAPI (integration)", () => {
+describe('OrderAPI (integration)', () => {
   let app: Application;
   let testDb: TestDatabase;
 
@@ -458,17 +452,17 @@ describe("OrderAPI (integration)", () => {
     await testDb.cleanup();
   });
 
-  it("creates order and persists to database", async () => {
-    const res = await app.request("/api/orders", {
-      method: "POST",
-      body: JSON.stringify({ items: [{ productId: "prod_1", quantity: 1 }] }),
+  it('creates order and persists to database', async () => {
+    const res = await app.request('/api/orders', {
+      method: 'POST',
+      body: JSON.stringify({ items: [{ productId: 'prod_1', quantity: 1 }] }),
     });
 
     expect(res.status).toBe(201);
 
     const order = await testDb.client.order.findFirst();
     expect(order).not.toBeNull();
-    expect(order!.status).toBe("PENDING");
+    expect(order!.status).toBe('PENDING');
   });
 });
 ```
@@ -478,6 +472,7 @@ describe("OrderAPI (integration)", () => {
 **Scope**: The entire system from external input to external output.
 
 **Characteristics**:
+
 - Test the system as a user would interact with it
 - Use real (or near-real) infrastructure
 - Run in seconds to minutes
@@ -486,6 +481,7 @@ describe("OrderAPI (integration)", () => {
 **When to use**: Critical user journeys, smoke tests, deployment verification.
 
 **Guidelines**:
+
 - Keep the E2E suite small and focused on high-value paths
 - Use dedicated test environments
 - Accept slightly lower reliability (network, timing) in exchange for higher confidence
@@ -506,7 +502,7 @@ const service = new MyService(deps as never);
 // WRONG -- verbose, no additional safety over `as never`
 const service = new MyService(
   mockDb as unknown as ConstructorParameters<typeof MyService>[0],
-  mockClient as unknown as ConstructorParameters<typeof MyService>[1]
+  mockClient as unknown as ConstructorParameters<typeof MyService>[1],
 );
 
 // WRONG -- disables all type checking
@@ -542,25 +538,20 @@ Coverage thresholds are defined in `.coverage-thresholds.json` at the repository
 
 ```typescript
 // vitest.config.ts
-import { defineConfig } from "vitest/config";
-import thresholds from "./.coverage-thresholds.json";
+import { defineConfig } from 'vitest/config';
+import thresholds from './.coverage-thresholds.json';
 
 export default defineConfig({
   test: {
     coverage: {
-      provider: "v8",
+      provider: 'v8',
       thresholds: {
         statements: thresholds.statements,
         branches: thresholds.branches,
         functions: thresholds.functions,
         lines: thresholds.lines,
       },
-      exclude: [
-        "**/*.config.*",
-        "**/test-utils/**",
-        "**/generated/**",
-        "**/node_modules/**",
-      ],
+      exclude: ['**/*.config.*', '**/test-utils/**', '**/generated/**', '**/node_modules/**'],
     },
   },
 });
@@ -570,7 +561,7 @@ export default defineConfig({
 
 ```javascript
 // jest.config.js
-const thresholds = require("./.coverage-thresholds.json");
+const thresholds = require('./.coverage-thresholds.json');
 
 module.exports = {
   coverageThreshold: {
@@ -582,10 +573,10 @@ module.exports = {
     },
   },
   collectCoverageFrom: [
-    "src/**/*.{ts,tsx}",
-    "!src/**/*.config.*",
-    "!src/test-utils/**",
-    "!src/generated/**",
+    'src/**/*.{ts,tsx}',
+    '!src/**/*.config.*',
+    '!src/test-utils/**',
+    '!src/generated/**',
   ],
 };
 ```
@@ -610,7 +601,7 @@ Everything else gets covered. If you find yourself wanting to exclude a file, as
 
 ```typescript
 // BAD -- mocks everything, tests nothing
-it("processes order", async () => {
+it('processes order', async () => {
   mockService.processOrder.mockResolvedValue({ success: true });
   const result = await controller.handleOrder(mockRequest);
   expect(mockService.processOrder).toHaveBeenCalled();
@@ -626,7 +617,7 @@ This test verifies that your mock was called. It does not verify that your code 
 expect(service.validate).toHaveBeenCalledBefore(service.save);
 
 // GOOD -- tests the observable result
-expect(result.status).toBe("SAVED");
+expect(result.status).toBe('SAVED');
 expect(result.validationErrors).toEqual([]);
 ```
 
@@ -637,11 +628,11 @@ Test the contract (inputs and outputs), not the internal execution path. Impleme
 ```typescript
 // BAD -- tests depend on order
 let counter = 0;
-it("first test", () => {
+it('first test', () => {
   counter++;
   expect(counter).toBe(1);
 });
-it("second test", () => {
+it('second test', () => {
   expect(counter).toBe(1); // Fails if first test doesn't run
 });
 ```
@@ -664,8 +655,8 @@ If a test fails intermittently, it is a bug. Fix it immediately -- do not re-run
 
 ```typescript
 // BAD -- no assertion, test always passes
-it("handles error", async () => {
-  await service.handleError(new Error("boom"));
+it('handles error', async () => {
+  await service.handleError(new Error('boom'));
 });
 ```
 
@@ -675,7 +666,7 @@ Every test MUST contain at least one assertion. A test without assertions is not
 
 ```typescript
 // BAD -- swallows the error, test passes incorrectly
-it("rejects invalid input", async () => {
+it('rejects invalid input', async () => {
   try {
     await service.process(invalidInput);
   } catch {
@@ -684,10 +675,8 @@ it("rejects invalid input", async () => {
 });
 
 // GOOD -- explicitly asserts the error
-it("rejects invalid input", async () => {
-  await expect(service.process(invalidInput)).rejects.toThrow(
-    ValidationError
-  );
+it('rejects invalid input', async () => {
+  await expect(service.process(invalidInput)).rejects.toThrow(ValidationError);
 });
 ```
 
@@ -723,7 +712,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: '20'
       - run: npm ci
       - run: npm run test:coverage
       # Coverage thresholds enforced by test runner config
@@ -762,13 +751,13 @@ Configure branch protection rules to enforce these checks.
 
 Adapt these commands to your project's package manager and test runner:
 
-| Command                            | Purpose                            |
-| ---------------------------------- | ---------------------------------- |
-| `npm test -- --run`                | Run all tests and exit             |
-| `npm run test:coverage`            | Run with coverage enforcement      |
-| `npx vitest run path/__tests__/`   | Run specific test directory        |
-| `npx vitest run path/file.test.ts` | Run specific test file             |
-| `npm test -- --watch`              | Watch mode during development      |
+| Command                            | Purpose                       |
+| ---------------------------------- | ----------------------------- |
+| `npm test -- --run`                | Run all tests and exit        |
+| `npm run test:coverage`            | Run with coverage enforcement |
+| `npx vitest run path/__tests__/`   | Run specific test directory   |
+| `npx vitest run path/file.test.ts` | Run specific test file        |
+| `npm test -- --watch`              | Watch mode during development |
 
 ---
 

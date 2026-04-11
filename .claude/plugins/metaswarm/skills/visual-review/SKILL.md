@@ -3,13 +3,13 @@ name: visual-review
 description: Take screenshots of web pages and UI using Playwright for visual review and iteration
 auto_activate: false
 triggers:
-  - "visual review"
-  - "screenshot"
-  - "take a screenshot"
-  - "review visually"
-  - "check how it looks"
-  - "review the UI"
-  - "review the slides"
+  - 'visual review'
+  - 'screenshot'
+  - 'take a screenshot'
+  - 'review visually'
+  - 'check how it looks'
+  - 'review the UI'
+  - 'review the slides'
 ---
 
 # Visual Review
@@ -19,6 +19,7 @@ triggers:
 Agents cannot see rendered web pages, presentations, or UI. This skill bridges that gap by using Playwright to capture screenshots of web pages (local files, localhost servers, or deployed URLs) so agents can visually inspect their work, identify layout issues, and iterate.
 
 This is especially useful for:
+
 - **Reveal.js presentations** — capture each slide individually
 - **Web UIs** — verify layout, styling, and responsiveness
 - **Landing pages** — check visual design matches intent
@@ -39,6 +40,7 @@ npx playwright install chromium
 **Important:** Only the `chromium` browser is needed. Do not install all browsers — it wastes disk space and time.
 
 If `npx playwright` fails entirely, the user may need to install it:
+
 ```bash
 npm install -g playwright
 npx playwright install chromium
@@ -67,6 +69,7 @@ npx playwright screenshot \
 ```
 
 **Parameters:**
+
 - `--viewport-size "1456,816"` — 16:9 aspect ratio, good for presentations
 - `--wait-for-timeout 3000` — wait 3 seconds for fonts, images, and animations to settle
 - Use `file:///absolute/path/to/file.html` for local files
@@ -152,6 +155,7 @@ lsof -ti:18080 | xargs kill
 Use whichever approach fits the environment. This is useful when collaborating on visual issues, when the user asks what something looks like, or when you want confirmation on a subjective design choice.
 
 For each screenshot, evaluate:
+
 - **Layout** — Is content centered/aligned as intended?
 - **Typography** — Are headings, body text, and code readable?
 - **Colors** — Do accent colors, backgrounds, and contrasts look right?
@@ -168,23 +172,26 @@ Create a findings summary:
 
 ### Reviewed: [date]
 
-| Slide/Page | Status | Notes |
-|-----------|--------|-------|
-| slide-0   | Good   | Title centered, accent color correct |
-| slide-1   | Issue  | Text overflows right edge on mobile |
-| ...       | ...    | ... |
+| Slide/Page | Status | Notes                                |
+| ---------- | ------ | ------------------------------------ |
+| slide-0    | Good   | Title centered, accent color correct |
+| slide-1    | Issue  | Text overflows right edge on mobile  |
+| ...        | ...    | ...                                  |
 
 ### Issues to Fix
+
 1. [Description of issue + which slide/page]
 2. [...]
 
 ### Looks Good
+
 - [Things that are working well]
 ```
 
 ### Phase 5: Fix and Re-capture
 
 After making fixes:
+
 1. Re-capture only the affected slides/pages
 2. Review the new screenshots
 3. Repeat until satisfied
@@ -199,15 +206,15 @@ After making fixes:
 
 ## Common Mistakes
 
-| Mistake | Why It's Wrong | Do This Instead |
-|---------|---------------|-----------------|
-| Not waiting for page load | Fonts/images may not render | Use `--wait-for-timeout 3000` |
-| Using `http://` for local files | File URLs need `file:///` protocol | Use `file:///absolute/path` |
-| Installing all Playwright browsers | Wastes time and disk | Only install `chromium` |
-| Treating fragment-hidden content as a bug | Fragments are designed to reveal on click | Note it as expected |
-| Forgetting to create output directory | Screenshots fail silently | Always `mkdir -p /tmp/visual-review` first |
-| Taking too many screenshots at once | Floods context window | Review in batches of 4-6 |
-| Not offering to `open` when discussing visuals | User can't see what you're describing | Use `open` when collaborating on visual issues |
+| Mistake                                        | Why It's Wrong                            | Do This Instead                                |
+| ---------------------------------------------- | ----------------------------------------- | ---------------------------------------------- |
+| Not waiting for page load                      | Fonts/images may not render               | Use `--wait-for-timeout 3000`                  |
+| Using `http://` for local files                | File URLs need `file:///` protocol        | Use `file:///absolute/path`                    |
+| Installing all Playwright browsers             | Wastes time and disk                      | Only install `chromium`                        |
+| Treating fragment-hidden content as a bug      | Fragments are designed to reveal on click | Note it as expected                            |
+| Forgetting to create output directory          | Screenshots fail silently                 | Always `mkdir -p /tmp/visual-review` first     |
+| Taking too many screenshots at once            | Floods context window                     | Review in batches of 4-6                       |
+| Not offering to `open` when discussing visuals | User can't see what you're describing     | Use `open` when collaborating on visual issues |
 
 ## Integration Points
 

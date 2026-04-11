@@ -25,13 +25,13 @@ This guide covers git worktree usage patterns for parallel development in projec
 
 ### Good Use Cases
 
-| Scenario                               | Why Worktrees Help                                            |
-| -------------------------------------- | ------------------------------------------------------------- |
-| **Multiple PRs in review**             | Work on new features while PRs await review                   |
-| **Parallel feature development**       | Multiple agents work on different features simultaneously     |
-| **Testing against different branches** | Compare behavior across branches without stashing             |
-| **Long-running tasks**                 | Do not block other work while waiting for builds/tests        |
-| **Code review reference**              | Keep PR code open while working on something else             |
+| Scenario                               | Why Worktrees Help                                        |
+| -------------------------------------- | --------------------------------------------------------- |
+| **Multiple PRs in review**             | Work on new features while PRs await review               |
+| **Parallel feature development**       | Multiple agents work on different features simultaneously |
+| **Testing against different branches** | Compare behavior across branches without stashing         |
+| **Long-running tasks**                 | Do not block other work while waiting for builds/tests    |
+| **Code review reference**              | Keep PR code open while working on something else         |
 
 ### When NOT to Use Worktrees
 
@@ -104,11 +104,11 @@ Each worktree must be isolated to prevent resource conflicts. Use environment va
 
 Each worktree should use a unique port to avoid `EADDRINUSE` errors:
 
-| Resource       | Main Repo | Worktree 1 | Worktree 2 |
-| -------------- | --------- | ----------- | ----------- |
-| App Server     | Base port | Base + 1    | Base + 2    |
-| Debug Port     | Base + 10 | Base + 11   | Base + 12   |
-| Dev Server     | Base + 20 | Base + 21   | Base + 22   |
+| Resource   | Main Repo | Worktree 1 | Worktree 2 |
+| ---------- | --------- | ---------- | ---------- |
+| App Server | Base port | Base + 1   | Base + 2   |
+| Debug Port | Base + 10 | Base + 11  | Base + 12  |
+| Dev Server | Base + 20 | Base + 21  | Base + 22  |
 
 ### Environment Variables
 
@@ -248,8 +248,8 @@ Instead of manually navigating to worktrees, orchestrate agents directly:
 ```typescript
 // From main repository, spawn a background agent
 Task({
-  description: "Implement feature X in worktree",
-  subagent_type: "general-purpose",
+  description: 'Implement feature X in worktree',
+  subagent_type: 'general-purpose',
   run_in_background: true,
   prompt: `
 You are working in a git worktree at /path/to/<project>-worktrees/feat-x
@@ -477,13 +477,13 @@ Store handoff documents in `.claude/handoffs/`:
 
 ### Prevention Strategies
 
-| Shared Resource          | How to Coordinate                                        |
-| ------------------------ | -------------------------------------------------------- |
-| **Database schema**      | Never migrate without checking other worktrees           |
-| **Package dependencies** | Commit lock files; let package manager resolve           |
+| Shared Resource          | How to Coordinate                                            |
+| ------------------------ | ------------------------------------------------------------ |
+| **Database schema**      | Never migrate without checking other worktrees               |
+| **Package dependencies** | Commit lock files; let package manager resolve               |
 | **Shared interfaces**    | Use interfaces; do not modify contracts without coordination |
-| **Test data**            | Use unique identifiers per worktree                      |
-| **Configuration**        | Keep environment-specific config in `.env` (not tracked) |
+| **Test data**            | Use unique identifiers per worktree                          |
+| **Configuration**        | Keep environment-specific config in `.env` (not tracked)     |
 
 ### Detecting Conflicts Early
 
@@ -654,17 +654,17 @@ git worktree prune
 
 ## Quick Reference
 
-| Operation                 | Command                                                         |
-| ------------------------- | --------------------------------------------------------------- |
-| Create worktree           | `git worktree add <path> -b <branch> [start-point]`            |
-| List worktrees            | `git worktree list`                                             |
-| Remove worktree           | `git worktree remove <path>`                                    |
-| Prune stale references    | `git worktree prune`                                            |
-| View file from branch     | `git show <branch>:<filepath>`                                  |
-| Diff against main         | `git diff main -- <path>`                                       |
-| Check divergence          | `git log --oneline origin/main..HEAD`                           |
-| Fetch + rebase on main    | `git fetch origin && git rebase origin/main`                    |
-| Force push after rebase   | `git push --force-with-lease`                                   |
+| Operation               | Command                                             |
+| ----------------------- | --------------------------------------------------- |
+| Create worktree         | `git worktree add <path> -b <branch> [start-point]` |
+| List worktrees          | `git worktree list`                                 |
+| Remove worktree         | `git worktree remove <path>`                        |
+| Prune stale references  | `git worktree prune`                                |
+| View file from branch   | `git show <branch>:<filepath>`                      |
+| Diff against main       | `git diff main -- <path>`                           |
+| Check divergence        | `git log --oneline origin/main..HEAD`               |
+| Fetch + rebase on main  | `git fetch origin && git rebase origin/main`        |
+| Force push after rebase | `git push --force-with-lease`                       |
 
 ---
 

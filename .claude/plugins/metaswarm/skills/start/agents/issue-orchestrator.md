@@ -154,8 +154,8 @@ Before work unit decomposition, scan the spec and plan for external service depe
 
 This project requires the following credentials:
 
-| Service | Env Var | Purpose | Obtain At |
-|---------|---------|---------|-----------|
+| Service       | Env Var           | Purpose | Obtain At                                   |
+| ------------- | ----------------- | ------- | ------------------------------------------- |
 | Anthropic API | ANTHROPIC_API_KEY | AI chat | https://console.anthropic.com/settings/keys |
 
 Are these configured in your .env file? [Y/n]
@@ -290,7 +290,7 @@ Run: git diff main..HEAD -- ${fileScope.join(' ')}
    - Completed work unit summary (title, key files, services created)
    - New patterns discovered during implementation
    - Updated SERVICE-INVENTORY.md entries
-   Pass this context document to every subsequent coder subagent alongside the work unit spec.
+     Pass this context document to every subsequent coder subagent alongside the work unit spec.
 
 ### Phase 3.5: Final Comprehensive Review
 
@@ -333,12 +333,14 @@ git log main..HEAD --oneline
 ### Overall Verdict: PASS / FAIL
 
 ### Work Units Summary
-| WU | Title | Impl | Validate | Review | Commit |
-| --- | --- | --- | --- | --- | --- |
-| WU-001 | <title> | Done | Pass | Pass | <sha> |
-| WU-002 | <title> | Done | Pass | Pass | <sha> |
+
+| WU     | Title   | Impl | Validate | Review | Commit |
+| ------ | ------- | ---- | -------- | ------ | ------ |
+| WU-001 | <title> | Done | Pass     | Pass   | <sha>  |
+| WU-002 | <title> | Done | Pass     | Pass   | <sha>  |
 
 ### Quality Gates
+
 - [ ] All tests pass
 - [ ] Type check clean
 - [ ] Lint clean
@@ -436,8 +438,8 @@ Use the Task tool to spawn specialist agents:
 ```typescript
 // Example: Spawn Researcher Agent
 Task({
-  subagent_type: "general-purpose",
-  description: "Research for issue #123",
+  subagent_type: 'general-purpose',
+  description: 'Research for issue #123',
   prompt: `You are acting as the RESEARCHER AGENT for BEADS epic ${epicId}.
 
   ## Your Task
@@ -509,6 +511,7 @@ Plan Complete
 ```
 
 **UX Reviewer responsibilities** (Issue #12):
+
 - Does every user flow have a clear trigger and visible outcome?
 - Are all screens described with component hierarchy (what renders what, where)?
 - Are empty states, loading states, and error states defined for each view?
@@ -696,4 +699,3 @@ The Issue Orchestrator reports progress via GitHub comments:
 
 <What happens next>
 ```
-

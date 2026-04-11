@@ -234,17 +234,21 @@ cat .beads/knowledge/*.jsonl | jq -r '.fact'
 _Recovered from BEADS persisted state_
 
 ## Active Plan
+
 <plan summary — title, work unit count, current position>
 
 ## Execution State
+
 - Current work unit: WU-<id> (<title>)
 - Phase: <IMPLEMENT|VALIDATE|REVIEW|COMMIT>
 - Completed: <N> of <total> work units
 
 ## Project Context
+
 <tooling, completed work units, established patterns>
 
 ## Relevant Knowledge
+
 <standard priming output: MUST FOLLOW, GOTCHAS, PATTERNS, DECISIONS>
 ```
 

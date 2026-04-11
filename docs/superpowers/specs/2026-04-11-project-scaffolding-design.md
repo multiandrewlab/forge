@@ -115,8 +115,9 @@ forge/
 **`src/plugins/router.ts`** — Vue Router with single `/` route to HomePage.
 
 **`src/assets/main.css`** — Tailwind v4 entry:
+
 ```css
-@import "tailwindcss";
+@import 'tailwindcss';
 
 @theme {
   --color-primary: #f06a11ff;
@@ -137,16 +138,19 @@ forge/
 Three infrastructure services only — app runs locally via `npm run dev`, not in containers. **Note:** The parent design spec mentions client/server in docker-compose; this is an intentional deviation for local dev ergonomics. A future issue can add app service definitions for staging/production.
 
 **PostgreSQL** (`postgres:16-alpine`):
+
 - Port 5432, database `forge`, user `forge`, password `forge_dev`
 - Mounts `docker/init-db.sql` to `/docker-entrypoint-initdb.d/`
 - Healthcheck: `pg_isready -U forge`
 
 **MinIO** (`minio/minio:latest`):
+
 - Ports 9000 (API) and 9001 (console)
 - User `forge_minio`, password `forge_minio_secret`
 - Healthcheck: `curl -f http://localhost:9000/minio/health/live` (`mc` CLI is not present in the minio/minio image)
 
 **Ollama** (`ollama/ollama:latest`):
+
 - Port 11434
 - Persistent volume for models
 - Healthcheck: `curl -f http://localhost:11434/api/tags` (`ollama list` fails with no models on fresh startup)
@@ -154,6 +158,7 @@ Three infrastructure services only — app runs locally via `npm run dev`, not i
 Named volumes: `pgdata`, `minio_data`, `ollama_data`.
 
 **`docker/init-db.sql`:**
+
 ```sql
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pg_trgm";
@@ -167,12 +172,14 @@ CREATE EXTENSION IF NOT EXISTS "unaccent";
 ## Tooling
 
 ### ESLint (`eslint.config.js`)
+
 - Flat config with `@eslint/js`, `typescript-eslint`, `eslint-plugin-vue`
 - Strict TypeScript rules: no `any`, no unused vars
 - Vue 3 recommended rules
 - Ignores `dist/`, `node_modules/`, `coverage/`
 
 ### Prettier (`.prettierrc`)
+
 ```json
 {
   "semi": true,
@@ -184,10 +191,12 @@ CREATE EXTENSION IF NOT EXISTS "unaccent";
 ```
 
 ### Husky (`.husky/pre-commit`)
+
 - Runs `npx lint-staged`
 - lint-staged config in root `package.json`: ESLint + Prettier on staged `.ts`, `.vue`, `.js` files
 
 ### Vitest
+
 - `vitest.workspace.ts` at root defines two test projects: `packages/server`, `packages/client`
 - Server uses Node environment, client uses jsdom
 - `npm test` → `vitest run` across all workspaces
@@ -196,6 +205,7 @@ CREATE EXTENSION IF NOT EXISTS "unaccent";
 - Coverage enforced via `.coverage-thresholds.json` (100% lines/branches/functions/statements)
 
 ### TypeScript (`tsconfig.base.json`)
+
 - `strict: true`, `noUncheckedIndexedAccess: true`
 - `target: ES2022`, `module: ESNext`, `moduleResolution: Bundler`
 - `declaration: true`
@@ -203,26 +213,29 @@ CREATE EXTENSION IF NOT EXISTS "unaccent";
 - **Note:** `composite: true` is set only in `packages/shared/tsconfig.json` (the referenced project), not in the base config. The server package overrides to `module: NodeNext` / `moduleResolution: NodeNext` in its own tsconfig.
 
 ### Environment (`.env.example`)
+
 Full variable list from issue spec:
+
 - `DATABASE_URL`, `MINIO_*`, `JWT_*`, `GOOGLE_*`, `LLM_*`, `OLLAMA_*`
 
 ### `.gitignore`
+
 Extended with `*.tsbuildinfo` for TypeScript project references.
 
 ## Acceptance Criteria Mapping
 
-| AC | How It's Met |
-|----|-------------|
-| `npm install` installs all workspace deps | npm workspaces in root `package.json` |
-| `docker compose up` brings up PG, MinIO, Ollama healthy | Healthchecks on all 3 services |
-| TypeScript compiles in all 3 packages | `tsconfig.json` per package extending `tsconfig.base.json` |
-| Vite dev server starts with placeholder page | `HomePage.vue` with "Forge" heading |
-| Fastify responds to `GET /api/health` with `{ status: "ok" }` | `routes/health.ts` |
-| Shared exports importable by client and server | Workspace dependency `@forge/shared` |
-| Zod configured with sample schema | `validators/index.ts` with `createPostSchema` |
-| ESLint + Prettier on pre-commit | Husky + lint-staged |
-| `.env.example` documents all env vars | Full variable list from issue spec |
-| Vitest configured for server and client | `vitest.workspace.ts` + per-package configs |
+| AC                                                            | How It's Met                                               |
+| ------------------------------------------------------------- | ---------------------------------------------------------- |
+| `npm install` installs all workspace deps                     | npm workspaces in root `package.json`                      |
+| `docker compose up` brings up PG, MinIO, Ollama healthy       | Healthchecks on all 3 services                             |
+| TypeScript compiles in all 3 packages                         | `tsconfig.json` per package extending `tsconfig.base.json` |
+| Vite dev server starts with placeholder page                  | `HomePage.vue` with "Forge" heading                        |
+| Fastify responds to `GET /api/health` with `{ status: "ok" }` | `routes/health.ts`                                         |
+| Shared exports importable by client and server                | Workspace dependency `@forge/shared`                       |
+| Zod configured with sample schema                             | `validators/index.ts` with `createPostSchema`              |
+| ESLint + Prettier on pre-commit                               | Husky + lint-staged                                        |
+| `.env.example` documents all env vars                         | Full variable list from issue spec                         |
+| Vitest configured for server and client                       | `vitest.workspace.ts` + per-package configs                |
 
 ## Definition of Done
 

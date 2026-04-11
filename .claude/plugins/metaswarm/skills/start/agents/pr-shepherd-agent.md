@@ -77,7 +77,7 @@ The core monitoring logic is handled by the existing skill:
 Or programmatically:
 
 ```typescript
-Skill({ skill: "pr-shepherd", args: prNumber.toString() });
+Skill({ skill: 'pr-shepherd', args: prNumber.toString() });
 ```
 
 ### Step 3: BEADS Status Updates
@@ -160,8 +160,8 @@ bd close <task-id> --reason "PR #${PR_NUMBER} ready to merge. All CI green, all 
 
 The existing PR Shepherd skill handles:
 
-| Responsibility             | Handled By                     |
-| -------------------------- | ------------------------------ |
+| Responsibility             | Handled By                        |
+| -------------------------- | --------------------------------- |
 | CI monitoring              | your-project:pr-shepherd          |
 | Auto-fixing lint/types     | your-project:pr-shepherd          |
 | Review comment handling    | your-project:handling-pr-comments |

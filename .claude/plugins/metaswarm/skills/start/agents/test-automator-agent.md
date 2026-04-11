@@ -79,11 +79,11 @@ For each component to test:
 // Create test file BEFORE implementation
 // src/lib/services/feature.service.test.ts
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
-import { FeatureService } from "./feature.service";
-import { createMockOrganization } from "@/test-utils/factories";
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { FeatureService } from './feature.service';
+import { createMockOrganization } from '@/test-utils/factories';
 
-describe("FeatureService", () => {
+describe('FeatureService', () => {
   let service: FeatureService;
   let mockDep: ReturnType<typeof createMockDependency>;
 
@@ -92,32 +92,32 @@ describe("FeatureService", () => {
     service = new FeatureService(deps as never);
   });
 
-  describe("processData", () => {
-    it("should process valid input and return result", async () => {
+  describe('processData', () => {
+    it('should process valid input and return result', async () => {
       // Arrange
-      const input = { value: "test-input" };
-      const expectedOutput = { processed: true, value: "TEST-INPUT" };
-      mockDep.transform.mockReturnValue("TEST-INPUT");
+      const input = { value: 'test-input' };
+      const expectedOutput = { processed: true, value: 'TEST-INPUT' };
+      mockDep.transform.mockReturnValue('TEST-INPUT');
 
       // Act
       const result = await service.processData(input);
 
       // Assert
       expect(result).toEqual(expectedOutput);
-      expect(mockDep.transform).toHaveBeenCalledWith("test-input");
+      expect(mockDep.transform).toHaveBeenCalledWith('test-input');
     });
 
-    it("should throw ValidationError for empty input", async () => {
-      const input = { value: "" };
+    it('should throw ValidationError for empty input', async () => {
+      const input = { value: '' };
 
-      await expect(service.processData(input)).rejects.toThrow("Validation failed");
+      await expect(service.processData(input)).rejects.toThrow('Validation failed');
     });
 
-    it("should handle dependency failure gracefully", async () => {
-      const input = { value: "test" };
-      mockDep.transform.mockRejectedValue(new Error("Dependency failed"));
+    it('should handle dependency failure gracefully', async () => {
+      const input = { value: 'test' };
+      mockDep.transform.mockRejectedValue(new Error('Dependency failed'));
 
-      await expect(service.processData(input)).rejects.toThrow("Processing failed");
+      await expect(service.processData(input)).rejects.toThrow('Processing failed');
     });
   });
 });
@@ -150,21 +150,21 @@ pnpm test src/lib/services/feature.service.test.ts --coverage --run
 After initial implementation, add:
 
 ```typescript
-describe("edge cases", () => {
-  it("should handle null input", async () => {
-    await expect(service.processData(null as never)).rejects.toThrow("Input required");
+describe('edge cases', () => {
+  it('should handle null input', async () => {
+    await expect(service.processData(null as never)).rejects.toThrow('Input required');
   });
 
-  it("should handle very long input", async () => {
-    const longInput = { value: "x".repeat(10000) };
+  it('should handle very long input', async () => {
+    const longInput = { value: 'x'.repeat(10000) };
     const result = await service.processData(longInput);
     expect(result.value.length).toBe(10000);
   });
 
-  it("should handle special characters", async () => {
+  it('should handle special characters', async () => {
     const input = { value: '<script>alert("xss")</script>' };
     const result = await service.processData(input);
-    expect(result.value).not.toContain("<script>");
+    expect(result.value).not.toContain('<script>');
   });
 });
 ```
@@ -176,10 +176,10 @@ describe("edge cases", () => {
 ### Testing Pure Services
 
 ```typescript
-describe("PureScoringService", () => {
+describe('PureScoringService', () => {
   const service = new PureScoringService();
 
-  it("should calculate score correctly", () => {
+  it('should calculate score correctly', () => {
     const input = {
       factors: [
         { weight: 0.5, value: 10 },
@@ -197,10 +197,10 @@ describe("PureScoringService", () => {
 ### Testing Persistence Services
 
 ```typescript
-import { mockDeep } from "vitest-mock-extended";
-import { PrismaClient } from "@prisma/client";
+import { mockDeep } from 'vitest-mock-extended';
+import { PrismaClient } from '@prisma/client';
 
-describe("ContactPersistenceService", () => {
+describe('ContactPersistenceService', () => {
   let service: ContactPersistenceService;
   let mockPrisma: ReturnType<typeof mockDeep<PrismaClient>>;
 
@@ -209,8 +209,8 @@ describe("ContactPersistenceService", () => {
     service = new ContactPersistenceService(mockPrisma);
   });
 
-  it("should find contacts by userId", async () => {
-    const userId = "user-123";
+  it('should find contacts by userId', async () => {
+    const userId = 'user-123';
     const mockContacts = [createMockContact({ userId })];
     mockPrisma.contact.findMany.mockResolvedValue(mockContacts);
 
@@ -227,7 +227,7 @@ describe("ContactPersistenceService", () => {
 ### Testing Orchestrators
 
 ```typescript
-describe("ContactOrchestratorService", () => {
+describe('ContactOrchestratorService', () => {
   let service: ContactOrchestratorService;
   let mockPersistence: ReturnType<typeof vi.fn>;
   let mockScoring: ReturnType<typeof vi.fn>;
@@ -243,7 +243,7 @@ describe("ContactOrchestratorService", () => {
     service = new ContactOrchestratorService(mockPersistence, mockScoring);
   });
 
-  it("should create contact and calculate score", async () => {
+  it('should create contact and calculate score', async () => {
     const input = createMockContactInput();
     const createdContact = createMockContact(input);
     mockPersistence.create.mockResolvedValue(createdContact);
@@ -260,23 +260,23 @@ describe("ContactOrchestratorService", () => {
 ### Testing API Routes (Hono)
 
 ```typescript
-import { Hono } from "hono";
+import { Hono } from 'hono';
 
 function buildApp(mockService: MockContactService) {
   const app = new Hono();
-  app.route("/api/contacts", createContactRoutes(mockService));
+  app.route('/api/contacts', createContactRoutes(mockService));
   return app;
 }
 
-describe("POST /api/contacts", () => {
-  it("should create contact and return 201", async () => {
-    const body = { email: "test@example.com", name: "Test" };
-    mockService.create.mockResolvedValue({ id: "contact-1", ...body });
+describe('POST /api/contacts', () => {
+  it('should create contact and return 201', async () => {
+    const body = { email: 'test@example.com', name: 'Test' };
+    mockService.create.mockResolvedValue({ id: 'contact-1', ...body });
 
     const app = buildApp(mockService);
-    const res = await app.request("/api/contacts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+    const res = await app.request('/api/contacts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
 
@@ -285,11 +285,11 @@ describe("POST /api/contacts", () => {
     expect(data.email).toBe(body.email);
   });
 
-  it("should return 401 for unauthenticated request", async () => {
+  it('should return 401 for unauthenticated request', async () => {
     const app = buildApp(mockService);
     // No auth header provided
-    const res = await app.request("/api/contacts", {
-      method: "POST",
+    const res = await app.request('/api/contacts', {
+      method: 'POST',
       body: JSON.stringify({}),
     });
 
@@ -310,15 +310,15 @@ import {
   createMockOrganization,
   createMockMembership,
   createMockJob,
-} from "@/test-utils/factories";
+} from '@/test-utils/factories';
 
 // With defaults
 const user = createMockUser();
 
 // With overrides
 const user = createMockUser({
-  email: "specific@example.com",
-  role: "admin",
+  email: 'specific@example.com',
+  role: 'admin',
 });
 ```
 
@@ -332,19 +332,19 @@ export interface NewEntityRecord {
   id: string;
   organizationId: string;
   name: string;
-  status: "ACTIVE" | "INACTIVE";
+  status: 'ACTIVE' | 'INACTIVE';
   createdAt: Date;
   updatedAt: Date;
 }
 
-const DEFAULT_DATE = new Date("2026-01-01T00:00:00Z");
+const DEFAULT_DATE = new Date('2026-01-01T00:00:00Z');
 
 export function createMockNewEntity(overrides: Partial<NewEntityRecord> = {}): NewEntityRecord {
   return {
-    id: "ne_test_default",
+    id: 'ne_test_default',
     organizationId: testOrgId(),
-    name: "Test Entity",
-    status: "ACTIVE",
+    name: 'Test Entity',
+    status: 'ACTIVE',
     createdAt: DEFAULT_DATE,
     updatedAt: DEFAULT_DATE,
     ...overrides,

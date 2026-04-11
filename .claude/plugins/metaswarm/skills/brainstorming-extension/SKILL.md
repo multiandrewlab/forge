@@ -4,7 +4,7 @@ description: Enforces design review gate after brainstorming — bridges superpo
 auto_activate: true
 triggers:
   - after:superpowers:brainstorming
-  - "design document committed"
+  - 'design document committed'
 ---
 
 # Brainstorming Extension - Mandatory Review Gate Bridge
@@ -98,6 +98,7 @@ Your design document has been committed. Before proceeding to implementation,
 I'll run it through our 5-agent review panel.
 
 Spawning reviews:
+
 - Product Manager Agent (use case/requirements validation)
 - Architect Agent (technical architecture)
 - Designer Agent (UX/API design)
@@ -129,6 +130,7 @@ All five reviewers have approved your design!
 | CTO             | APPROVED | TDD specs present, ready to implement |
 
 ### Next Steps
+
 1. Create epic for this feature
 2. Create implementation plan (writing-plans)
 3. Run plan through Plan Review Gate (3 adversarial reviewers)
@@ -146,9 +148,11 @@ Ready to proceed? [Yes / No]
 Some reviewers found issues that need to be addressed.
 
 ### Blocking Issues
+
 [Agent-specific issues listed here]
 
 ### Questions Requiring Answers
+
 [Questions listed here]
 
 ---

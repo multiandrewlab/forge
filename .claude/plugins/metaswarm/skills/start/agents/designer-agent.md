@@ -250,7 +250,7 @@ interface ContactSyncService {
 
 ```typescript
 // BAD: Magic strings
-searchContacts({ type: "linkedin", status: "active" });
+searchContacts({ type: 'linkedin', status: 'active' });
 
 // GOOD: Type-safe discriminated unions
 searchContacts({

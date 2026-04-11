@@ -52,15 +52,15 @@ You MUST detect all of the following automatically by scanning the project direc
 
 Check for these marker files using Glob at the project root:
 
-| Marker File | Language |
-|---|---|
-| `package.json` | Node.js / JavaScript |
-| `tsconfig.json` | TypeScript (refines Node.js to TypeScript) |
-| `pyproject.toml` OR `setup.py` OR `requirements.txt` | Python |
-| `go.mod` | Go |
-| `Cargo.toml` | Rust |
-| `pom.xml` OR `build.gradle` OR `build.gradle.kts` | Java |
-| `Gemfile` | Ruby |
+| Marker File                                          | Language                                   |
+| ---------------------------------------------------- | ------------------------------------------ |
+| `package.json`                                       | Node.js / JavaScript                       |
+| `tsconfig.json`                                      | TypeScript (refines Node.js to TypeScript) |
+| `pyproject.toml` OR `setup.py` OR `requirements.txt` | Python                                     |
+| `go.mod`                                             | Go                                         |
+| `Cargo.toml`                                         | Rust                                       |
+| `pom.xml` OR `build.gradle` OR `build.gradle.kts`    | Java                                       |
+| `Gemfile`                                            | Ruby                                       |
 
 If multiple languages are detected, note all of them but use the primary one (the one with the most infrastructure) for command generation.
 
@@ -70,34 +70,34 @@ If `tsconfig.json` exists alongside `package.json`, the language is "TypeScript"
 
 If `package.json` exists, Read it and check `dependencies` and `devDependencies` for:
 
-| Dependency | Framework |
-|---|---|
-| `next` | Next.js |
-| `nuxt` OR `nuxt3` | Nuxt |
-| `@angular/core` | Angular |
+| Dependency                  | Framework |
+| --------------------------- | --------- |
+| `next`                      | Next.js   |
+| `nuxt` OR `nuxt3`           | Nuxt      |
+| `@angular/core`             | Angular   |
 | `svelte` OR `@sveltejs/kit` | SvelteKit |
-| `react` (without next/nuxt) | React |
-| `vue` (without nuxt) | Vue |
-| `express` | Express |
-| `fastify` | Fastify |
-| `hono` | Hono |
-| `@nestjs/core` | NestJS |
+| `react` (without next/nuxt) | React     |
+| `vue` (without nuxt)        | Vue       |
+| `express`                   | Express   |
+| `fastify`                   | Fastify   |
+| `hono`                      | Hono      |
+| `@nestjs/core`              | NestJS    |
 
 If `pyproject.toml` or `requirements.txt` exists, check for:
 
 | Dependency | Framework |
-|---|---|
-| `fastapi` | FastAPI |
-| `django` | Django |
-| `flask` | Flask |
+| ---------- | --------- |
+| `fastapi`  | FastAPI   |
+| `django`   | Django    |
+| `flask`    | Flask     |
 
 If `go.mod` exists, Read it and check for:
 
-| Module | Framework |
-|---|---|
-| `github.com/gin-gonic/gin` | Gin |
-| `github.com/labstack/echo` | Echo |
-| `github.com/gofiber/fiber` | Fiber |
+| Module                     | Framework |
+| -------------------------- | --------- |
+| `github.com/gin-gonic/gin` | Gin       |
+| `github.com/labstack/echo` | Echo      |
+| `github.com/gofiber/fiber` | Fiber     |
 
 If no framework is detected, set framework to `null`.
 
@@ -105,12 +105,12 @@ If no framework is detected, set framework to `null`.
 
 If the language is Node.js or TypeScript, check for lock files:
 
-| Lock File | Package Manager |
-|---|---|
-| `pnpm-lock.yaml` | pnpm |
-| `yarn.lock` | yarn |
-| `bun.lockb` | bun |
-| `package-lock.json` | npm |
+| Lock File           | Package Manager |
+| ------------------- | --------------- |
+| `pnpm-lock.yaml`    | pnpm            |
+| `yarn.lock`         | yarn            |
+| `bun.lockb`         | bun             |
+| `package-lock.json` | npm             |
 
 If no lock file is found, default to `npm`.
 
@@ -121,6 +121,7 @@ For non-Node.js languages, set package_manager to `null`.
 Check in this order (first match wins per ecosystem):
 
 **Node.js / TypeScript:**
+
 1. Glob for `vitest.config.*` — if found, test runner is `vitest`
 2. Read `package.json` → if `vitest` in `devDependencies`, test runner is `vitest`
 3. Glob for `jest.config.*` — if found, test runner is `jest`
@@ -128,68 +129,72 @@ Check in this order (first match wins per ecosystem):
 5. Read `package.json` → if `mocha` in `devDependencies`, test runner is `mocha`
 
 **Python:**
+
 1. Read `pyproject.toml` → if `[tool.pytest]` section exists, test runner is `pytest`
 2. Check Python dependencies for `pytest` → test runner is `pytest`
 3. Default: `pytest` (standard for Python)
 
 **Go:**
+
 - If `go.mod` exists → test runner is `go test` (built-in)
 
 **Rust:**
+
 - If `Cargo.toml` exists → test runner is `cargo test` (built-in)
 
 **Java:**
+
 - If `pom.xml` exists → test runner is `maven` (mvn test)
 - If `build.gradle` exists → test runner is `gradle` (gradle test)
 
 ### 2.5 — Linter Detection
 
-| Marker | Linter |
-|---|---|
-| `.eslintrc*` OR `eslint.config.*` files exist, OR `eslint` in devDependencies | eslint |
-| `biome.json` OR `@biomejs/biome` in devDependencies | biome |
-| `[tool.ruff]` section in `pyproject.toml` OR `ruff.toml` exists | ruff |
-| `.golangci.yml` OR `.golangci.yaml` exists | golangci-lint |
-| `clippy` section in Cargo.toml or `.clippy.toml` exists | clippy |
+| Marker                                                                        | Linter        |
+| ----------------------------------------------------------------------------- | ------------- |
+| `.eslintrc*` OR `eslint.config.*` files exist, OR `eslint` in devDependencies | eslint        |
+| `biome.json` OR `@biomejs/biome` in devDependencies                           | biome         |
+| `[tool.ruff]` section in `pyproject.toml` OR `ruff.toml` exists               | ruff          |
+| `.golangci.yml` OR `.golangci.yaml` exists                                    | golangci-lint |
+| `clippy` section in Cargo.toml or `.clippy.toml` exists                       | clippy        |
 
 ### 2.6 — Formatter Detection
 
-| Marker | Formatter |
-|---|---|
-| `.prettierrc*` files exist OR `prettier` in devDependencies | prettier |
-| `biome.json` exists (biome also formats) | biome |
-| `black` in Python dependencies | black |
-| `[tool.ruff.format]` section in `pyproject.toml` | ruff format |
-| `rustfmt.toml` OR `.rustfmt.toml` exists | rustfmt |
+| Marker                                                      | Formatter   |
+| ----------------------------------------------------------- | ----------- |
+| `.prettierrc*` files exist OR `prettier` in devDependencies | prettier    |
+| `biome.json` exists (biome also formats)                    | biome       |
+| `black` in Python dependencies                              | black       |
+| `[tool.ruff.format]` section in `pyproject.toml`            | ruff format |
+| `rustfmt.toml` OR `.rustfmt.toml` exists                    | rustfmt     |
 
 Note: If biome is detected as both linter and formatter, report it once as "Biome (lint + format)".
 
 ### 2.7 — Type Checker Detection
 
-| Marker | Type Checker |
-|---|---|
-| `tsconfig.json` exists | tsc |
-| `mypy` in Python deps OR `[tool.mypy]` in `pyproject.toml` | mypy |
-| `pyright` in Python deps OR `pyrightconfig.json` exists | pyright |
+| Marker                                                     | Type Checker |
+| ---------------------------------------------------------- | ------------ |
+| `tsconfig.json` exists                                     | tsc          |
+| `mypy` in Python deps OR `[tool.mypy]` in `pyproject.toml` | mypy         |
+| `pyright` in Python deps OR `pyrightconfig.json` exists    | pyright      |
 
 For Go (`go vet`) and Rust (`cargo check`), type checking is built-in — note this but don't list as a separate tool.
 
 ### 2.8 — CI Detection
 
-| Marker | CI System |
-|---|---|
+| Marker                                                         | CI System      |
+| -------------------------------------------------------------- | -------------- |
 | `.github/workflows/` directory exists (with .yml files inside) | GitHub Actions |
-| `.gitlab-ci.yml` exists | GitLab CI |
-| `Jenkinsfile` exists | Jenkins |
-| `.circleci/config.yml` exists | CircleCI |
+| `.gitlab-ci.yml` exists                                        | GitLab CI      |
+| `Jenkinsfile` exists                                           | Jenkins        |
+| `.circleci/config.yml` exists                                  | CircleCI       |
 
 ### 2.9 — Git Hooks Detection
 
-| Marker | Hook System |
-|---|---|
-| `.husky/` directory exists | Husky |
-| `.pre-commit-config.yaml` exists | pre-commit |
-| `.lefthook.yml` exists | Lefthook |
+| Marker                           | Hook System |
+| -------------------------------- | ----------- |
+| `.husky/` directory exists       | Husky       |
+| `.pre-commit-config.yaml` exists | pre-commit  |
+| `.lefthook.yml` exists           | Lefthook    |
 
 ### 2.10 — Present Detection Results
 
@@ -265,6 +270,7 @@ Based on detection results and user answers, customize the following files. Read
 Read the project's `CLAUDE.md` file. Find and update the TODO sections.
 
 **Test commands section** — Find the lines:
+
 ```
 <!-- TODO: Update these commands for your project's test runner -->
 - Test command: `npm test`
@@ -273,29 +279,31 @@ Read the project's `CLAUDE.md` file. Find and update the TODO sections.
 
 Replace with the correct commands based on detected test runner and package manager:
 
-| Test Runner | Package Manager | Test Command | Coverage Command |
-|---|---|---|---|
-| vitest | pnpm | `pnpm vitest run` | `pnpm vitest run --coverage` |
-| vitest | npm | `npx vitest run` | `npx vitest run --coverage` |
-| vitest | yarn | `yarn vitest run` | `yarn vitest run --coverage` |
-| vitest | bun | `bun vitest run` | `bun vitest run --coverage` |
-| jest | pnpm | `pnpm jest` | `pnpm jest --coverage` |
-| jest | npm | `npx jest` | `npx jest --coverage` |
-| jest | yarn | `yarn jest` | `yarn jest --coverage` |
-| mocha | any | `npx mocha` | `npx nyc mocha` |
-| pytest | — | `pytest` | `pytest --cov --cov-fail-under={threshold}` |
-| go test | — | `go test ./...` | `go test -coverprofile=coverage.out ./...` |
-| cargo test | — | `cargo test` | `cargo tarpaulin` |
-| maven | — | `mvn test` | `mvn test jacoco:report` |
-| gradle | — | `gradle test` | `gradle test jacocoTestReport` |
+| Test Runner | Package Manager | Test Command      | Coverage Command                            |
+| ----------- | --------------- | ----------------- | ------------------------------------------- |
+| vitest      | pnpm            | `pnpm vitest run` | `pnpm vitest run --coverage`                |
+| vitest      | npm             | `npx vitest run`  | `npx vitest run --coverage`                 |
+| vitest      | yarn            | `yarn vitest run` | `yarn vitest run --coverage`                |
+| vitest      | bun             | `bun vitest run`  | `bun vitest run --coverage`                 |
+| jest        | pnpm            | `pnpm jest`       | `pnpm jest --coverage`                      |
+| jest        | npm             | `npx jest`        | `npx jest --coverage`                       |
+| jest        | yarn            | `yarn jest`       | `yarn jest --coverage`                      |
+| mocha       | any             | `npx mocha`       | `npx nyc mocha`                             |
+| pytest      | —               | `pytest`          | `pytest --cov --cov-fail-under={threshold}` |
+| go test     | —               | `go test ./...`   | `go test -coverprofile=coverage.out ./...`  |
+| cargo test  | —               | `cargo test`      | `cargo tarpaulin`                           |
+| maven       | —               | `mvn test`        | `mvn test jacoco:report`                    |
+| gradle      | —               | `gradle test`     | `gradle test jacocoTestReport`              |
 
 Remove the TODO comment after replacing. The updated section should look like:
+
 ```
 - Test command: `pnpm vitest run`
 - Coverage command: `pnpm vitest run --coverage`
 ```
 
 **Code quality section** — Find the lines:
+
 ```
 <!-- TODO: Update these for your project's language and tools -->
 - TypeScript strict mode, no `any` types
@@ -304,15 +312,15 @@ Remove the TODO comment after replacing. The updated section should look like:
 
 Replace with language-appropriate descriptions:
 
-| Language | Code Quality Line 1 | Code Quality Line 2 |
-|---|---|---|
-| TypeScript | `TypeScript strict mode, no \`any\` types` | `{linter} + {formatter}` |
-| JavaScript | `Modern ES modules, strict mode` | `{linter} + {formatter}` |
-| Python | `Type hints required (PEP 484), no \`Any\` escape hatches` | `{linter} + {formatter}` |
-| Go | `Go idioms, \`go vet\` clean, exported types documented` | `{linter}` |
-| Rust | `Clippy clean (\`#![deny(clippy::all)]\`), no \`unsafe\` without comment` | `{formatter}` |
-| Java | `Null-safe patterns, no raw types` | `{linter} + {formatter}` |
-| Ruby | `Rubocop clean, frozen string literals` | `RuboCop` |
+| Language   | Code Quality Line 1                                                       | Code Quality Line 2      |
+| ---------- | ------------------------------------------------------------------------- | ------------------------ |
+| TypeScript | `TypeScript strict mode, no \`any\` types`                                | `{linter} + {formatter}` |
+| JavaScript | `Modern ES modules, strict mode`                                          | `{linter} + {formatter}` |
+| Python     | `Type hints required (PEP 484), no \`Any\` escape hatches`                | `{linter} + {formatter}` |
+| Go         | `Go idioms, \`go vet\` clean, exported types documented`                  | `{linter}`               |
+| Rust       | `Clippy clean (\`#![deny(clippy::all)]\`), no \`unsafe\` without comment` | `{formatter}`            |
+| Java       | `Null-safe patterns, no raw types`                                        | `{linter} + {formatter}` |
+| Ruby       | `Rubocop clean, frozen string literals`                                   | `RuboCop`                |
 
 Replace `{linter}` and `{formatter}` with the actual detected tools. If none detected, omit that part.
 
@@ -323,6 +331,7 @@ Remove the TODO comment after replacing.
 Read `.coverage-thresholds.json`. Update:
 
 **Threshold values** — If user chose something other than 100%:
+
 ```json
 "thresholds": {
   "lines": {chosen_value},
@@ -334,25 +343,26 @@ Read `.coverage-thresholds.json`. Update:
 
 **Enforcement command** — Map to the correct coverage command:
 
-| Test Runner | Package Manager | Enforcement Command |
-|---|---|---|
-| vitest | pnpm | `pnpm vitest run --coverage` |
-| vitest | npm | `npx vitest run --coverage` |
-| vitest | yarn | `yarn vitest run --coverage` |
-| jest | pnpm | `pnpm jest --coverage` |
-| jest | npm | `npx jest --coverage` |
-| jest | yarn | `yarn jest --coverage` |
-| pytest | — | `pytest --cov --cov-fail-under={threshold}` |
-| go test | — | `go test -coverprofile=coverage.out ./...` |
-| cargo test | — | `cargo tarpaulin --fail-under {threshold}` |
-| maven | — | `mvn test jacoco:report` |
-| gradle | — | `gradle test jacocoTestReport` |
+| Test Runner | Package Manager | Enforcement Command                         |
+| ----------- | --------------- | ------------------------------------------- |
+| vitest      | pnpm            | `pnpm vitest run --coverage`                |
+| vitest      | npm             | `npx vitest run --coverage`                 |
+| vitest      | yarn            | `yarn vitest run --coverage`                |
+| jest        | pnpm            | `pnpm jest --coverage`                      |
+| jest        | npm             | `npx jest --coverage`                       |
+| jest        | yarn            | `yarn jest --coverage`                      |
+| pytest      | —               | `pytest --cov --cov-fail-under={threshold}` |
+| go test     | —               | `go test -coverprofile=coverage.out ./...`  |
+| cargo test  | —               | `cargo tarpaulin --fail-under {threshold}`  |
+| maven       | —               | `mvn test jacoco:report`                    |
+| gradle      | —               | `gradle test jacocoTestReport`              |
 
 ### 4.3 — Update .gitignore
 
 Read the project's `.gitignore` file (it may be the template or the user's own). Append any missing language-specific entries. Do NOT duplicate entries that already exist.
 
 **Node.js / TypeScript — ensure these are present:**
+
 ```
 node_modules/
 dist/
@@ -365,6 +375,7 @@ coverage/
 ```
 
 **Python — ensure these are present:**
+
 ```
 __pycache__/
 *.pyc
@@ -379,6 +390,7 @@ coverage/
 ```
 
 **Go — ensure these are present:**
+
 ```
 vendor/
 .env
@@ -386,12 +398,14 @@ coverage.out
 ```
 
 **Rust — ensure these are present:**
+
 ```
 target/
 .env
 ```
 
 **Java — ensure these are present:**
+
 ```
 build/
 .gradle/
@@ -401,6 +415,7 @@ target/
 ```
 
 **Always ensure these are present regardless of language:**
+
 ```
 .DS_Store
 *.log
@@ -440,6 +455,7 @@ If the user chose YES for visual review:
 If the user chose YES for git hooks and no hooks were detected:
 
 **For Node.js / TypeScript projects:**
+
 1. Tell the user: "Setting up Husky for git hooks..."
 2. Check if husky is in devDependencies. If not, install it:
    - pnpm: `pnpm add -D husky`
@@ -450,10 +466,12 @@ If the user chose YES for git hooks and no hooks were detected:
 5. Make it executable: `chmod +x .husky/pre-push`
 
 **For Python projects:**
+
 1. Tell the user: "Consider setting up pre-commit hooks. Install with: `pip install pre-commit`"
 2. Offer to create a basic `.pre-commit-config.yaml` with ruff/black/mypy hooks
 
 **For other languages:**
+
 1. Suggest appropriate hook tools for their ecosystem
 
 ### 4.7 — BEADS Setup
@@ -469,6 +487,7 @@ If the user chose YES for BEADS and `bd` is available:
 ## Phase 5: Write Project Profile
 
 Create the `.metaswarm/` directory if it doesn't exist:
+
 ```bash
 mkdir -p .metaswarm
 ```
@@ -513,22 +532,22 @@ Fill in ALL values based on detection results and user answers. Use `null` for a
 
 For the `commands` section, derive the correct commands:
 
-| Tool | Command |
-|---|---|
-| eslint (pnpm) | `pnpm eslint .` |
-| eslint (npm) | `npx eslint .` |
-| biome (pnpm) | `pnpm biome check .` |
-| ruff | `ruff check .` |
-| golangci-lint | `golangci-lint run` |
-| tsc (pnpm) | `pnpm tsc --noEmit` |
-| tsc (npm) | `npx tsc --noEmit` |
-| mypy | `mypy .` |
-| pyright | `pyright` |
-| prettier (pnpm) | `pnpm prettier --check .` |
-| prettier (npm) | `npx prettier --check .` |
-| biome format | `pnpm biome check --formatter-enabled=true .` |
-| black | `black --check .` |
-| ruff format | `ruff format --check .` |
+| Tool            | Command                                       |
+| --------------- | --------------------------------------------- |
+| eslint (pnpm)   | `pnpm eslint .`                               |
+| eslint (npm)    | `npx eslint .`                                |
+| biome (pnpm)    | `pnpm biome check .`                          |
+| ruff            | `ruff check .`                                |
+| golangci-lint   | `golangci-lint run`                           |
+| tsc (pnpm)      | `pnpm tsc --noEmit`                           |
+| tsc (npm)       | `npx tsc --noEmit`                            |
+| mypy            | `mypy .`                                      |
+| pyright         | `pyright`                                     |
+| prettier (pnpm) | `pnpm prettier --check .`                     |
+| prettier (npm)  | `npx prettier --check .`                      |
+| biome format    | `pnpm biome check --formatter-enabled=true .` |
+| black           | `black --check .`                             |
+| ruff format     | `ruff format --check .`                       |
 
 ---
 

@@ -25,21 +25,21 @@ This triggers the full pipeline: Research → Plan → Design Review Gate → Wo
 
 ### Available Commands
 
-| Command | Purpose |
-|---|---|
-| `/start-task` | Begin tracked work on a task |
-| `/prime` | Load relevant knowledge before starting |
-| `/review-design` | Trigger parallel design review gate (5 agents) |
-| `/pr-shepherd <pr>` | Monitor a PR through to merge |
-| `/self-reflect` | Extract learnings after a PR merge |
-| `/handle-pr-comments` | Handle PR review comments |
-| `/brainstorm` | Refine an idea before implementation |
-| `/create-issue` | Create a well-structured GitHub Issue |
-| `/external-tools-health` | Check status of external AI tools (Codex, Gemini) |
-| `/setup` | Interactive guided setup — detects project, configures metaswarm |
-| `/update` | Update metaswarm to latest version |
-| `/status` | Run diagnostic checks on your installation |
-| `/start` | Alias for `/start-task` |
+| Command                  | Purpose                                                          |
+| ------------------------ | ---------------------------------------------------------------- |
+| `/start-task`            | Begin tracked work on a task                                     |
+| `/prime`                 | Load relevant knowledge before starting                          |
+| `/review-design`         | Trigger parallel design review gate (5 agents)                   |
+| `/pr-shepherd <pr>`      | Monitor a PR through to merge                                    |
+| `/self-reflect`          | Extract learnings after a PR merge                               |
+| `/handle-pr-comments`    | Handle PR review comments                                        |
+| `/brainstorm`            | Refine an idea before implementation                             |
+| `/create-issue`          | Create a well-structured GitHub Issue                            |
+| `/external-tools-health` | Check status of external AI tools (Codex, Gemini)                |
+| `/setup`                 | Interactive guided setup — detects project, configures metaswarm |
+| `/update`                | Update metaswarm to latest version                               |
+| `/status`                | Run diagnostic checks on your installation                       |
+| `/start`                 | Alias for `/start-task`                                          |
 
 ### Visual Review
 
@@ -125,6 +125,7 @@ When `superpowers:test-driven-development` runs as a standalone skill (outside o
 
 1. **Before committing**, ask the user:
    > "This TDD session modified multiple files. Would you like me to run an adversarial review before committing?"
+   >
    > 1. **Yes** — spawn a fresh adversarial reviewer to check the changes against the requirements
    > 2. **No** — commit directly
 2. If the user chooses review, spawn a fresh `Task()` reviewer with the requirements and the diff
@@ -180,6 +181,7 @@ When `TeamCreate` and `SendMessage` tools are available, the orchestrator uses T
 ## Guides
 
 Development patterns and standards are documented in `guides/`:
+
 - `agent-coordination.md` — Team Mode vs Task Mode, agent dispatch patterns
 - `build-validation.md` — Build and validation workflow
 - `coding-standards.md` — Code style and conventions

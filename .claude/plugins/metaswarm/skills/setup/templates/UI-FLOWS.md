@@ -29,11 +29,11 @@
 
 ### Flow: [Action Name]
 
-| Step | User Action | System Response | Component |
-|------|------------|-----------------|-----------|
-| 1 | _User clicks X_ | _System does Y_ | _ComponentName_ |
-| 2 | _User types Z_ | _Input validates_ | _ComponentName_ |
-| 3 | _User presses Enter_ | _Item appears in list_ | _ComponentName_ |
+| Step | User Action          | System Response        | Component       |
+| ---- | -------------------- | ---------------------- | --------------- |
+| 1    | _User clicks X_      | _System does Y_        | _ComponentName_ |
+| 2    | _User types Z_       | _Input validates_      | _ComponentName_ |
+| 3    | _User presses Enter_ | _Item appears in list_ | _ComponentName_ |
 
 **Error States**: _What happens on failure_
 **Loading States**: _What the user sees while waiting_

@@ -35,13 +35,13 @@ This script:
 
 The filter script categorizes by priority:
 
-| Priority        | Marker                                                   | Action           |
-| --------------- | -------------------------------------------------------- | ---------------- |
-| CRITICAL        | `_⚠️ Potential issue_ \| _🔴 Critical_`                  | Fix immediately  |
-| HIGH            | `_⚠️ Potential issue_ \| _🟠 Major_`                     | Fix before merge |
-| MEDIUM          | `_🟡 Minor_` or `_🛠️ Refactor suggestion_ \| _🟠 Major_` | Should fix       |
-| LOW             | `_🔵 Trivial_` / `_🧹 Nitpick_`                          | Fix if quick     |
-| HUMAN           | Non-bot comments                                         | Always process   |
+| Priority | Marker                                                   | Action           |
+| -------- | -------------------------------------------------------- | ---------------- |
+| CRITICAL | `_⚠️ Potential issue_ \| _🔴 Critical_`                  | Fix immediately  |
+| HIGH     | `_⚠️ Potential issue_ \| _🟠 Major_`                     | Fix before merge |
+| MEDIUM   | `_🟡 Minor_` or `_🛠️ Refactor suggestion_ \| _🟠 Major_` | Should fix       |
+| LOW      | `_🔵 Trivial_` / `_🧹 Nitpick_`                          | Fix if quick     |
+| HUMAN    | Non-bot comments                                         | Always process   |
 
 For each actionable comment, further categorize as:
 

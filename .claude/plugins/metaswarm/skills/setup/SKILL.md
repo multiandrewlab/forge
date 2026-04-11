@@ -17,6 +17,7 @@ bash "${CLAUDE_PLUGIN_ROOT}/lib/setup-mandatory-files.sh" "$(pwd)" <threshold> "
 ```
 
 Where:
+
 - `<threshold>` is the user's chosen percentage (e.g., `100`)
 - `<coverage-command>` is the enforcement command for their test runner:
   - pytest → `"pytest --cov --cov-fail-under=<threshold>"`
@@ -26,6 +27,7 @@ Where:
   - cargo → `"cargo tarpaulin --fail-under <threshold>"`
 
 The script handles:
+
 1. **CLAUDE.md** — appends metaswarm section (or writes new), skips if already present
 2. **`.coverage-thresholds.json`** — writes at project root with correct thresholds and command
 3. **6 shims in `.claude/commands/`** — writes `start-task.md`, `prime.md`, `review-design.md`, `self-reflect.md`, `pr-shepherd.md`, `brainstorm.md`
@@ -54,16 +56,16 @@ Scan the project directory silently using Glob and Read. Do NOT ask the user for
 
 Check for marker files at the project root:
 
-| Marker File | Language |
-|---|---|
-| `package.json` | Node.js / JavaScript |
-| `tsconfig.json` | TypeScript (refines Node.js to TypeScript) |
-| `pyproject.toml` OR `setup.py` OR `requirements.txt` | Python |
-| `go.mod` | Go |
-| `Cargo.toml` | Rust |
-| `pom.xml` OR `build.gradle` OR `build.gradle.kts` | Java |
-| `Gemfile` | Ruby |
-| `Makefile` (alone, no other markers) | Unknown (ask user) |
+| Marker File                                          | Language                                   |
+| ---------------------------------------------------- | ------------------------------------------ |
+| `package.json`                                       | Node.js / JavaScript                       |
+| `tsconfig.json`                                      | TypeScript (refines Node.js to TypeScript) |
+| `pyproject.toml` OR `setup.py` OR `requirements.txt` | Python                                     |
+| `go.mod`                                             | Go                                         |
+| `Cargo.toml`                                         | Rust                                       |
+| `pom.xml` OR `build.gradle` OR `build.gradle.kts`    | Java                                       |
+| `Gemfile`                                            | Ruby                                       |
+| `Makefile` (alone, no other markers)                 | Unknown (ask user)                         |
 
 If `tsconfig.json` exists alongside `package.json`, the language is "TypeScript".
 
@@ -75,18 +77,18 @@ If multiple languages are detected, note all of them but use the primary one (mo
 
 **Node.js/TypeScript** — Read `package.json` and check `dependencies` + `devDependencies`:
 
-| Dependency | Framework |
-|---|---|
-| `next` | Next.js |
-| `nuxt` OR `nuxt3` | Nuxt |
-| `@angular/core` | Angular |
+| Dependency                  | Framework |
+| --------------------------- | --------- |
+| `next`                      | Next.js   |
+| `nuxt` OR `nuxt3`           | Nuxt      |
+| `@angular/core`             | Angular   |
 | `svelte` OR `@sveltejs/kit` | SvelteKit |
-| `react` (without next/nuxt) | React |
-| `vue` (without nuxt) | Vue |
-| `express` | Express |
-| `fastify` | Fastify |
-| `hono` | Hono |
-| `@nestjs/core` | NestJS |
+| `react` (without next/nuxt) | React     |
+| `vue` (without nuxt)        | Vue       |
+| `express`                   | Express   |
+| `fastify`                   | Fastify   |
+| `hono`                      | Hono      |
+| `@nestjs/core`              | NestJS    |
 
 **Python** — Check `pyproject.toml` or `requirements.txt` for: `fastapi`, `django`, `flask`.
 
@@ -96,18 +98,19 @@ If no framework detected, set to `null`.
 
 ### 1.3 Package Manager (Node.js only)
 
-| Lock File | Package Manager |
-|---|---|
-| `pnpm-lock.yaml` | pnpm |
-| `yarn.lock` | yarn |
-| `bun.lockb` | bun |
-| `package-lock.json` | npm |
+| Lock File           | Package Manager |
+| ------------------- | --------------- |
+| `pnpm-lock.yaml`    | pnpm            |
+| `yarn.lock`         | yarn            |
+| `bun.lockb`         | bun             |
+| `package-lock.json` | npm             |
 
 Default to `npm` if no lock file found. For non-Node.js, set to `null`.
 
 ### 1.4 Test Runner
 
 **Node.js/TypeScript** (first match wins):
+
 1. Glob for `vitest.config.*` or `vitest` in devDependencies -> `vitest`
 2. Glob for `jest.config.*` or `jest` in devDependencies -> `jest`
 3. `mocha` in devDependencies -> `mocha`
@@ -118,52 +121,52 @@ Default to `npm` if no lock file found. For non-Node.js, set to `null`.
 
 ### 1.5 Linter
 
-| Marker | Linter |
-|---|---|
-| `.eslintrc*` OR `eslint.config.*` OR `eslint` in devDependencies | eslint |
-| `biome.json` OR `@biomejs/biome` in devDependencies | biome |
-| `[tool.ruff]` in `pyproject.toml` OR `ruff.toml` | ruff |
-| `.golangci.yml` OR `.golangci.yaml` | golangci-lint |
-| `.clippy.toml` or clippy in Cargo.toml | clippy |
+| Marker                                                           | Linter        |
+| ---------------------------------------------------------------- | ------------- |
+| `.eslintrc*` OR `eslint.config.*` OR `eslint` in devDependencies | eslint        |
+| `biome.json` OR `@biomejs/biome` in devDependencies              | biome         |
+| `[tool.ruff]` in `pyproject.toml` OR `ruff.toml`                 | ruff          |
+| `.golangci.yml` OR `.golangci.yaml`                              | golangci-lint |
+| `.clippy.toml` or clippy in Cargo.toml                           | clippy        |
 
 ### 1.6 Formatter
 
-| Marker | Formatter |
-|---|---|
-| `.prettierrc*` OR `prettier` in devDependencies | prettier |
-| `biome.json` (also formats) | biome |
-| `black` in Python deps | black |
-| `[tool.ruff.format]` in `pyproject.toml` | ruff format |
-| `rustfmt.toml` OR `.rustfmt.toml` | rustfmt |
+| Marker                                          | Formatter   |
+| ----------------------------------------------- | ----------- |
+| `.prettierrc*` OR `prettier` in devDependencies | prettier    |
+| `biome.json` (also formats)                     | biome       |
+| `black` in Python deps                          | black       |
+| `[tool.ruff.format]` in `pyproject.toml`        | ruff format |
+| `rustfmt.toml` OR `.rustfmt.toml`               | rustfmt     |
 
 If biome detected as both linter and formatter, report once as "Biome (lint + format)".
 
 ### 1.7 Type Checker
 
-| Marker | Type Checker |
-|---|---|
-| `tsconfig.json` | tsc |
-| `mypy` in Python deps OR `[tool.mypy]` in `pyproject.toml` | mypy |
-| `pyright` in Python deps OR `pyrightconfig.json` | pyright |
+| Marker                                                     | Type Checker |
+| ---------------------------------------------------------- | ------------ |
+| `tsconfig.json`                                            | tsc          |
+| `mypy` in Python deps OR `[tool.mypy]` in `pyproject.toml` | mypy         |
+| `pyright` in Python deps OR `pyrightconfig.json`           | pyright      |
 
 Go (`go vet`) and Rust (`cargo check`) have built-in type checking — note but do not list separately.
 
 ### 1.8 CI Detection
 
-| Marker | CI System |
-|---|---|
+| Marker                    | CI System      |
+| ------------------------- | -------------- |
 | `.github/workflows/*.yml` | GitHub Actions |
-| `.gitlab-ci.yml` | GitLab CI |
-| `Jenkinsfile` | Jenkins |
-| `.circleci/config.yml` | CircleCI |
+| `.gitlab-ci.yml`          | GitLab CI      |
+| `Jenkinsfile`             | Jenkins        |
+| `.circleci/config.yml`    | CircleCI       |
 
 ### 1.9 Git Hooks Detection
 
-| Marker | Hook System |
-|---|---|
-| `.husky/` | Husky |
-| `.pre-commit-config.yaml` | pre-commit |
-| `.lefthook.yml` | Lefthook |
+| Marker                    | Hook System |
+| ------------------------- | ----------- |
+| `.husky/`                 | Husky       |
+| `.pre-commit-config.yaml` | pre-commit  |
+| `.lefthook.yml`           | Lefthook    |
 
 ### 1.10 Present Results
 
@@ -216,6 +219,7 @@ bash "${CLAUDE_PLUGIN_ROOT}/lib/setup-mandatory-files.sh" "$(pwd)" <threshold> "
 ```
 
 Example for Python with pytest at 100%:
+
 ```bash
 bash "${CLAUDE_PLUGIN_ROOT}/lib/setup-mandatory-files.sh" "$(pwd)" 100 "pytest --cov --cov-fail-under=100"
 ```
@@ -227,6 +231,7 @@ If the script fails or is not found, write the files manually (see CRITICAL-REQU
 ### Step 2: Customize CLAUDE.md TODO sections
 
 If CLAUDE.md was newly written (not appended), use Edit to replace the TODO placeholders:
+
 - Replace `npm test` / `npm run test:coverage` with the detected test/coverage commands
 - Replace `TypeScript strict mode` / `ESLint + Prettier` with the detected language tools
 - Remove the `<!-- TODO: ... -->` comment lines
@@ -240,6 +245,7 @@ If CLAUDE.md was appended to (existing file), this step is not needed.
 #### Knowledge Base
 
 Read each file from `./knowledge/`:
+
 - `patterns.jsonl`, `gotchas.jsonl`, `decisions.jsonl`, `api-behaviors.jsonl`, `codebase-facts.jsonl`, `anti-patterns.jsonl`, `facts.jsonl`
 
 Write them to `.beads/knowledge/` in the project. Skip any that already exist.
@@ -247,6 +253,7 @@ Write them to `.beads/knowledge/` in the project. Skip any that already exist.
 #### Shell Utilities
 
 Read each file from `./bin/`:
+
 - `estimate-cost.sh`, `external-tools-verify.sh`, `pr-comments-check.sh`, `pr-comments-filter.sh`
 
 Write them to `bin/` in the project. Make executable with `chmod +x`. Skip any that already exist.
@@ -254,23 +261,25 @@ Write them to `bin/` in the project. Make executable with `chmod +x`. Skip any t
 #### TypeScript Scripts
 
 Read each file from `./scripts/`:
+
 - `beads-self-reflect.ts`, `beads-fetch-pr-comments.ts`, `beads-fetch-conversation-history.ts`
 
 Write them to `scripts/` in the project. Skip any that already exist.
 
 **Node.js dependency warning**: If Node.js was NOT detected as the project language, print:
-> "Note: scripts/*.ts require Node.js (npx tsx) to run. Some advanced features (self-reflect, PR comment fetching) will work once Node.js is available. Core metaswarm functionality does not require Node.js."
+
+> "Note: scripts/\*.ts require Node.js (npx tsx) to run. Some advanced features (self-reflect, PR comment fetching) will work once Node.js is available. Core metaswarm functionality does not require Node.js."
 
 #### Conditional Files
 
-| Condition | Source | Destination |
-|---|---|---|
-| User chose YES for CI | `./templates/ci.yml` | `.github/workflows/ci.yml` |
-| User chose YES for git hooks AND Husky detected or Node.js project | `./templates/pre-push` | `.husky/pre-push` (chmod +x) |
-| User chose YES for external tools | `./templates/external-tools.yaml` | `.metaswarm/external-tools.yaml` |
-| Always | `./templates/.env.example` | `.env.example` |
-| Always | `./templates/SERVICE-INVENTORY.md` | `SERVICE-INVENTORY.md` |
-| Always | `./templates/gitignore` | Merge into existing `.gitignore` (append missing entries, never duplicate) |
+| Condition                                                          | Source                             | Destination                                                                |
+| ------------------------------------------------------------------ | ---------------------------------- | -------------------------------------------------------------------------- |
+| User chose YES for CI                                              | `./templates/ci.yml`               | `.github/workflows/ci.yml`                                                 |
+| User chose YES for git hooks AND Husky detected or Node.js project | `./templates/pre-push`             | `.husky/pre-push` (chmod +x)                                               |
+| User chose YES for external tools                                  | `./templates/external-tools.yaml`  | `.metaswarm/external-tools.yaml`                                           |
+| Always                                                             | `./templates/.env.example`         | `.env.example`                                                             |
+| Always                                                             | `./templates/SERVICE-INVENTORY.md` | `SERVICE-INVENTORY.md`                                                     |
+| Always                                                             | `./templates/gitignore`            | Merge into existing `.gitignore` (append missing entries, never duplicate) |
 
 For `.gitignore`, read the existing file (if any), then append language-specific entries that are not already present. Always ensure `.env`, `.DS_Store`, and `*.log` are included.
 
@@ -318,20 +327,20 @@ Fill all values from detection and user answers. Use `null` for anything not det
 
 Command resolution reference:
 
-| Test Runner | Pkg Mgr | Test Command | Coverage Command |
-|---|---|---|---|
-| vitest | pnpm | `pnpm vitest run` | `pnpm vitest run --coverage` |
-| vitest | npm | `npx vitest run` | `npx vitest run --coverage` |
-| vitest | yarn | `yarn vitest run` | `yarn vitest run --coverage` |
-| jest | pnpm | `pnpm jest` | `pnpm jest --coverage` |
-| jest | npm | `npx jest` | `npx jest --coverage` |
-| jest | yarn | `yarn jest` | `yarn jest --coverage` |
-| mocha | any | `npx mocha` | `npx nyc mocha` |
-| pytest | -- | `pytest` | `pytest --cov --cov-fail-under={threshold}` |
-| go test | -- | `go test ./...` | `go test -coverprofile=coverage.out ./...` |
-| cargo test | -- | `cargo test` | `cargo tarpaulin --fail-under {threshold}` |
-| mvn test | -- | `mvn test` | `mvn test jacoco:report` |
-| gradle test | -- | `gradle test` | `gradle test jacocoTestReport` |
+| Test Runner | Pkg Mgr | Test Command      | Coverage Command                            |
+| ----------- | ------- | ----------------- | ------------------------------------------- |
+| vitest      | pnpm    | `pnpm vitest run` | `pnpm vitest run --coverage`                |
+| vitest      | npm     | `npx vitest run`  | `npx vitest run --coverage`                 |
+| vitest      | yarn    | `yarn vitest run` | `yarn vitest run --coverage`                |
+| jest        | pnpm    | `pnpm jest`       | `pnpm jest --coverage`                      |
+| jest        | npm     | `npx jest`        | `npx jest --coverage`                       |
+| jest        | yarn    | `yarn jest`       | `yarn jest --coverage`                      |
+| mocha       | any     | `npx mocha`       | `npx nyc mocha`                             |
+| pytest      | --      | `pytest`          | `pytest --cov --cov-fail-under={threshold}` |
+| go test     | --      | `go test ./...`   | `go test -coverprofile=coverage.out ./...`  |
+| cargo test  | --      | `cargo test`      | `cargo tarpaulin --fail-under {threshold}`  |
+| mvn test    | --      | `mvn test`        | `mvn test jacoco:report`                    |
+| gradle test | --      | `gradle test`     | `gradle test jacocoTestReport`              |
 
 ---
 
@@ -390,6 +399,7 @@ You're all set! Run /start-task to begin working.
 **Command naming**: When recommending commands to the user, always use the short shim names (`/start-task`, `/prime`, `/brainstorm`, etc.), NOT the namespaced plugin names (`/metaswarm:start-task`). The shims you just created in `.claude/commands/` make the short names work. The short names are easier to type and remember.
 
 Offer 1-2 relevant tips based on configuration:
+
 - If external tools enabled: "Use `/external-tools-health` to check tool status."
 - If no CI set up: "Consider adding CI later -- metaswarm includes a template at `./templates/ci.yml`."
 - If visual review enabled: "The visual review skill will screenshot your app during development."
