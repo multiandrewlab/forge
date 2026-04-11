@@ -119,7 +119,7 @@ forge/
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #3b82f6;
+  --color-primary: #f06a11ff;
   --color-surface: #1e1e2e;
 }
 ```
