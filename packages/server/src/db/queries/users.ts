@@ -56,3 +56,19 @@ export async function updateUser(id: string, fields: UpdateUserFields): Promise<
   const result = await query<UserRow>(sql, params);
   return result.rows[0] ?? null;
 }
+
+export async function updateUserAvatar(id: string, avatarUrl: string): Promise<UserRow | null> {
+  const result = await query<UserRow>(
+    'UPDATE users SET avatar_url = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
+    [avatarUrl, id],
+  );
+  return result.rows[0] ?? null;
+}
+
+export async function convertToGoogle(id: string, avatarUrl: string): Promise<UserRow | null> {
+  const result = await query<UserRow>(
+    'UPDATE users SET auth_provider = $1, avatar_url = $2, password_hash = NULL, updated_at = NOW() WHERE id = $3 RETURNING *',
+    ['google', avatarUrl, id],
+  );
+  return result.rows[0] ?? null;
+}

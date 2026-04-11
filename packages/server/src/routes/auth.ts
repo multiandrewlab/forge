@@ -1,7 +1,21 @@
 import type { FastifyInstance } from 'fastify';
+import type { OAuth2Namespace } from '@fastify/oauth2';
 import { registerSchema, loginSchema, updateProfileSchema } from '@forge/shared';
 import type { User } from '@forge/shared';
-import { findUserByEmail, findUserById, createUser, updateUser } from '../db/queries/users.js';
+
+declare module 'fastify' {
+  interface FastifyInstance {
+    googleOAuth2?: OAuth2Namespace;
+  }
+}
+import {
+  findUserByEmail,
+  findUserById,
+  createUser,
+  updateUser,
+  updateUserAvatar,
+  convertToGoogle,
+} from '../db/queries/users.js';
 import type { UserRow } from '../db/queries/types.js';
 import {
   hashPassword,
@@ -10,6 +24,12 @@ import {
   generateRefreshToken,
   verifyRefreshToken,
 } from '../services/auth.js';
+
+interface GoogleProfile {
+  email?: string;
+  name?: string;
+  picture?: string;
+}
 
 function toUser(row: UserRow): User {
   return {
@@ -192,5 +212,117 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     }
 
     return reply.send(toUser(updatedRow));
+  });
+
+  // GET /google/callback — handles the OAuth2 callback from Google
+  app.get('/google/callback', async (request, reply) => {
+    const frontendUrl = process.env.FRONTEND_URL ?? 'http://localhost:3000';
+
+    const oauth2 = app.googleOAuth2;
+    if (!oauth2) {
+      return reply.status(501).send({ error: 'Google OAuth is not configured' });
+    }
+
+    // Exchange authorization code for access token
+    const { token } = await oauth2.getAccessTokenFromAuthorizationCodeFlow(request);
+
+    // Fetch Google profile
+    const profileResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: { Authorization: `Bearer ${token.access_token}` },
+    });
+    const profile = (await profileResponse.json()) as GoogleProfile;
+
+    if (!profile.email) {
+      return reply.status(502).send({ error: 'Google did not return an email address' });
+    }
+
+    const existing = await findUserByEmail(profile.email);
+
+    // Case 1: New user — create with google auth_provider
+    if (!existing) {
+      const row = await createUser({
+        email: profile.email,
+        displayName: profile.name ?? profile.email,
+        avatarUrl: profile.picture ?? null,
+        authProvider: 'google',
+        passwordHash: null,
+      });
+      const user = toUser(row);
+      const accessToken = generateAccessToken(app, {
+        id: user.id,
+        email: user.email,
+        displayName: user.displayName,
+      });
+      const refreshToken = generateRefreshToken(app, { id: user.id });
+      void reply.setCookie('refresh_token', refreshToken, getRefreshCookieOptions());
+      return reply.redirect(`${frontendUrl}/auth/callback#access_token=${accessToken}`);
+    }
+
+    // Case 2: Existing Google user — update avatar, generate tokens
+    if (existing.auth_provider === 'google') {
+      await updateUserAvatar(existing.id, profile.picture ?? existing.avatar_url ?? '');
+      const user = toUser(existing);
+      const accessToken = generateAccessToken(app, {
+        id: user.id,
+        email: user.email,
+        displayName: user.displayName,
+      });
+      const refreshToken = generateRefreshToken(app, { id: user.id });
+      void reply.setCookie('refresh_token', refreshToken, getRefreshCookieOptions());
+      return reply.redirect(`${frontendUrl}/auth/callback#access_token=${accessToken}`);
+    }
+
+    // Case 3: Existing local user — generate link token and redirect to link page
+    const linkToken = app.jwt.sign(
+      { userId: existing.id, googleAvatarUrl: profile.picture ?? '' },
+      { expiresIn: '10m' },
+    );
+    return reply.redirect(`${frontendUrl}/auth/link#link_token=${linkToken}`);
+  });
+
+  // POST /link-google — links a local account to Google
+  app.post('/link-google', async (request, reply) => {
+    const body = request.body as { linkToken?: string; password?: string } | undefined;
+
+    if (!body?.linkToken || !body?.password) {
+      return reply.status(400).send({ error: 'linkToken and password are required' });
+    }
+
+    // Verify the link token
+    let payload: { userId: string; googleAvatarUrl: string };
+    try {
+      payload = app.jwt.verify<{ userId: string; googleAvatarUrl: string }>(body.linkToken);
+    } catch {
+      return reply.status(401).send({ error: 'Invalid or expired link token' });
+    }
+
+    // Look up the user
+    const row = await findUserById(payload.userId);
+    if (!row) {
+      return reply.status(401).send({ error: 'User not found' });
+    }
+
+    // Verify the password
+    const valid = await verifyPassword(body.password, row.password_hash as string);
+    if (!valid) {
+      return reply.status(401).send({ error: 'Invalid password' });
+    }
+
+    // Convert account to Google
+    const updatedRow = await convertToGoogle(row.id, payload.googleAvatarUrl);
+    if (!updatedRow) {
+      return reply.status(401).send({ error: 'User not found' });
+    }
+    const user = toUser(updatedRow);
+    const accessToken = generateAccessToken(app, {
+      id: user.id,
+      email: user.email,
+      displayName: user.displayName,
+    });
+    const refreshToken = generateRefreshToken(app, { id: user.id });
+
+    void reply.setCookie('refresh_token', refreshToken, getRefreshCookieOptions());
+
+    return reply.send({ user, accessToken });
   });
 }
