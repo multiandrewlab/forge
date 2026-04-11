@@ -86,9 +86,9 @@ forge/
 
 ## Server Package (`@forge/server`)
 
-- Dependencies: `fastify`, `@fastify/cors`, `@fastify/cookie`, `@fastify/websocket`, `zod`, `@forge/shared`
+- Dependencies: `fastify`, `@fastify/cors`, `@fastify/cookie`, `zod`, `@forge/shared`
 - Dev dependencies: `vitest`, `tsx`, TypeScript types
-- Deferred deps (installed in future issues): `pg`, `node-pg-migrate`, `bcrypt`, `jsonwebtoken`
+- Deferred deps (installed in future issues): `pg`, `node-pg-migrate`, `bcrypt`, `jsonwebtoken`, `@fastify/websocket` (issue #8)
 
 **`src/app.ts`** — Fastify app factory. Registers CORS plugin and health route. Exports the app instance for both server startup and testing.
 
@@ -102,7 +102,7 @@ forge/
 
 ## Client Package (`@forge/client`)
 
-- Dependencies: `vue`, `vue-router`, `pinia`, `primevue`, `@primevue/themes`, `@forge/shared`
+- Dependencies: `vue`, `vue-router`, `pinia`, `primevue`, `@forge/shared` (verify `@primevue/themes` is still a separate package — PrimeVue 4 may bundle themes in the main `primevue` package; install only if npm registry confirms it exists)
 - Dev dependencies: `vite`, `@vitejs/plugin-vue`, `@tailwindcss/vite`, `tailwindcss`, `vitest`, `@vue/test-utils`, `jsdom`, `typescript`
 - Deferred deps (installed in future issues): `@vueuse/core`, `vue-codemirror`, `shiki`
 
@@ -134,7 +134,7 @@ forge/
 
 ## Docker Compose
 
-Three infrastructure services (app runs locally via `npm run dev`):
+Three infrastructure services only — app runs locally via `npm run dev`, not in containers. **Note:** The parent design spec mentions client/server in docker-compose; this is an intentional deviation for local dev ergonomics. A future issue can add app service definitions for staging/production.
 
 **PostgreSQL** (`postgres:16-alpine`):
 - Port 5432, database `forge`, user `forge`, password `forge_dev`
@@ -144,12 +144,12 @@ Three infrastructure services (app runs locally via `npm run dev`):
 **MinIO** (`minio/minio:latest`):
 - Ports 9000 (API) and 9001 (console)
 - User `forge_minio`, password `forge_minio_secret`
-- Healthcheck: `mc ready local`
+- Healthcheck: `curl -f http://localhost:9000/minio/health/live` (`mc` CLI is not present in the minio/minio image)
 
 **Ollama** (`ollama/ollama:latest`):
 - Port 11434
 - Persistent volume for models
-- Healthcheck: `ollama list`
+- Healthcheck: `curl -f http://localhost:11434/api/tags` (`ollama list` fails with no models on fresh startup)
 
 Named volumes: `pgdata`, `minio_data`, `ollama_data`.
 
@@ -192,13 +192,15 @@ CREATE EXTENSION IF NOT EXISTS "unaccent";
 - Server uses Node environment, client uses jsdom
 - `npm test` → `vitest run` across all workspaces
 - `npm run test:coverage` → `vitest run --coverage` with `@vitest/coverage-v8`
+- Coverage provider configured at workspace level: `coverage: { provider: 'v8' }` in `vitest.workspace.ts`
 - Coverage enforced via `.coverage-thresholds.json` (100% lines/branches/functions/statements)
 
 ### TypeScript (`tsconfig.base.json`)
 - `strict: true`, `noUncheckedIndexedAccess: true`
-- `target: ES2022`, `module: NodeNext`
-- `declaration: true`, `composite: true` for project references
+- `target: ES2022`, `module: ESNext`, `moduleResolution: Bundler`
+- `declaration: true`
 - No `any` enforced by both TS strict mode and ESLint
+- **Note:** `composite: true` is set only in `packages/shared/tsconfig.json` (the referenced project), not in the base config. The server package overrides to `module: NodeNext` / `moduleResolution: NodeNext` in its own tsconfig.
 
 ### Environment (`.env.example`)
 Full variable list from issue spec:
