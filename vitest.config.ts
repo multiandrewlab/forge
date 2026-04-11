@@ -7,6 +7,7 @@ export default defineConfig({
       include: ['packages/server/src/**/*.ts', 'packages/client/src/**/*.{ts,vue}'],
       exclude: [
         'packages/server/src/server.ts',
+        'packages/server/src/db/queries/types.ts',
         'packages/client/src/main.ts',
         'packages/client/src/plugins/router.ts',
         '**/*.config.*',
