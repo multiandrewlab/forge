@@ -26,3 +26,49 @@ export async function createUser(input: CreateUserInput): Promise<UserRow> {
   );
   return result.rows[0] as UserRow;
 }
+
+export interface UpdateUserFields {
+  displayName?: string;
+  avatarUrl?: string | null;
+}
+
+export async function updateUser(id: string, fields: UpdateUserFields): Promise<UserRow | null> {
+  const setClauses: string[] = [];
+  const params: unknown[] = [];
+  let paramIndex = 1;
+
+  if (fields.displayName !== undefined) {
+    setClauses.push(`display_name = $${String(paramIndex)}`);
+    params.push(fields.displayName);
+    paramIndex++;
+  }
+
+  if (fields.avatarUrl !== undefined) {
+    setClauses.push(`avatar_url = $${String(paramIndex)}`);
+    params.push(fields.avatarUrl);
+    paramIndex++;
+  }
+
+  setClauses.push('updated_at = NOW()');
+  params.push(id);
+
+  const sql = `UPDATE users SET ${setClauses.join(', ')} WHERE id = $${String(paramIndex)} RETURNING *`;
+  const result = await query<UserRow>(sql, params);
+  return result.rows[0] ?? null;
+}
+
+export async function updateUserAvatar(id: string, avatarUrl: string): Promise<UserRow | null> {
+  const result = await query<UserRow>(
+    'UPDATE users SET avatar_url = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
+    [avatarUrl, id],
+  );
+  return result.rows[0] ?? null;
+}
+
+export async function convertToGoogle(id: string, avatarUrl: string): Promise<UserRow | null> {
+  const result = await query<UserRow>(
+    'UPDATE users SET auth_provider = $1, avatar_url = $2, password_hash = NULL, updated_at = NOW() WHERE id = $3 RETURNING *',
+    ['google', avatarUrl, id],
+  );
+  return result.rows[0] ?? null;
+}

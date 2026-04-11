@@ -14,10 +14,8 @@ export const createPostSchema = z.object({
   isDraft: z.boolean().default(true),
 });
 
-export const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(8),
-});
-
 export type CreatePostInput = z.infer<typeof createPostSchema>;
-export type LoginInput = z.infer<typeof loginSchema>;
+
+export { loginSchema, registerSchema, updateProfileSchema } from './auth.js';
+
+export type { LoginInput, RegisterInput, UpdateProfileInput } from './auth.js';

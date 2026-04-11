@@ -34,3 +34,5 @@ export interface LinkPreview {
   image: string | null;
   readingTime: number | null;
 }
+
+export type { AuthTokens, AuthResponse } from './user.js';
