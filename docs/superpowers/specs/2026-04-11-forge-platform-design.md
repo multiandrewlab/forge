@@ -86,16 +86,19 @@ Single `posts` table with `content_type` discriminator (`'snippet' | 'prompt' | 
 ```sql
 posts
 ├── id              UUID PRIMARY KEY
-├── author_id       UUID → users
+├── author_id       UUID → users ON DELETE CASCADE
 ├── title           VARCHAR NOT NULL
 ├── content_type    VARCHAR NOT NULL  -- 'snippet' | 'prompt' | 'document' | 'link'
 ├── language        VARCHAR           -- programming language (for snippets)
 ├── visibility      VARCHAR NOT NULL  -- 'public' | 'private'
 ├── is_draft        BOOLEAN DEFAULT true
-├── forked_from_id  UUID → posts      -- NULL if original
-├── vote_count      INT DEFAULT 0     -- denormalized for sort performance
+├── forked_from_id  UUID → posts ON DELETE SET NULL  -- NULL if original
+├── link_url        VARCHAR           -- URL for content_type='link'
+├── link_preview     JSONB            -- { title, description, image, reading_time } for links
+├── vote_count      INT DEFAULT 0     -- denormalized, updated via trigger on votes
 ├── view_count      INT DEFAULT 0
 ├── search_vector   tsvector          -- auto-updated via trigger
+├── deleted_at      TIMESTAMPTZ       -- soft delete (NULL = active)
 ├── created_at      TIMESTAMPTZ
 └── updated_at      TIMESTAMPTZ
 ```
@@ -107,8 +110,8 @@ Revisions store full content, not diffs. Storage is cheap; complexity isn't. Dif
 ```sql
 post_revisions
 ├── id              UUID PRIMARY KEY
-├── post_id         UUID → posts
-├── author_id       UUID → users
+├── post_id         UUID → posts ON DELETE CASCADE
+├── author_id       UUID → users ON DELETE SET NULL
 ├── content         TEXT NOT NULL      -- full content at this revision
 ├── message         VARCHAR           -- commit message ("Added null check")
 ├── revision_number INT NOT NULL
@@ -121,13 +124,20 @@ post_revisions
 ```sql
 post_files
 ├── id              UUID PRIMARY KEY
-├── post_id         UUID → posts
+├── post_id         UUID → posts ON DELETE CASCADE
+├── revision_id     UUID → post_revisions ON DELETE CASCADE  -- snapshot per revision
 ├── filename        VARCHAR NOT NULL
 ├── content         TEXT              -- inline content (small files)
 ├── storage_key     VARCHAR           -- MinIO key (large files)
 ├── mime_type       VARCHAR
 ├── sort_order      INT DEFAULT 0
-└── created_at      TIMESTAMPTZ
+├── created_at      TIMESTAMPTZ
+└── CONSTRAINT file_size CHECK (octet_length(content) <= 10485760)  -- 10 MB inline limit
+
+-- File upload constraints:
+-- Max file size: 10 MB (enforced server-side, returned as HTTP 413)
+-- Allowed MIME types: text/*, application/json, application/yaml, image/* (returned as HTTP 415)
+-- Storage: files <= 64 KB stored inline in content; larger files stored in MinIO via storage_key
 ```
 
 ### Tags
@@ -136,11 +146,15 @@ post_files
 tags
 ├── id              UUID PRIMARY KEY
 ├── name            VARCHAR UNIQUE NOT NULL
-└── post_count      INT DEFAULT 0     -- denormalized
+└── post_count      INT DEFAULT 0     -- denormalized, updated via trigger on post_tags changes
+
+-- Trigger: on INSERT/DELETE to post_tags, increment/decrement tags.post_count.
+-- Also fires on posts.deleted_at change (soft delete) and posts.visibility change to
+-- keep count accurate for public, non-deleted posts only.
 
 post_tags
-├── post_id         UUID → posts
-└── tag_id          UUID → tags
+├── post_id         UUID → posts ON DELETE CASCADE
+└── tag_id          UUID → tags ON DELETE CASCADE
     PRIMARY KEY (post_id, tag_id)
 ```
 
@@ -148,14 +162,14 @@ post_tags
 
 ```sql
 votes
-├── user_id         UUID → users
-├── post_id         UUID → posts
-├── value           SMALLINT NOT NULL  -- +1 or -1
+├── user_id         UUID → users ON DELETE CASCADE
+├── post_id         UUID → posts ON DELETE CASCADE
+├── value           SMALLINT NOT NULL CHECK (value IN (1, -1))
     PRIMARY KEY (user_id, post_id)
 
 bookmarks
-├── user_id         UUID → users
-├── post_id         UUID → posts
+├── user_id         UUID → users ON DELETE CASCADE
+├── post_id         UUID → posts ON DELETE CASCADE
 ├── created_at      TIMESTAMPTZ
     PRIMARY KEY (user_id, post_id)
 ```
@@ -164,8 +178,8 @@ bookmarks
 
 ```sql
 user_tag_subscriptions
-├── user_id         UUID → users
-├── tag_id          UUID → tags
+├── user_id         UUID → users ON DELETE CASCADE
+├── tag_id          UUID → tags ON DELETE CASCADE
     PRIMARY KEY (user_id, tag_id)
 ```
 
@@ -176,14 +190,21 @@ Inline comments anchor to a specific revision so they don't break when content c
 ```sql
 comments
 ├── id              UUID PRIMARY KEY
-├── post_id         UUID → posts
-├── author_id       UUID → users
-├── parent_id       UUID → comments   -- NULL for top-level, enables threading
+├── post_id         UUID → posts ON DELETE CASCADE
+├── author_id       UUID → users ON DELETE SET NULL
+├── parent_id       UUID → comments ON DELETE CASCADE  -- deleting parent cascades to children
 ├── line_number     INT               -- NULL for general comments, set for inline
-├── revision_id     UUID → post_revisions -- anchors inline comment to specific revision
+├── revision_id     UUID → post_revisions ON DELETE SET NULL -- anchors inline comment to specific revision
 ├── body            TEXT NOT NULL
 ├── created_at      TIMESTAMPTZ
 └── updated_at      TIMESTAMPTZ
+
+-- Inline comment display policy:
+-- Comments on the CURRENT revision: shown inline at line_number
+-- Comments on OLDER revisions: shown in a "Previous comments" section below current
+--   inline comments, with "Left on revision N" indicator and link to that revision
+-- When a revision is restored, comments on the now-current revision become inline again
+-- GET /api/posts/:id/comments accepts ?revision=<id> to filter by specific revision
 ```
 
 ### Prompt Variables
@@ -191,11 +212,12 @@ comments
 ```sql
 prompt_variables
 ├── id              UUID PRIMARY KEY
-├── post_id         UUID → posts
+├── post_id         UUID → posts ON DELETE CASCADE
 ├── name            VARCHAR NOT NULL   -- e.g. "Error Log"
 ├── placeholder     VARCHAR           -- e.g. "Insert Error Log Here"
 ├── sort_order      INT DEFAULT 0
-└── default_value   TEXT
+├── default_value   TEXT
+└── UNIQUE(post_id, name)
 ```
 
 ## API Design
@@ -213,7 +235,7 @@ Authentication
 └── PATCH  /api/auth/me               # Update profile
 
 Posts
-├── GET    /api/posts                 # List/feed (?sort=trending|recent|top&tag=X&type=snippet)
+├── GET    /api/posts                 # List/feed (?sort=trending|recent|top|personalized&tag=X&type=snippet)
 ├── POST   /api/posts                 # Create post
 ├── GET    /api/posts/:id             # Get post with latest revision
 ├── PATCH  /api/posts/:id             # Update metadata (title, visibility, tags)
@@ -329,7 +351,9 @@ Auth:            LoginForm, RegisterForm
 
 ### Pinia Stores
 
-`auth` (session, JWT), `posts` (CRUD, feed), `comments` (threaded comments), `search` (query, results), `tags` (available tags, subscriptions), `realtime` (WebSocket state, subscriptions, presence), `ui` (dark mode, sidebar, search modal).
+`auth` (session, JWT), `posts` (CRUD, feed including personalized sort), `comments` (threaded comments), `search` (query, results), `tags` (available tags, subscriptions), `realtime` (WebSocket state, subscriptions, presence), `ui` (dark mode, sidebar, search modal).
+
+**Personalized feed (`sort=personalized`):** Returns posts tagged with the user's subscribed tags, ranked by recency weighted by `vote_count`. Falls back to `trending` for users with no tag subscriptions.
 
 ### Composables
 
@@ -360,6 +384,14 @@ Three chains: `autocomplete` (code/markdown completion), `generate` (content fro
 - **AI Search:** "Ask AI" toggle routes query through search chain first (NL → structured filters), then PostgreSQL. Falls back to plain search on failure.
 - **Prompt Playground:** Variables filled in by user, assembled prompt passed directly to LLM. Streams via SSE.
 
+### AI Rate Limiting
+
+All AI endpoints enforce per-user concurrency limits:
+- **1 in-flight AI request per user** — second request returns HTTP 429 with `Retry-After` header
+- **Request timeout:** 60 seconds max streaming duration, then server closes the SSE connection
+- **Token budget (production):** When using OpenAI/Vertex, a daily per-user token budget is enforced (configurable via env). Ollama has no budget limit since it's local.
+- Rate limiting is implemented as a Fastify `onRequest` hook on all `/api/ai/*` and `/api/playground/*` routes.
+
 ## Search Architecture
 
 ### PostgreSQL Full-Text Search
@@ -375,6 +407,10 @@ Three chains: `autocomplete` (code/markdown completion), `generate` (content fro
 
 - AI toggle OFF: direct PostgreSQL `tsvector` match + trigram fallback for typos
 - AI toggle ON: LangChain interprets query → structured filters → same PostgreSQL query with better intent
+
+### Regex Search
+
+Regex search (mentioned in the brief) is deferred to a future enhancement. The MVP search covers full-text stemmed search + trigram fuzzy matching, which handles the vast majority of developer search needs. Regex support can be added later as a separate query path using PostgreSQL's `~` operator, activated when the search input is detected as a regex pattern (e.g., starts with `/` or contains regex metacharacters).
 
 ### Cmd+K Modal Response
 
@@ -423,7 +459,7 @@ Single shared WebSocket connection. `useWebSocket` composable provides: `subscri
 
 | # | Issue | Depends On |
 |---|-------|-----------|
-| 10 | LangChain integration & AI autocomplete | 4, 8 |
+| 10 | LangChain integration & AI autocomplete | 4 |
 | 11 | AI content generation | 10 |
 | 12 | AI-powered search | 9, 10 |
 | 13 | Prompt playground | 10 |
@@ -443,5 +479,7 @@ Single shared WebSocket connection. `useWebSocket` composable provides: `subscri
 | # | Issue | Depends On |
 |---|-------|-----------|
 | 19 | Code execution sandbox | 13 |
+
+**Decision: Code execution sandbox deferred.** The brief lists code execution as part of the Playground feature. This is intentionally deferred because: (1) secure sandboxed code execution requires significant infrastructure decisions (Firecracker microVMs, Docker-in-Docker, WASM runtimes) that are orthogonal to the rest of the platform, (2) the prompt playground delivers the higher-value part of the Playground feature first, and (3) the sandbox can be added as a self-contained feature without modifying existing code. Issue 19 should spec the sandbox runtime when it's picked up.
 
 **MVP (issues 1-7) delivers:** Auth, full post CRUD with polished editor, feed/detail/sidebar UI, voting/bookmarks/tags, and threaded + inline comments. Users can sign in, create snippets, browse, vote, bookmark, comment inline, and filter by tags.
