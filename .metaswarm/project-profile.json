@@ -1,0 +1,29 @@
+{
+  "metaswarm_version": "0.9.2",
+  "installed_at": "2026-04-11T00:00:00.000Z",
+  "updated_at": "2026-04-11T00:00:00.000Z",
+  "detection": {
+    "language": "typescript",
+    "framework": null,
+    "test_runner": null,
+    "linter": null,
+    "formatter": null,
+    "package_manager": "npm",
+    "type_checker": null,
+    "ci": "github-actions",
+    "git_hooks": "husky"
+  },
+  "choices": {
+    "coverage_threshold": 100,
+    "external_tools": true,
+    "visual_review": false,
+    "git_hooks": true
+  },
+  "commands": {
+    "test": "npm test",
+    "coverage": "npm run test:coverage",
+    "lint": null,
+    "typecheck": null,
+    "format_check": null
+  }
+}

@@ -1,5 +1,11 @@
 # **Project Brief: Internal Developer Knowledge-Sharing Platform**
 
+## **0\. Tech Stack**
+
+* **Frontend:** Vue 3, TypeScript, Tailwind CSS, PrimeVue
+* **Backend:** Fastify, TypeScript, PostgreSQL
+* **Local Development:** Docker, Docker Compose
+
 ## **1\. Executive Summary**
 
 This project aims to build a centralized, highly engaging internal platform for developers to share knowledge, code snippets, prompts, and files. The core philosophy is to reject clunky, traditional wikis in favor of a modern, developer-centric experience. By combining the discoverability of platforms like Hacker News with the utility of GitHub Gists and AI-assisted writing tools, this platform will become the default destination for engineering teams to collaborate, find solutions, test and play with prompts and code, and document best practices.

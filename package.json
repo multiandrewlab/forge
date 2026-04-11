@@ -1,0 +1,27 @@
+{
+  "name": "forge",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"No test framework configured yet\"",
+    "prepare": "husky"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/FundamentalMedia/forge.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/FundamentalMedia/forge/issues"
+  },
+  "homepage": "https://github.com/FundamentalMedia/forge#readme",
+  "devDependencies": {
+    "husky": "^9.1.7"
+  }
+}
