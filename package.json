@@ -16,6 +16,7 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "bruno": "cd bruno && npx @usebruno/cli run -r --env local",
     "prepare": "husky"
   },
   "repository": {

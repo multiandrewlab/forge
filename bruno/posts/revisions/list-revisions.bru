@@ -1,0 +1,15 @@
+meta {
+  name: List Revisions
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/posts/{{postId}}/revisions
+  body: none
+  auth: none
+}
+
+docs {
+  Returns all revisions for a post. No auth required.
+}

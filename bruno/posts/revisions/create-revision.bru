@@ -1,0 +1,28 @@
+meta {
+  name: Create Revision
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/posts/{{postId}}/revisions
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "content": "console.log('Hello, Forge! v2');",
+    "message": "Updated greeting message"
+  }
+}
+
+script:post-response {
+  if (res.body.revision) {
+    bru.setVar("revisionNumber", res.body.revision.revisionNumber);
+  }
+}

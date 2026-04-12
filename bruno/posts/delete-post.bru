@@ -1,0 +1,20 @@
+meta {
+  name: Delete Post
+  type: http
+  seq: 6
+}
+
+delete {
+  url: {{baseUrl}}/api/posts/{{postId}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+docs {
+  Soft-deletes the post (sets deletedAt timestamp).
+  Only the post author can delete.
+}

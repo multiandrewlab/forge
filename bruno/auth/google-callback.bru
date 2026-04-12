@@ -1,0 +1,17 @@
+meta {
+  name: Google OAuth Callback
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/api/auth/google/callback
+  body: none
+  auth: none
+}
+
+docs {
+  This endpoint is called by Google during the OAuth flow.
+  It is not meant to be called directly — included for reference.
+  Returns 501 if Google OAuth is not configured.
+}

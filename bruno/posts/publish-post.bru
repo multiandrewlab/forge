@@ -1,0 +1,19 @@
+meta {
+  name: Publish Post
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/posts/{{postId}}/publish
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+docs {
+  Sets isDraft to false. Only the post author can publish.
+}

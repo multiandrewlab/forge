@@ -1,0 +1,15 @@
+meta {
+  name: Get Revision by Number
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/posts/{{postId}}/revisions/{{revisionNumber}}
+  body: none
+  auth: none
+}
+
+docs {
+  Returns a single revision by its revision number. No auth required.
+}

@@ -1,0 +1,22 @@
+meta {
+  name: Refresh Token
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/auth/refresh
+  body: none
+  auth: none
+}
+
+docs {
+  Uses the refresh_token HTTP-only cookie set by login/register.
+  Bruno sends cookies automatically if the domain matches.
+}
+
+script:post-response {
+  if (res.status === 200) {
+    bru.setVar("accessToken", res.body.accessToken);
+  }
+}

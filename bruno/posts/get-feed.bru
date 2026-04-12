@@ -1,0 +1,25 @@
+meta {
+  name: Get Feed
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/posts?sort=recent&limit=20
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+docs {
+  Query params:
+  - sort: trending | recent | top (default: recent)
+  - filter: mine | bookmarked (optional)
+  - tag: string (optional)
+  - type: snippet | prompt | document | link (optional)
+  - cursor: base64 pagination cursor (optional)
+  - limit: 1-100 (default: 20)
+}

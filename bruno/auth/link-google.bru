@@ -1,0 +1,29 @@
+meta {
+  name: Link Google Account
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/api/auth/link-google
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "linkToken": "paste-link-token-from-google-callback",
+    "password": "password123"
+  }
+}
+
+docs {
+  Links a Google account to an existing local account.
+  The linkToken comes from the Google OAuth callback redirect.
+}
+
+script:post-response {
+  if (res.status === 200) {
+    bru.setVar("accessToken", res.body.accessToken);
+  }
+}

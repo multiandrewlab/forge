@@ -1,0 +1,33 @@
+meta {
+  name: Create Post
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/posts
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "title": "Hello World Snippet",
+    "contentType": "snippet",
+    "language": "javascript",
+    "visibility": "public",
+    "isDraft": true,
+    "content": "console.log('Hello, Forge!');",
+    "tags": ["javascript", "hello-world"]
+  }
+}
+
+script:post-response {
+  if (res.body.post) {
+    bru.setVar("postId", res.body.post.id);
+  }
+}
