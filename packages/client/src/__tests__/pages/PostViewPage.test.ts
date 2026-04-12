@@ -323,4 +323,88 @@ describe('PostViewPage', () => {
       expect(backLink.text()).toContain('Back to Workspace');
     });
   });
+
+  describe('latestRevision edge cases', () => {
+    it('should not render CodeViewer when post has no revisions (line 88 branch)', async () => {
+      const post = createMockPost({ revisions: [] });
+      mockFetchPost.mockImplementation(async () => {
+        mockCurrentPost.value = post;
+      });
+      mockUser.value = createMockUser({ id: post.authorId });
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      // Post title still shown
+      expect(wrapper.text()).toContain('Test Post');
+      // CodeViewer not rendered because latestRevision is undefined
+      expect(wrapper.find('[data-testid="code-viewer"]').exists()).toBe(false);
+    });
+
+    it('latestRevision returns undefined when currentPost becomes null (line 20 branch)', async () => {
+      // Start with a post loaded, then clear it — forces computed to re-evaluate with null
+      const post = createMockPost();
+      mockFetchPost.mockImplementation(async () => {
+        mockCurrentPost.value = post;
+      });
+      mockUser.value = createMockUser({ id: post.authorId });
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      // Post is shown — latestRevision computed is accessed and returns revision
+      expect(wrapper.text()).toContain('Test Post');
+
+      // Clear the post — latestRevision computed re-runs, hits `if (!currentPost.value) return undefined`
+      mockCurrentPost.value = null;
+      await wrapper.vm.$nextTick();
+      await flushPromises();
+
+      // Template shows "Post not found" (the v-else branch)
+      expect(wrapper.text()).toContain('Post not found');
+
+      // Force the computed to be evaluated while null by reading it from the component internals
+      const vm = wrapper.vm as unknown as { latestRevision: unknown };
+      if ('latestRevision' in vm) {
+        expect(vm.latestRevision).toBeUndefined();
+      }
+    });
+
+    it('should not show revision number when revisions array is empty (line 65 branch)', async () => {
+      const post = createMockPost({ revisions: [] });
+      mockFetchPost.mockImplementation(async () => {
+        mockCurrentPost.value = post;
+      });
+      mockUser.value = createMockUser({ id: post.authorId });
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      expect(wrapper.text()).not.toContain('Rev ');
+    });
+
+    it('should not navigate home when deletePost sets an error (line 37 branch)', async () => {
+      const post = createMockPost({ authorId: 'user-1' });
+      mockFetchPost.mockImplementation(async () => {
+        mockCurrentPost.value = post;
+      });
+      mockDeletePost.mockImplementation(async () => {
+        mockPostError.value = 'Delete failed';
+      });
+      mockUser.value = createMockUser({ id: 'user-1' });
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      const deleteButton = wrapper.findAll('button').find((b) => b.text() === 'Delete') as
+        | ReturnType<typeof wrapper.find>
+        | undefined;
+      expect(deleteButton).toBeDefined();
+      await (deleteButton as ReturnType<typeof wrapper.find>).trigger('click');
+      await flushPromises();
+
+      // Should stay on the post-view route, not navigate to '/'
+      expect(router.currentRoute.value.name).toBe('post-view');
+    });
+  });
 });

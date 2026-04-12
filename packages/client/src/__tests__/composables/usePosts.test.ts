@@ -188,6 +188,46 @@ describe('usePosts', () => {
       expect(error.value).toBe('Failed to create post');
     });
 
+    it('should use fallback error when error response body is not valid JSON (parseErrorMessage catch branch)', async () => {
+      // Simulate a non-ok response whose .json() throws (non-JSON body)
+      mockApiFetch.mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: () => Promise.reject(new Error('not json')),
+      } as unknown as Response);
+
+      const { createPost, error } = usePosts();
+      const id = await createPost({
+        title: 'Test',
+        contentType: ContentType.Snippet,
+        language: null,
+        visibility: Visibility.Public,
+      });
+
+      expect(id).toBeNull();
+      expect(error.value).toBe('Failed to create post');
+    });
+
+    it('should use fallback error when error response JSON has no error field (parseErrorMessage ?? branch)', async () => {
+      // Non-ok response whose .json() resolves with no `error` key — hits data.error ?? fallback
+      mockApiFetch.mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: () => Promise.resolve({}),
+      } as unknown as Response);
+
+      const { createPost, error } = usePosts();
+      const id = await createPost({
+        title: 'Test',
+        contentType: ContentType.Snippet,
+        language: null,
+        visibility: Visibility.Public,
+      });
+
+      expect(id).toBeNull();
+      expect(error.value).toBe('Failed to create post');
+    });
+
     it('should clear previous error on new call', async () => {
       mockApiFetch.mockResolvedValueOnce(
         new Response(JSON.stringify({ error: 'Validation failed' }), { status: 400 }),

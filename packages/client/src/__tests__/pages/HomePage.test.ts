@@ -176,4 +176,63 @@ describe('HomePage', () => {
     const store = useFeedStore();
     expect(store.selectedPostId).toBe('1');
   });
+
+  it('calls setSort on mount when sort prop is provided', async () => {
+    const router = createTestRouter();
+    await router.push('/trending');
+    await router.isReady();
+    mount(HomePage, {
+      props: { sort: 'trending' as const },
+      global: { plugins: [router] },
+    });
+    await flushPromises();
+
+    // setSort triggers a feed fetch — verify the URL contains sort=trending
+    const feedCalls = mockApiFetch.mock.calls.filter((c) =>
+      (c[0] as string).includes('/api/posts?'),
+    );
+    expect(feedCalls.length).toBeGreaterThan(0);
+    const lastUrl = feedCalls[feedCalls.length - 1][0] as string;
+    expect(lastUrl).toContain('sort=trending');
+  });
+
+  it('calls setFilter on mount when filter prop is provided (no sort)', async () => {
+    const router = createTestRouter();
+    await router.push('/my-snippets');
+    await router.isReady();
+    mount(HomePage, {
+      props: { filter: 'mine' as const },
+      global: { plugins: [router] },
+    });
+    await flushPromises();
+
+    // setFilter triggers a feed fetch — verify the URL contains filter=mine
+    const feedCalls = mockApiFetch.mock.calls.filter((c) =>
+      (c[0] as string).includes('/api/posts?'),
+    );
+    expect(feedCalls.length).toBeGreaterThan(0);
+    const lastUrl = feedCalls[feedCalls.length - 1][0] as string;
+    expect(lastUrl).toContain('filter=mine');
+  });
+
+  it('calls setFilter(null) when filter prop changes to undefined (line 74 branch)', async () => {
+    const router = createTestRouter();
+    await router.push('/');
+    await router.isReady();
+    const wrapper = mount(HomePage, {
+      props: { filter: 'mine' as const },
+      global: { plugins: [router] },
+    });
+    await flushPromises();
+
+    // Change filter prop to undefined — watcher fires, setFilter(null) called
+    await wrapper.setProps({ filter: undefined });
+    await flushPromises();
+
+    // Verify setFilter(null) triggered a new feed fetch
+    const feedCalls = mockApiFetch.mock.calls.filter((c) =>
+      (c[0] as string).includes('/api/posts?'),
+    );
+    expect(feedCalls.length).toBeGreaterThan(0);
+  });
 });

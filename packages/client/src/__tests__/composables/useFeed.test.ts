@@ -154,4 +154,56 @@ describe('useFeed', () => {
     await setContentType('snippet');
     expect(mockApiFetch).toHaveBeenCalledWith('/api/posts?sort=recent&type=snippet&limit=20');
   });
+
+  it('loadMore sets error on non-ok response', async () => {
+    // First load succeeds and sets cursor
+    mockApiFetch.mockResolvedValueOnce(mockFetchResponse({ posts: [mockPost], cursor: 'abc' }));
+    const { loadPosts, loadMore, error } = useFeed();
+    await loadPosts();
+
+    // loadMore returns error response
+    mockApiFetch.mockResolvedValueOnce(mockFetchResponse({ error: 'Failed to load more' }, false));
+    await loadMore();
+
+    expect(error.value).toBeTruthy();
+  });
+
+  it('loadMore uses fallback error message when response has no error field', async () => {
+    mockApiFetch.mockResolvedValueOnce(mockFetchResponse({ posts: [mockPost], cursor: 'abc' }));
+    const { loadPosts, loadMore, error } = useFeed();
+    await loadPosts();
+
+    // Non-ok response with no error field
+    mockApiFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      json: () => Promise.resolve({}),
+    } as Response);
+    await loadMore();
+
+    expect(error.value).toBe('Failed to load more posts');
+  });
+
+  it('loadMore sets network error on exception', async () => {
+    mockApiFetch.mockResolvedValueOnce(mockFetchResponse({ posts: [mockPost], cursor: 'abc' }));
+    const { loadPosts, loadMore, error } = useFeed();
+    await loadPosts();
+
+    mockApiFetch.mockRejectedValueOnce(new Error('Network failure'));
+    await loadMore();
+
+    expect(error.value).toBe('Network error');
+  });
+
+  it('loadPosts uses fallback error when response json parse fails', async () => {
+    mockApiFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      json: () => Promise.reject(new Error('parse fail')),
+    } as unknown as Response);
+    const { loadPosts, error } = useFeed();
+    await loadPosts();
+
+    expect(error.value).toBe('Failed to load posts');
+  });
 });

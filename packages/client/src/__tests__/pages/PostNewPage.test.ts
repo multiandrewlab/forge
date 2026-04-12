@@ -152,6 +152,38 @@ describe('PostNewPage', () => {
       expect(router.currentRoute.value.name).toBe('post-new');
     });
 
+    it('should skip saveRevision when content is empty on publish', async () => {
+      mockCreatePost.mockResolvedValue('post-789');
+      mockSaveRevision.mockResolvedValue(undefined);
+      const wrapper = await mountPage();
+
+      // Do NOT emit any content update — content stays empty string
+      const editor = wrapper.findComponent({ name: 'PostEditor' });
+      await editor.vm.$emit('publish');
+      await flushPromises();
+
+      // saveRevision must NOT have been called because content is ''
+      expect(mockSaveRevision).not.toHaveBeenCalled();
+      expect(router.currentRoute.value.name).toBe('post-edit');
+      expect(router.currentRoute.value.params.id).toBe('post-789');
+    });
+
+    it('should call saveRevision when content is non-empty on publish', async () => {
+      mockCreatePost.mockResolvedValue('post-abc');
+      mockSaveRevision.mockResolvedValue(undefined);
+      const wrapper = await mountPage();
+
+      const editor = wrapper.findComponent({ name: 'PostEditor' });
+      // Set content first
+      await editor.vm.$emit('update:modelValue', 'some content');
+      await flushPromises();
+
+      await editor.vm.$emit('publish');
+      await flushPromises();
+
+      expect(mockSaveRevision).toHaveBeenCalledWith('post-abc', 'some content', null);
+    });
+
     it('should use entered title rather than "Untitled" when title is provided', async () => {
       mockCreatePost.mockResolvedValue('post-456');
       mockSaveRevision.mockResolvedValue(undefined);
@@ -163,6 +195,41 @@ describe('PostNewPage', () => {
       await flushPromises();
 
       expect(mockCreatePost).toHaveBeenCalledWith(expect.objectContaining({ title: 'My Title' }));
+    });
+  });
+
+  // ── Tag / visibility / contentType v-model handlers ──────────
+  describe('v-model handlers for template-compiled emits', () => {
+    it('should update visibility when PostEditor emits update:visibility', async () => {
+      mockCreatePost.mockResolvedValue('post-v');
+      mockSaveRevision.mockResolvedValue(undefined);
+      const wrapper = await mountPage();
+      const editor = wrapper.findComponent({ name: 'PostEditor' });
+
+      await editor.vm.$emit('update:visibility', 'private');
+      await flushPromises();
+
+      expect(editor.props('visibility')).toBe('private');
+    });
+
+    it('should update contentType when PostEditor emits update:contentType', async () => {
+      const wrapper = await mountPage();
+      const editor = wrapper.findComponent({ name: 'PostEditor' });
+
+      await editor.vm.$emit('update:contentType', 'link');
+      await flushPromises();
+
+      expect(editor.props('contentType')).toBe('link');
+    });
+
+    it('should update tags when PostEditor emits update:tags', async () => {
+      const wrapper = await mountPage();
+      const editor = wrapper.findComponent({ name: 'PostEditor' });
+
+      await editor.vm.$emit('update:tags', ['vue', 'ts']);
+      await flushPromises();
+
+      expect(editor.props('tags')).toEqual(['vue', 'ts']);
     });
   });
 

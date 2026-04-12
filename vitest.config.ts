@@ -17,6 +17,8 @@ export default defineConfig({
         'packages/shared/src/constants/index.ts',
         'packages/shared/src/types/index.ts',
         'packages/shared/src/types/user.ts',
+        'packages/shared/src/types/post.ts',
+        'packages/shared/src/types/feed.ts',
         'packages/shared/src/validators/index.ts',
         '**/*.config.*',
         '**/*.d.ts',

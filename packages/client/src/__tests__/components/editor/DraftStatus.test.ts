@@ -113,5 +113,24 @@ describe('DraftStatus', () => {
 
       expect(wrapper.find('span').classes()).toContain('text-xs');
     });
+
+    it('should apply text-gray-400 for default/unknown status via statusColor', () => {
+      // Cast to bypass type safety to test the default branch
+      const wrapper = mount(DraftStatus, {
+        props: { status: 'unknown' as 'saving', lastSavedAt: null },
+      });
+
+      expect(wrapper.find('span').classes()).toContain('text-gray-400');
+    });
+  });
+
+  describe('statusText default case', () => {
+    it('should return empty string for unknown status', () => {
+      const wrapper = mount(DraftStatus, {
+        props: { status: 'unknown' as 'saving', lastSavedAt: null },
+      });
+
+      expect(wrapper.text()).toBe('');
+    });
   });
 });

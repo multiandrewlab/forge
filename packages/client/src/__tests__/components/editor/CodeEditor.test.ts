@@ -68,6 +68,16 @@ vi.mock('@codemirror/lang-php', () => ({
 import CodeEditor from '@/components/editor/CodeEditor.vue';
 import { javascript } from '@codemirror/lang-javascript';
 import { python } from '@codemirror/lang-python';
+import { html } from '@codemirror/lang-html';
+import { css } from '@codemirror/lang-css';
+import { json } from '@codemirror/lang-json';
+import { markdown } from '@codemirror/lang-markdown';
+import { sql } from '@codemirror/lang-sql';
+import { xml } from '@codemirror/lang-xml';
+import { java } from '@codemirror/lang-java';
+import { cpp } from '@codemirror/lang-cpp';
+import { rust } from '@codemirror/lang-rust';
+import { php } from '@codemirror/lang-php';
 import { oneDark } from '@codemirror/theme-one-dark';
 
 describe('CodeEditor', () => {
@@ -202,5 +212,60 @@ describe('CodeEditor', () => {
     const extensions = codemirror.props('extensions') as symbol[];
     expect(extensions).toHaveLength(1);
     expect(extensions[0]).toBe(oneDark);
+  });
+
+  it('should support html language', () => {
+    mount(CodeEditor, { props: { modelValue: '', language: 'html' } });
+    expect(html).toHaveBeenCalled();
+  });
+
+  it('should support css language', () => {
+    mount(CodeEditor, { props: { modelValue: '', language: 'css' } });
+    expect(css).toHaveBeenCalled();
+  });
+
+  it('should support json language', () => {
+    mount(CodeEditor, { props: { modelValue: '', language: 'json' } });
+    expect(json).toHaveBeenCalled();
+  });
+
+  it('should support markdown language', () => {
+    mount(CodeEditor, { props: { modelValue: '', language: 'markdown' } });
+    expect(markdown).toHaveBeenCalled();
+  });
+
+  it('should support sql language', () => {
+    mount(CodeEditor, { props: { modelValue: '', language: 'sql' } });
+    expect(sql).toHaveBeenCalled();
+  });
+
+  it('should support xml language', () => {
+    mount(CodeEditor, { props: { modelValue: '', language: 'xml' } });
+    expect(xml).toHaveBeenCalled();
+  });
+
+  it('should support java language', () => {
+    mount(CodeEditor, { props: { modelValue: '', language: 'java' } });
+    expect(java).toHaveBeenCalled();
+  });
+
+  it('should support cpp language', () => {
+    mount(CodeEditor, { props: { modelValue: '', language: 'cpp' } });
+    expect(cpp).toHaveBeenCalled();
+  });
+
+  it('should support c language (uses cpp extension)', () => {
+    mount(CodeEditor, { props: { modelValue: '', language: 'c' } });
+    expect(cpp).toHaveBeenCalled();
+  });
+
+  it('should support rust language', () => {
+    mount(CodeEditor, { props: { modelValue: '', language: 'rust' } });
+    expect(rust).toHaveBeenCalled();
+  });
+
+  it('should support php language', () => {
+    mount(CodeEditor, { props: { modelValue: '', language: 'php' } });
+    expect(php).toHaveBeenCalled();
   });
 });

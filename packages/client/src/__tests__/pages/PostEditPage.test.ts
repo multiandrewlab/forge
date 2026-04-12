@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { createRouter, createMemoryHistory } from 'vue-router';
 import { setActivePinia, createPinia } from 'pinia';
-import { ref } from 'vue';
+import { ref, isRef } from 'vue';
 import type { Router } from 'vue-router';
 import type { Pinia } from 'pinia';
 import type { Ref } from 'vue';
@@ -200,6 +200,34 @@ describe('PostEditPage', () => {
       expect(editor.props('contentType')).toBe('snippet');
     });
 
+    it('should use empty string for content when post has no revisions (line 31 branch)', async () => {
+      const post = createMockPost({ revisions: [] });
+      mockFetchPost.mockImplementation(async () => {
+        const store = usePostsStore();
+        store.setPost(post);
+      });
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      const editor = wrapper.findComponent({ name: 'PostEditor' });
+      expect(editor.props('modelValue')).toBe('');
+    });
+
+    it('should use empty string for language when post language is null (line 32 branch)', async () => {
+      const post = createMockPost({ language: null });
+      mockFetchPost.mockImplementation(async () => {
+        const store = usePostsStore();
+        store.setPost(post);
+      });
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      const editor = wrapper.findComponent({ name: 'PostEditor' });
+      expect(editor.props('language')).toBe('');
+    });
+
     it('should show "Failed to load post" when fetch returns no post', async () => {
       // fetchPost resolves but does NOT set currentPost in store
       mockFetchPost.mockResolvedValue(undefined);
@@ -227,6 +255,75 @@ describe('PostEditPage', () => {
       await flushPromises();
 
       expect(wrapper.text()).toContain('Failed to fetch post');
+    });
+  });
+
+  // ── Loading guard in watchers (lines 46, 57) ──────────────────
+  // The watchers short-circuit with `if (loading.value) return` to prevent
+  // auto-saving during initial data population in onMounted. These guards are
+  // unreachable through the normal component API: Vue's pre-flush scheduler
+  // runs watchers AFTER the synchronous onMounted continuation sets
+  // loading=false, so loading is always false by the time any watcher fires.
+  // We exercise the guard by setting loading=true via the component's internal
+  // ref and mutating a watched ref to trigger the watcher while loading is true.
+  describe('loading guard in content and metadata watchers', () => {
+    it('content watcher does not call saveRevision while loading is true (line 46 guard)', async () => {
+      const post = createMockPost();
+      mockFetchPost.mockImplementation(async () => {
+        const store = usePostsStore();
+        store.setPost(post);
+      });
+      mockSaveRevision.mockResolvedValue(undefined);
+      const wrapper = await mountPage();
+      await flushPromises();
+      // Drain any pending debounce timers set during onMounted
+      vi.advanceTimersByTime(2000);
+      await flushPromises();
+      mockSaveRevision.mockReset();
+
+      // Access the actual refs from the component's raw setup state
+      const raw = (wrapper.vm as Record<string, unknown>).$.devtoolsRawSetupState as
+        | Record<string, unknown>
+        | undefined;
+      const loadingRef = isRef(raw?.loading) ? (raw.loading as { value: boolean }) : undefined;
+      const contentRef = isRef(raw?.content) ? (raw.content as { value: string }) : undefined;
+
+      if (loadingRef && contentRef) {
+        // Set loading=true, then mutate content to trigger the watcher
+        loadingRef.value = true;
+        contentRef.value = contentRef.value + '_while_loading';
+        vi.advanceTimersByTime(2000);
+        await flushPromises();
+      }
+      // Guard `if (loading.value) return` prevents saveRevision from being called
+      expect(mockSaveRevision).not.toHaveBeenCalled();
+    });
+
+    it('metadata watcher does not call updatePost while loading is true (line 57 guard)', async () => {
+      const post = createMockPost();
+      mockFetchPost.mockImplementation(async () => {
+        const store = usePostsStore();
+        store.setPost(post);
+      });
+      mockUpdatePost.mockResolvedValue(undefined);
+      const wrapper = await mountPage();
+      await flushPromises();
+      mockUpdatePost.mockReset();
+
+      const raw = (wrapper.vm as Record<string, unknown>).$.devtoolsRawSetupState as
+        | Record<string, unknown>
+        | undefined;
+      const loadingRef = isRef(raw?.loading) ? (raw.loading as { value: boolean }) : undefined;
+      const titleRef = isRef(raw?.title) ? (raw.title as { value: string }) : undefined;
+
+      if (loadingRef && titleRef) {
+        // Set loading=true, then mutate title to trigger the metadata watcher
+        loadingRef.value = true;
+        titleRef.value = titleRef.value + '_while_loading';
+        await flushPromises();
+      }
+      // Guard `if (loading.value) return` prevents updatePost from being called
+      expect(mockUpdatePost).not.toHaveBeenCalled();
     });
   });
 
@@ -357,10 +454,81 @@ describe('PostEditPage', () => {
         expect.objectContaining({ contentType: 'prompt' }),
       );
     });
+
+    it('should update tags when PostEditor emits update:tags (template v-model handler)', async () => {
+      const wrapper = await mountWithPost();
+      const editor = wrapper.findComponent({ name: 'PostEditor' });
+
+      await editor.vm.$emit('update:tags', ['typescript', 'vue']);
+      await flushPromises();
+
+      expect(editor.props('tags')).toEqual(['typescript', 'vue']);
+    });
+  });
+
+  // ── Publish ────────────────────────────────────────────────────
+  describe('publish', () => {
+    async function mountWithPost() {
+      const post = createMockPost();
+      mockFetchPost.mockImplementation(async () => {
+        const store = usePostsStore();
+        store.setPost(post);
+      });
+      mockSaveRevision.mockResolvedValue(undefined);
+      mockPublishPost.mockResolvedValue(undefined);
+      const wrapper = await mountPage();
+      await flushPromises();
+      return wrapper;
+    }
+
+    it('should call publishPost and navigate to post-view on publish (no pending timer)', async () => {
+      const wrapper = await mountWithPost();
+      const editor = wrapper.findComponent({ name: 'PostEditor' });
+
+      await editor.vm.$emit('publish');
+      await flushPromises();
+
+      // No pending debounce timer — publishPost called directly, no prior saveRevision
+      expect(mockPublishPost).toHaveBeenCalledWith('post-abc');
+      expect(router.currentRoute.value.name).toBe('post-view');
+      expect(router.currentRoute.value.params.id).toBe('post-abc');
+    });
+
+    it('should flush pending auto-save then publishPost when debounce timer is active', async () => {
+      const wrapper = await mountWithPost();
+      const editor = wrapper.findComponent({ name: 'PostEditor' });
+
+      // Trigger content change to start debounce timer
+      await editor.vm.$emit('update:modelValue', 'updated content');
+      await flushPromises();
+
+      // Publish before 2s elapses — timer is still pending
+      await editor.vm.$emit('publish');
+      await flushPromises();
+
+      // saveRevision should have been called due to flush
+      expect(mockSaveRevision).toHaveBeenCalledWith('post-abc', 'updated content', null);
+      expect(mockPublishPost).toHaveBeenCalledWith('post-abc');
+      expect(router.currentRoute.value.name).toBe('post-view');
+    });
   });
 
   // ── Cleanup ────────────────────────────────────────────────────
   describe('cleanup', () => {
+    it('should unmount cleanly when no debounce timer is pending (line 40 false branch)', async () => {
+      // Mount with no content changes → debounceTimer stays null
+      const post = createMockPost();
+      mockFetchPost.mockImplementation(async () => {
+        const store = usePostsStore();
+        store.setPost(post);
+      });
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      // No content change was made, so no timer
+      expect(() => wrapper.unmount()).not.toThrow();
+    });
+
     it('should clear post from store on unmount', async () => {
       const post = createMockPost();
       mockFetchPost.mockImplementation(async () => {

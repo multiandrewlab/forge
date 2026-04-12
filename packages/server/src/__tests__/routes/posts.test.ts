@@ -11,10 +11,27 @@ vi.mock('../../plugins/rate-limit.js', () => ({
   },
 }));
 
+// Allow spy on @forge/shared schema methods to exercise unreachable ?? branches
+vi.mock('@forge/shared', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@forge/shared')>();
+  return {
+    ...original,
+    createPostSchema: {
+      ...original.createPostSchema,
+      safeParse: vi.fn((...args: Parameters<typeof original.createPostSchema.safeParse>) =>
+        original.createPostSchema.safeParse(...args),
+      ),
+    },
+  };
+});
+
 import { query } from '../../db/connection.js';
 import { buildApp } from '../../app.js';
+import { createPostSchema } from '@forge/shared';
 import type { FastifyInstance } from 'fastify';
 import type { PostRow, PostRevisionRow, PostWithRevisionRow } from '../../db/queries/types.js';
+
+const mockCreatePostSchema = createPostSchema as { safeParse: Mock };
 
 const mockQuery = query as Mock;
 
@@ -136,6 +153,63 @@ describe('post routes', () => {
 
       expect(response.statusCode).toBe(401);
     });
+
+    it('creates post without language field (language ?? null branch)', async () => {
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ ...samplePostRow, language: null }],
+        rowCount: 1,
+      });
+      mockQuery.mockResolvedValueOnce({ rows: [sampleRevisionRow], rowCount: 1 });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/posts',
+        headers: { authorization: `Bearer ${token}` },
+        payload: {
+          title: 'No Language Post',
+          contentType: 'snippet',
+          visibility: 'public',
+          content: 'some content',
+          // language omitted — hits language ?? null
+        },
+      });
+
+      expect(response.statusCode).toBe(201);
+    });
+
+    it('uses isDraft ?? true fallback when parsed data has isDraft undefined', async () => {
+      // isDraft has z.boolean().default(true) so it's always defined after normal parsing.
+      // We override safeParse to return undefined for isDraft to hit the ?? true branch.
+      mockCreatePostSchema.safeParse.mockImplementationOnce((body: unknown) => {
+        const result = createPostSchema.safeParse(body);
+        if (result.success) {
+          const data = { ...result.data, isDraft: undefined as unknown as boolean };
+          return { success: true as const, data };
+        }
+        return result;
+      });
+
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ ...samplePostRow, is_draft: true }],
+        rowCount: 1,
+      });
+      mockQuery.mockResolvedValueOnce({ rows: [sampleRevisionRow], rowCount: 1 });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/posts',
+        headers: { authorization: `Bearer ${token}` },
+        payload: {
+          title: 'Draft Post',
+          contentType: 'snippet',
+          language: 'typescript',
+          visibility: 'public',
+          content: 'some content',
+        },
+      });
+
+      expect(response.statusCode).toBe(201);
+    });
   });
 
   // ─── GET /api/posts/:id ────────────────────────────────────────────
@@ -249,6 +323,24 @@ describe('post routes', () => {
 
       expect(response.statusCode).toBe(401);
     });
+
+    it('returns 404 when updatePost returns null (post deleted between check and update)', async () => {
+      // findPostById returns post (ownership check passes)
+      mockQuery.mockResolvedValueOnce({ rows: [samplePostRow], rowCount: 1 });
+      // updatePost query returns no rows (race condition — post gone)
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+      const response = await app.inject({
+        method: 'PATCH',
+        url: `/api/posts/${postId}`,
+        headers: { authorization: `Bearer ${token}` },
+        payload: { title: 'Updated Title' },
+      });
+
+      expect(response.statusCode).toBe(404);
+      const body = response.json();
+      expect(body.error).toBe('Post not found');
+    });
   });
 
   // ─── DELETE /api/posts/:id ─────────────────────────────────────────
@@ -356,6 +448,23 @@ describe('post routes', () => {
 
       expect(response.statusCode).toBe(401);
     });
+
+    it('returns 404 when publishPost returns null (post deleted between check and publish)', async () => {
+      // findPostById returns post (ownership check passes)
+      mockQuery.mockResolvedValueOnce({ rows: [samplePostRow], rowCount: 1 });
+      // publishPost query returns no rows (race condition — post gone)
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/posts/${postId}/publish`,
+        headers: { authorization: `Bearer ${token}` },
+      });
+
+      expect(response.statusCode).toBe(404);
+      const body = response.json();
+      expect(body.error).toBe('Post not found');
+    });
   });
 
   // ─── POST /api/posts/:id/revisions ─────────────────────────────────
@@ -434,6 +543,26 @@ describe('post routes', () => {
       });
 
       expect(response.statusCode).toBe(401);
+    });
+
+    it('creates revision without message (message ?? null fallback branch)', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [samplePostRow], rowCount: 1 });
+      const noMsgRevision: PostRevisionRow = {
+        ...sampleRevisionRow,
+        message: null,
+        revision_number: 2,
+      };
+      mockQuery.mockResolvedValueOnce({ rows: [noMsgRevision], rowCount: 1 });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/posts/${postId}/revisions`,
+        headers: { authorization: `Bearer ${token}` },
+        payload: { content: 'content without message' },
+        // message omitted — hits parsed.data.message ?? null (right-side fallback)
+      });
+
+      expect(response.statusCode).toBe(201);
     });
   });
 

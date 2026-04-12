@@ -264,4 +264,43 @@ console.log(config.port);
 ]`;
     expect(detectLanguage(code)).toBe('json');
   });
+
+  it('should not detect invalid JSON that starts/ends like JSON (catch branch)', () => {
+    // Starts with { and ends with } but is not valid JSON — falls through to pattern matching
+    const code = '{ this is not valid json }';
+    // Should not return 'json' since JSON.parse throws and catch continues
+    const result = detectLanguage(code);
+    expect(result).not.toBe('json');
+  });
+
+  it('should not detect invalid JSON array that starts/ends like array (catch branch)', () => {
+    // Starts with [ and ends with ] but is not valid JSON
+    const code = '[ not valid json ]';
+    const result = detectLanguage(code);
+    expect(result).not.toBe('json');
+  });
+
+  it('should use empty string fallback when shebang match group is undefined (??  branch)', () => {
+    // Temporarily mock String.prototype.match so the shebang regex returns a match
+    // where group 1 is undefined — hits the `?? ''` fallback branch
+    const originalMatch = String.prototype.match;
+    String.prototype.match = function (regexp: RegExp | string) {
+      const str = String(this);
+      if (regexp instanceof RegExp && regexp.source.includes('env') && str.startsWith('#!')) {
+        // Return a fake match array with undefined at index 1
+        return Object.assign(['#!/usr/bin/env '], { index: 0, input: str }) as RegExpMatchArray;
+      }
+      return originalMatch.call(this, regexp as RegExp);
+    } as typeof String.prototype.match;
+
+    try {
+      // The shebang match fires but group 1 is undefined → falls through to pattern matching
+      const code = '#!/usr/bin/env \nconsole.log("hi")';
+      const result = detectLanguage(code);
+      // Interpreter is '' which is not in SHEBANG_MAP, so falls through
+      expect(result).not.toBe('python'); // just verify it doesn't crash
+    } finally {
+      String.prototype.match = originalMatch;
+    }
+  });
 });

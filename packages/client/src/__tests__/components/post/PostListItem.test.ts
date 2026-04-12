@@ -86,4 +86,50 @@ describe('PostListItem', () => {
     });
     expect(wrapper.text()).toContain('Draft');
   });
+
+  // ── timeAgo branches (lines 59-64) ───────────────────────────
+  describe('timeAgo display', () => {
+    function postWithAge(secondsAgo: number): PostWithAuthor {
+      return {
+        ...mockPost,
+        createdAt: new Date(Date.now() - secondsAgo * 1000),
+      };
+    }
+
+    it('shows "just now" for posts created less than 60s ago', () => {
+      const router = createTestRouter();
+      const wrapper = mount(PostListItem, {
+        props: { post: postWithAge(30), selected: false },
+        global: { plugins: [router] },
+      });
+      expect(wrapper.text()).toContain('just now');
+    });
+
+    it('shows minutes ago for posts created between 60s and 60m ago', () => {
+      const router = createTestRouter();
+      const wrapper = mount(PostListItem, {
+        props: { post: postWithAge(5 * 60), selected: false }, // 5 minutes ago
+        global: { plugins: [router] },
+      });
+      expect(wrapper.text()).toContain('5m ago');
+    });
+
+    it('shows hours ago for posts created between 1h and 24h ago', () => {
+      const router = createTestRouter();
+      const wrapper = mount(PostListItem, {
+        props: { post: postWithAge(3 * 60 * 60), selected: false }, // 3 hours ago
+        global: { plugins: [router] },
+      });
+      expect(wrapper.text()).toContain('3h ago');
+    });
+
+    it('shows days ago for posts created more than 24h ago', () => {
+      const router = createTestRouter();
+      const wrapper = mount(PostListItem, {
+        props: { post: postWithAge(2 * 24 * 60 * 60), selected: false }, // 2 days ago
+        global: { plugins: [router] },
+      });
+      expect(wrapper.text()).toContain('2d ago');
+    });
+  });
 });
