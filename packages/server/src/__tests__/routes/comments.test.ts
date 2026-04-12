@@ -331,6 +331,32 @@ describe('comment routes', () => {
       const json = response.json();
       expect(json.error).toBeDefined();
     });
+
+    it('returns 200 with fallback when re-read does not find updated comment', async () => {
+      // findPostById — post exists
+      mockQuery.mockResolvedValueOnce({ rows: [samplePostRow], rowCount: 1 });
+      // findCommentById — comment exists
+      mockQuery.mockResolvedValueOnce({ rows: [sampleCommentRow], rowCount: 1 });
+      // updateComment
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ ...sampleCommentRow, body: 'Updated' }],
+        rowCount: 1,
+      });
+      // findCommentsByPostIdWithAuthor — re-read returns empty (race condition)
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+      const response = await app.inject({
+        method: 'PATCH',
+        url: `/api/posts/${postId}/comments/${commentId}`,
+        headers: { authorization: `Bearer ${token}` },
+        payload: { body: 'Updated' },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const json = response.json();
+      expect(json.comment).toBeDefined();
+      expect(json.comment.body).toBe('Updated');
+    });
   });
 
   // ─── DELETE /api/posts/:id/comments/:cid ────────────────────────────
@@ -385,6 +411,21 @@ describe('comment routes', () => {
       expect(response.statusCode).toBe(404);
       const json = response.json();
       expect(json.error).toBe('Comment not found');
+    });
+
+    it('returns 404 when post not found', async () => {
+      // findPostById — no post
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+      const response = await app.inject({
+        method: 'DELETE',
+        url: `/api/posts/${postId}/comments/${commentId}`,
+        headers: { authorization: `Bearer ${token}` },
+      });
+
+      expect(response.statusCode).toBe(404);
+      const json = response.json();
+      expect(json.error).toBe('Post not found');
     });
 
     it('returns 401 without auth', async () => {
