@@ -20,6 +20,12 @@ body:json {
   }
 }
 
+script:post-response {
+  if (res.body.comment) {
+    bru.setVar("commentId", res.body.comment.id);
+  }
+}
+
 docs {
   Create a general comment on a post.
 
