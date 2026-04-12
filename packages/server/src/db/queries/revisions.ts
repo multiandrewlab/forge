@@ -35,3 +35,19 @@ export async function createRevision(input: CreateRevisionInput): Promise<PostRe
   );
   return result.rows[0] as PostRevisionRow;
 }
+
+export async function createRevisionAtomic(input: {
+  postId: string;
+  authorId: string;
+  content: string;
+  message: string | null;
+}): Promise<PostRevisionRow> {
+  const result = await query<PostRevisionRow>(
+    `INSERT INTO post_revisions (post_id, author_id, content, message, revision_number)
+     SELECT $1, $2, $3, $4, COALESCE(MAX(revision_number), 0) + 1
+     FROM post_revisions WHERE post_id = $1
+     RETURNING *`,
+    [input.postId, input.authorId, input.content, input.message],
+  );
+  return result.rows[0] as PostRevisionRow;
+}

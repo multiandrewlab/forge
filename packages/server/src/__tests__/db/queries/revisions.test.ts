@@ -9,6 +9,7 @@ import {
   findRevisionsByPostId,
   findRevision,
   createRevision,
+  createRevisionAtomic,
 } from '../../../db/queries/revisions.js';
 import type { PostRevisionRow } from '../../../db/queries/types.js';
 
@@ -74,6 +75,54 @@ describe('revision queries', () => {
         [sampleRevision.post_id, sampleRevision.author_id, '# Hello World', 'Initial version', 1],
       );
       expect(result).toEqual(sampleRevision);
+    });
+  });
+
+  describe('createRevisionAtomic', () => {
+    it('inserts a revision with auto-incremented revision_number and returns the row', async () => {
+      const atomicRevision: PostRevisionRow = {
+        ...sampleRevision,
+        revision_number: 3,
+        message: 'Atomic revision',
+      };
+      mockQuery.mockResolvedValue({ rows: [atomicRevision], rowCount: 1 });
+      const result = await createRevisionAtomic({
+        postId: sampleRevision.post_id,
+        authorId: sampleRevision.author_id as string,
+        content: '# Hello World',
+        message: 'Atomic revision',
+      });
+      expect(mockQuery).toHaveBeenCalledWith(
+        `INSERT INTO post_revisions (post_id, author_id, content, message, revision_number)
+     SELECT $1, $2, $3, $4, COALESCE(MAX(revision_number), 0) + 1
+     FROM post_revisions WHERE post_id = $1
+     RETURNING *`,
+        [sampleRevision.post_id, sampleRevision.author_id, '# Hello World', 'Atomic revision'],
+      );
+      expect(result).toEqual(atomicRevision);
+    });
+
+    it('handles null message', async () => {
+      const atomicRevision: PostRevisionRow = {
+        ...sampleRevision,
+        revision_number: 1,
+        message: null,
+      };
+      mockQuery.mockResolvedValue({ rows: [atomicRevision], rowCount: 1 });
+      const result = await createRevisionAtomic({
+        postId: sampleRevision.post_id,
+        authorId: sampleRevision.author_id as string,
+        content: '# Hello World',
+        message: null,
+      });
+      expect(mockQuery).toHaveBeenCalledWith(
+        `INSERT INTO post_revisions (post_id, author_id, content, message, revision_number)
+     SELECT $1, $2, $3, $4, COALESCE(MAX(revision_number), 0) + 1
+     FROM post_revisions WHERE post_id = $1
+     RETURNING *`,
+        [sampleRevision.post_id, sampleRevision.author_id, '# Hello World', null],
+      );
+      expect(result).toEqual(atomicRevision);
     });
   });
 });

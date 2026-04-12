@@ -38,6 +38,41 @@ describe('Router', () => {
       expect(route.name).toBe('home');
     });
 
+    it('should have a trending route at "/trending"', () => {
+      const route = router.resolve('/trending');
+      expect(route.name).toBe('home-trending');
+    });
+
+    it('should have a my-snippets route at "/my-snippets"', () => {
+      const route = router.resolve('/my-snippets');
+      expect(route.name).toBe('home-my-snippets');
+    });
+
+    it('should have a bookmarks route at "/bookmarks"', () => {
+      const route = router.resolve('/bookmarks');
+      expect(route.name).toBe('home-bookmarks');
+    });
+
+    it('should have a post-new route at "/posts/new"', () => {
+      const route = router.resolve('/posts/new');
+      expect(route.name).toBe('post-new');
+    });
+
+    it('should have a post-view route at "/posts/:id"', () => {
+      const route = router.resolve('/posts/abc');
+      expect(route.name).toBe('post-view');
+    });
+
+    it('should have a post-edit route at "/posts/:id/edit"', () => {
+      const route = router.resolve('/posts/abc/edit');
+      expect(route.name).toBe('post-edit');
+    });
+
+    it('should have a post-history route at "/posts/:id/history"', () => {
+      const route = router.resolve('/posts/abc/history');
+      expect(route.name).toBe('post-history');
+    });
+
     it('should have a login route at "/login"', () => {
       const route = router.resolve('/login');
       expect(route.name).toBe('login');
@@ -81,6 +116,76 @@ describe('Router', () => {
     it('should mark auth link route as guest', () => {
       const route = router.resolve('/auth/link');
       expect(route.meta.guest).toBe(true);
+    });
+
+    it('should navigate to trending route when authenticated', async () => {
+      const store = useAuthStore();
+      store.setAuth('token', createMockUser());
+
+      await router.push('/trending');
+      await router.isReady();
+
+      expect(router.currentRoute.value.name).toBe('home-trending');
+    });
+
+    it('should navigate to my-snippets route when authenticated', async () => {
+      const store = useAuthStore();
+      store.setAuth('token', createMockUser());
+
+      await router.push('/my-snippets');
+      await router.isReady();
+
+      expect(router.currentRoute.value.name).toBe('home-my-snippets');
+    });
+
+    it('should navigate to bookmarks route when authenticated', async () => {
+      const store = useAuthStore();
+      store.setAuth('token', createMockUser());
+
+      await router.push('/bookmarks');
+      await router.isReady();
+
+      expect(router.currentRoute.value.name).toBe('home-bookmarks');
+    });
+
+    it('should navigate to post-history route when authenticated', async () => {
+      const store = useAuthStore();
+      store.setAuth('token', createMockUser());
+
+      await router.push('/posts/xyz/history');
+      await router.isReady();
+
+      expect(router.currentRoute.value.name).toBe('post-history');
+    });
+
+    it('should lazy-load PostNewPage component when navigating to post-new', async () => {
+      const store = useAuthStore();
+      store.setAuth('token', createMockUser());
+
+      await router.push('/posts/new');
+      await router.isReady();
+
+      expect(router.currentRoute.value.name).toBe('post-new');
+    });
+
+    it('should lazy-load PostViewPage component when navigating to post-view', async () => {
+      const store = useAuthStore();
+      store.setAuth('token', createMockUser());
+
+      await router.push('/posts/abc');
+      await router.isReady();
+
+      expect(router.currentRoute.value.name).toBe('post-view');
+    });
+
+    it('should lazy-load PostEditPage component when navigating to post-edit', async () => {
+      const store = useAuthStore();
+      store.setAuth('token', createMockUser());
+
+      await router.push('/posts/abc/edit');
+      await router.isReady();
+
+      expect(router.currentRoute.value.name).toBe('post-edit');
     });
   });
 

@@ -1,28 +1,87 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
-import HomePage from '@/pages/HomePage.vue';
 
 const router = createRouter({
   history: createWebHistory(),
   routes: [
+    // Authenticated routes — all wrapped in AppLayout
     {
       path: '/',
-      name: 'home',
-      component: HomePage,
+      component: () => import('@/layouts/AppLayout.vue'),
       meta: { requiresAuth: true },
+      children: [
+        {
+          path: '',
+          name: 'home',
+          component: () => import('@/pages/HomePage.vue'),
+        },
+        {
+          path: 'trending',
+          name: 'home-trending',
+          component: () => import('@/pages/HomePage.vue'),
+          props: { sort: 'trending' },
+        },
+        {
+          path: 'my-snippets',
+          name: 'home-my-snippets',
+          component: () => import('@/pages/HomePage.vue'),
+          props: { filter: 'mine' },
+        },
+        {
+          path: 'bookmarks',
+          name: 'home-bookmarks',
+          component: () => import('@/pages/HomePage.vue'),
+          props: { filter: 'bookmarked' },
+        },
+        {
+          path: 'posts/new',
+          name: 'post-new',
+          component: () => import('@/pages/PostNewPage.vue'),
+        },
+        {
+          path: 'posts/:id',
+          name: 'post-view',
+          component: () => import('@/pages/PostViewPage.vue'),
+        },
+        {
+          path: 'posts/:id/edit',
+          name: 'post-edit',
+          component: () => import('@/pages/PostEditPage.vue'),
+        },
+        {
+          path: 'posts/:id/history',
+          name: 'post-history',
+          component: () => import('@/pages/PostHistoryPage.vue'),
+        },
+      ],
     },
+    // Login — wrapped in AuthLayout
     {
       path: '/login',
-      name: 'login',
-      component: () => import('@/pages/LoginPage.vue'),
+      component: () => import('@/layouts/AuthLayout.vue'),
       meta: { guest: true },
+      children: [
+        {
+          path: '',
+          name: 'login',
+          component: () => import('@/pages/LoginPage.vue'),
+        },
+      ],
     },
+    // Register — separate top-level route wrapped in AuthLayout
     {
       path: '/register',
-      name: 'register',
-      component: () => import('@/pages/RegisterPage.vue'),
+      component: () => import('@/layouts/AuthLayout.vue'),
       meta: { guest: true },
+      children: [
+        {
+          path: '',
+          name: 'register',
+          component: () => import('@/pages/RegisterPage.vue'),
+        },
+      ],
     },
+    // Auth callback + link — flat standalone routes
     {
       path: '/auth/callback',
       name: 'auth-callback',
