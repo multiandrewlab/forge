@@ -11,6 +11,7 @@ import { postRoutes } from './routes/posts.js';
 import { voteRoutes } from './routes/votes.js';
 import { bookmarkRoutes } from './routes/bookmarks.js';
 import { tagRoutes } from './routes/tags.js';
+import { commentRoutes } from './routes/comments.js';
 
 export async function buildApp() {
   const app = Fastify({
@@ -54,6 +55,7 @@ export async function buildApp() {
   await app.register(voteRoutes, { prefix: '/api/posts' });
   await app.register(bookmarkRoutes, { prefix: '/api' });
   await app.register(tagRoutes, { prefix: '/api/tags' });
+  await app.register(commentRoutes, { prefix: '/api/posts' });
 
   return app;
 }
