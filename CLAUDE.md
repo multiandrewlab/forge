@@ -59,11 +59,43 @@ If a GitHub Issue specifies different coverage requirements, update `.coverage-t
 
 The validation phase of orchestrated execution reads `.coverage-thresholds.json` and runs the enforcement command. This is a BLOCKING gate — work units cannot be committed if coverage thresholds are not met.
 
+## Bruno API Tests
+
+Every feature that adds or modifies API endpoints **must** include Bruno request files in `bruno/`. This is a BLOCKING requirement — the same as unit tests and coverage.
+
+### Requirements
+
+- **New endpoints**: Create `.bru` files in the appropriate `bruno/<resource>/` directory
+- **Post-response scripts**: Capture IDs (e.g., `commentId`, `revisionId`) so subsequent requests can reference them
+- **E2E verification**: After implementation, run the Bruno requests against a running server and verify all return expected status codes
+- **Run command**: `cd bruno && npx @usebruno/cli run <directory> --env local`
+- **Full collection**: `cd bruno && npx @usebruno/cli run -r --env local`
+
+### When to run
+
+- After completing all work units for a feature (before final review)
+- The server must be running with `.env` loaded: `set -a && source .env && set +a && cd packages/server && npx tsx src/server.ts`
+- All requests in the modified directory must return success status codes (2xx)
+
+### Existing collection structure
+
+```
+bruno/
+├── auth/          # 8 requests
+├── bookmarks/     # 2 requests
+├── comments/      # 7 requests
+├── health/        # 1 request
+├── posts/         # 7 requests + revisions/ (3)
+├── tags/          # 5 requests
+└── votes/         # 3 requests
+```
+
 ## Quality Gates
 
 - **Design Review Gate**: Parallel 5-agent review after design is drafted (`/review-design`)
 - **Plan Review Gate**: Automatic adversarial review after any implementation plan is drafted. Spawns 3 independent reviewers (Feasibility, Completeness, Scope & Alignment) in parallel — ALL must PASS before the plan is presented to the user. See `skills/plan-review-gate/SKILL.md`
 - **Coverage Gate**: Reads `.coverage-thresholds.json` and runs the enforcement command — BLOCKING gate before PR creation
+- **Bruno API Gate**: All Bruno requests for affected endpoints must pass against a running server — BLOCKING gate before PR creation
 
 ## Workflow Enforcement (MANDATORY)
 
@@ -141,6 +173,7 @@ For single-file TDD changes, this intercept is not needed — commit directly.
 - `superpowers:test-driven-development` — must verify coverage meets thresholds before declaring done
 - Orchestrated execution — reads `.coverage-thresholds.json` during Phase 2 (VALIDATE)
 - Any other skill claiming "tests pass" — must also confirm coverage thresholds are met
+- Any feature adding API endpoints — must include Bruno `.bru` files and verify they pass against a running server
 
 If `.coverage-thresholds.json` exists, no skill may skip it. If a skill has its own coverage check logic, `.coverage-thresholds.json` takes precedence.
 
