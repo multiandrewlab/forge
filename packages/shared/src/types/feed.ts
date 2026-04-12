@@ -12,7 +12,7 @@ export interface PostWithAuthor extends Post {
   tags: string[];
 }
 
-export type FeedSort = 'trending' | 'recent' | 'top';
+export type FeedSort = 'trending' | 'recent' | 'top' | 'personalized';
 export type FeedFilter = 'mine' | 'bookmarked';
 export type FeedContentType = ContentType;
 

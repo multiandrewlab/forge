@@ -46,3 +46,6 @@ export type {
   FeedResponse,
   FeedQuery,
 } from './feed.js';
+export type { VoteValue, VoteResponse } from './vote.js';
+export type { BookmarkToggleResponse } from './bookmark.js';
+export type { Tag, TagSubscriptionResponse } from './tag.js';
