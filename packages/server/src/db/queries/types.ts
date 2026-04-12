@@ -97,6 +97,12 @@ export interface CommentRow {
   updated_at: Date;
 }
 
+export type CommentWithAuthorRow = CommentRow & {
+  author_display_name: string | null;
+  author_avatar_url: string | null;
+  revision_number: number | null;
+};
+
 export interface PromptVariableRow {
   id: string;
   post_id: string;
