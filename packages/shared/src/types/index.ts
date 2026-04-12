@@ -37,3 +37,12 @@ export interface LinkPreview {
 
 export type { AuthTokens, AuthResponse } from './user.js';
 export type { PostRevision, PostWithRevision } from './post.js';
+export type {
+  PostAuthor,
+  PostWithAuthor,
+  FeedSort,
+  FeedFilter,
+  FeedContentType,
+  FeedResponse,
+  FeedQuery,
+} from './feed.js';
