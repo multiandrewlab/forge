@@ -31,6 +31,21 @@ interface CursorData {
 export async function findFeedPosts(input: FindFeedPostsInput): Promise<FindFeedPostsResult> {
   const { userId, sort = 'trending', filter, tag, type, cursor, limit } = input;
 
+  let effectiveSort: FeedSort = sort;
+  let filterBySubscriptions = false;
+
+  if (sort === 'personalized') {
+    const subCheck = await query(
+      'SELECT 1 FROM user_tag_subscriptions WHERE user_id = $1 LIMIT 1',
+      [userId],
+    );
+    if (subCheck.rows.length > 0) {
+      filterBySubscriptions = true;
+    } else {
+      effectiveSort = 'trending';
+    }
+  }
+
   const clampedLimit = Math.min(limit ?? 20, 100);
   const fetchLimit = clampedLimit + 1;
 
@@ -85,6 +100,13 @@ export async function findFeedPosts(input: FindFeedPostsInput): Promise<FindFeed
     conditions.push(`p.content_type = ${nextParam(type)}`);
   }
 
+  if (filterBySubscriptions) {
+    const userParam = nextParam(userId);
+    conditions.push(
+      `EXISTS (SELECT 1 FROM post_tags pt_sub JOIN user_tag_subscriptions uts ON uts.tag_id = pt_sub.tag_id WHERE pt_sub.post_id = p.id AND uts.user_id = ${userParam})`,
+    );
+  }
+
   // Cursor-based pagination (keyset)
   if (cursor !== undefined) {
     const decoded = Buffer.from(cursor, 'base64').toString('utf8');
@@ -99,10 +121,14 @@ export async function findFeedPosts(input: FindFeedPostsInput): Promise<FindFeed
 
   // ORDER BY
   let orderByClause: string;
-  if (sort === 'recent') {
+  if (effectiveSort === 'recent') {
     orderByClause = 'ORDER BY p.created_at DESC, p.id DESC';
-  } else if (sort === 'top') {
+  } else if (effectiveSort === 'top') {
     orderByClause = 'ORDER BY p.vote_count DESC, p.created_at DESC, p.id DESC';
+  } else if (effectiveSort === 'personalized') {
+    // personalized: hotness score (vote_count with time decay, no GREATEST denominator)
+    orderByClause =
+      'ORDER BY (p.vote_count + 1) * (1.0 / (EXTRACT(EPOCH FROM NOW() - p.created_at) / 3600 + 2)) DESC, p.created_at DESC, p.id DESC';
   } else {
     // trending: vote_count with time decay (Wilson-style approximation using epoch seconds)
     orderByClause =

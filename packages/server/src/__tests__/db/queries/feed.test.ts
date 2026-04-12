@@ -88,6 +88,58 @@ describe('findFeedPosts', () => {
     });
   });
 
+  describe('sort=personalized', () => {
+    it('checks subscriptions and adds EXISTS clause with hotness ORDER BY when user has subscriptions', async () => {
+      // First call: subscription check returns a row (user has subscriptions)
+      mockQuery.mockResolvedValueOnce({ rows: [{ '?column?': 1 }], rowCount: 1 });
+      // Second call: the actual feed query
+      mockQuery.mockResolvedValueOnce({ rows: [sampleRow], rowCount: 1 });
+
+      const result = await findFeedPosts({ userId, sort: 'personalized' });
+
+      // Should have made 2 queries: subscription check + feed query
+      expect(mockQuery).toHaveBeenCalledTimes(2);
+
+      // First query: subscription check
+      const [subSql, subParams] = mockQuery.mock.calls[0] as [string, unknown[]];
+      expect(subSql).toContain('user_tag_subscriptions');
+      expect(subSql).toContain('LIMIT 1');
+      expect(subParams).toEqual([userId]);
+
+      // Second query: feed query with EXISTS and hotness ORDER BY
+      const [feedSql, feedParams] = mockQuery.mock.calls[1] as [string, unknown[]];
+      expect(feedSql).toContain('EXISTS');
+      expect(feedSql).toContain('post_tags pt_sub');
+      expect(feedSql).toContain('user_tag_subscriptions uts');
+      expect(feedSql).toContain('uts.user_id');
+      expect(feedParams).toContain(userId);
+      // Hotness ORDER BY: vote_count with time decay
+      expect(feedSql).toContain('vote_count');
+      expect(feedSql.toLowerCase()).toContain('epoch');
+
+      expect(result.posts).toHaveLength(1);
+    });
+
+    it('falls back to trending sort when user has no subscriptions', async () => {
+      // First call: subscription check returns no rows
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+      // Second call: the actual feed query (trending fallback)
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+      await findFeedPosts({ userId, sort: 'personalized' });
+
+      // Should have made 2 queries: subscription check + feed query
+      expect(mockQuery).toHaveBeenCalledTimes(2);
+
+      // Second query: should use trending sort (GREATEST pattern), no EXISTS clause
+      const [feedSql] = mockQuery.mock.calls[1] as [string, unknown[]];
+      expect(feedSql).not.toContain('EXISTS');
+      // Trending sort uses GREATEST pattern
+      expect(feedSql).toContain('GREATEST');
+      expect(feedSql.toLowerCase()).toContain('epoch');
+    });
+  });
+
   describe('filter=mine', () => {
     it('filters by author_id and includes drafts', async () => {
       mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });

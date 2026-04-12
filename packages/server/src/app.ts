@@ -8,6 +8,9 @@ import { rateLimitPlugin } from './plugins/rate-limit.js';
 import { healthRoutes } from './routes/health.js';
 import { authRoutes } from './routes/auth.js';
 import { postRoutes } from './routes/posts.js';
+import { voteRoutes } from './routes/votes.js';
+import { bookmarkRoutes } from './routes/bookmarks.js';
+import { tagRoutes } from './routes/tags.js';
 
 export async function buildApp() {
   const app = Fastify({
@@ -48,6 +51,9 @@ export async function buildApp() {
   await app.register(healthRoutes);
   await app.register(authRoutes, { prefix: '/api/auth' });
   await app.register(postRoutes, { prefix: '/api/posts' });
+  await app.register(voteRoutes, { prefix: '/api/posts' });
+  await app.register(bookmarkRoutes, { prefix: '/api' });
+  await app.register(tagRoutes, { prefix: '/api/tags' });
 
   return app;
 }
