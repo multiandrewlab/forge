@@ -41,11 +41,17 @@
         <h3 class="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
           Followed Tags
         </h3>
-        <div class="space-y-1 px-3">
-          <span class="block text-sm text-gray-400">#frontend</span>
-          <span class="block text-sm text-gray-400">#k8s</span>
-          <span class="block text-sm text-gray-400">#prompts</span>
+        <div v-if="subscribedTags.length > 0" class="space-y-1">
+          <button
+            v-for="tag in subscribedTags"
+            :key="tag.id"
+            class="block w-full px-3 text-left text-sm text-gray-400 hover:text-white"
+            @click="handleTagClick(tag.name)"
+          >
+            #{{ tag.name }}
+          </button>
         </div>
+        <p v-else class="px-3 text-xs text-gray-600">No followed tags</p>
       </div>
     </div>
 
@@ -96,11 +102,17 @@
               <h3 class="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
                 Followed Tags
               </h3>
-              <div class="space-y-1 px-3">
-                <span class="block text-sm text-gray-400">#frontend</span>
-                <span class="block text-sm text-gray-400">#k8s</span>
-                <span class="block text-sm text-gray-400">#prompts</span>
+              <div v-if="subscribedTags.length > 0" class="space-y-1">
+                <button
+                  v-for="tag in subscribedTags"
+                  :key="tag.id"
+                  class="block w-full px-3 text-left text-sm text-gray-400 hover:text-white"
+                  @click="handleTagClick(tag.name)"
+                >
+                  #{{ tag.name }}
+                </button>
               </div>
+              <p v-else class="px-3 text-xs text-gray-600">No followed tags</p>
             </div>
           </div>
           <div class="border-t border-gray-700 p-3">
@@ -113,12 +125,25 @@
 </template>
 
 <script setup lang="ts">
-import { h, type FunctionalComponent } from 'vue';
+import { h, onMounted, type FunctionalComponent } from 'vue';
 import { RouterLink } from 'vue-router';
 import UserAvatar from './UserAvatar.vue';
+import { useTags } from '../../composables/useTags.js';
+import { useFeed } from '../../composables/useFeed.js';
 
 defineProps<{ collapsed: boolean; overlayOpen: boolean }>();
 defineEmits<{ closeOverlay: [] }>();
+
+const { subscribedTags, loadSubscriptions } = useTags();
+const { setTag } = useFeed();
+
+function handleTagClick(tagName: string): void {
+  setTag(tagName);
+}
+
+onMounted(() => {
+  loadSubscriptions();
+});
 
 // Simple SVG icon components
 const HomeIcon: FunctionalComponent = () =>
