@@ -16,36 +16,39 @@
 
 ### New Files
 
-| File                                                                | Responsibility                                        |
-| ------------------------------------------------------------------- | ----------------------------------------------------- |
-| `packages/shared/src/types/feed.ts`                                 | `PostWithAuthor` type, `FeedSort`, `FeedFilter` types |
-| `packages/server/src/db/queries/feed.ts`                            | Feed query with sort/filter/pagination SQL            |
-| `packages/server/src/services/feed.ts`                              | `toPostWithAuthor()` row-to-DTO transform             |
-| `packages/server/src/__tests__/db/queries/feed.test.ts`             | Feed query unit tests                                 |
-| `packages/server/src/__tests__/routes/posts-feed.test.ts`           | Feed endpoint integration tests                       |
-| `packages/client/src/stores/feed.ts`                                | `useFeedStore` — thin state container                 |
-| `packages/client/src/stores/ui.ts`                                  | `useUiStore` — sidebar, dark mode, search modal state |
-| `packages/client/src/composables/useFeed.ts`                        | Wraps feedStore + apiFetch for feed operations        |
-| `packages/client/src/composables/useDarkMode.ts`                    | Dark mode init, toggle, persistence                   |
-| `packages/client/src/layouts/AppLayout.vue`                         | 3-panel shell with responsive breakpoints             |
-| `packages/client/src/layouts/AuthLayout.vue`                        | Centered auth card                                    |
-| `packages/client/src/components/shell/TheSidebar.vue`               | Nav links, tags, user profile, collapse states        |
-| `packages/client/src/components/shell/TheTopBar.vue`                | Logo, search placeholder, dark mode toggle            |
-| `packages/client/src/components/shell/UserAvatar.vue`               | Avatar + dropdown menu                                |
-| `packages/client/src/components/post/PostList.vue`                  | Scrollable feed with sort tabs + load more            |
-| `packages/client/src/components/post/PostListItem.vue`              | Post card in feed list                                |
-| `packages/client/src/components/post/PostListFilters.vue`           | Sort tab bar                                          |
-| `packages/client/src/components/post/PostDetail.vue`                | Detail panel orchestrator                             |
-| `packages/client/src/components/post/PostMetaHeader.vue`            | Author info, tags, timestamps                         |
-| `packages/client/src/components/post/PostActions.vue`               | Disabled stub for vote/bookmark                       |
-| `packages/client/src/__tests__/stores/feed.test.ts`                 | Feed store tests                                      |
-| `packages/client/src/__tests__/stores/ui.test.ts`                   | UI store tests                                        |
-| `packages/client/src/__tests__/composables/useFeed.test.ts`         | Feed composable tests                                 |
-| `packages/client/src/__tests__/composables/useDarkMode.test.ts`     | Dark mode composable tests                            |
-| `packages/client/src/__tests__/components/shell/TheSidebar.test.ts` | Sidebar nav + collapse tests                          |
-| `packages/client/src/__tests__/components/shell/UserAvatar.test.ts` | Avatar dropdown + logout tests                        |
-| `packages/client/src/__tests__/pages/HomePage.test.ts`              | Route prop watch + auto-select tests                  |
-| `packages/client/src/pages/PostHistoryPage.vue`                     | Stub placeholder for future issue                     |
+| File                                                                   | Responsibility                                        |
+| ---------------------------------------------------------------------- | ----------------------------------------------------- |
+| `packages/shared/src/types/feed.ts`                                    | `PostWithAuthor` type, `FeedSort`, `FeedFilter` types |
+| `packages/server/src/db/queries/feed.ts`                               | Feed query with sort/filter/pagination SQL            |
+| `packages/server/src/services/feed.ts`                                 | `toPostWithAuthor()` row-to-DTO transform             |
+| `packages/server/src/__tests__/db/queries/feed.test.ts`                | Feed query unit tests                                 |
+| `packages/server/src/__tests__/routes/posts-feed.test.ts`              | Feed endpoint integration tests                       |
+| `packages/client/src/stores/feed.ts`                                   | `useFeedStore` — thin state container                 |
+| `packages/client/src/stores/ui.ts`                                     | `useUiStore` — sidebar, dark mode, search modal state |
+| `packages/client/src/composables/useFeed.ts`                           | Wraps feedStore + apiFetch for feed operations        |
+| `packages/client/src/composables/useDarkMode.ts`                       | Dark mode init, toggle, persistence                   |
+| `packages/client/src/layouts/AppLayout.vue`                            | 3-panel shell with responsive breakpoints             |
+| `packages/client/src/layouts/AuthLayout.vue`                           | Centered auth card                                    |
+| `packages/client/src/components/shell/TheSidebar.vue`                  | Nav links, tags, user profile, collapse states        |
+| `packages/client/src/components/shell/TheTopBar.vue`                   | Logo, search placeholder, dark mode toggle            |
+| `packages/client/src/components/shell/UserAvatar.vue`                  | Avatar + dropdown menu                                |
+| `packages/client/src/components/post/PostList.vue`                     | Scrollable feed with sort tabs + load more            |
+| `packages/client/src/components/post/PostListItem.vue`                 | Post card in feed list                                |
+| `packages/client/src/components/post/PostListFilters.vue`              | Sort tab bar                                          |
+| `packages/client/src/components/post/PostDetail.vue`                   | Detail panel orchestrator                             |
+| `packages/client/src/components/post/PostMetaHeader.vue`               | Author info, tags, timestamps                         |
+| `packages/client/src/components/post/PostActions.vue`                  | Disabled stub for vote/bookmark                       |
+| `packages/client/src/__tests__/stores/feed.test.ts`                    | Feed store tests                                      |
+| `packages/client/src/__tests__/stores/ui.test.ts`                      | UI store tests                                        |
+| `packages/client/src/__tests__/composables/useFeed.test.ts`            | Feed composable tests                                 |
+| `packages/client/src/__tests__/composables/useDarkMode.test.ts`        | Dark mode composable tests                            |
+| `packages/client/src/__tests__/components/shell/TheSidebar.test.ts`    | Sidebar nav + collapse tests                          |
+| `packages/client/src/__tests__/components/shell/UserAvatar.test.ts`    | Avatar dropdown + logout tests                        |
+| `packages/client/src/__tests__/pages/HomePage.test.ts`                 | Route prop watch + auto-select tests                  |
+| `packages/client/src/__tests__/components/post/PostListItem.test.ts`   | Mobile routing logic test                             |
+| `packages/client/src/__tests__/components/post/PostMetaHeader.test.ts` | Tag chips + draft badge rendering                     |
+| `packages/server/src/__tests__/services/feed.test.ts`                  | `toPostWithAuthor` transform tests                    |
+| `packages/client/src/pages/PostHistoryPage.vue`                        | Stub placeholder for future issue                     |
 
 ### Modified Files
 
@@ -553,17 +556,15 @@ describe('GET /api/posts (feed)', () => {
     expect(response.json().cursor).toBeNull();
   });
 
-  it('clamps limit to max 100', async () => {
-    mockFindFeedPosts.mockResolvedValue([]);
+  it('rejects limit > 100 with 400', async () => {
     const app = await buildApp();
     const response = await app.inject({
       method: 'GET',
       url: '/api/posts?limit=200',
       headers: { authorization: `Bearer ${validToken}` },
     });
-    // Should succeed (clamped by Zod .max(100))
-    // or return 400 depending on Zod config
-    expect([200, 400]).toContain(response.statusCode);
+    // Zod .max(100) rejects values > 100
+    expect(response.statusCode).toBe(400);
   });
 
   it('passes userId from JWT to query', async () => {
@@ -2057,6 +2058,7 @@ const props = defineProps<{
   hasMore: boolean;
   currentSort: FeedSort;
   currentFilter: string | null;
+  currentTag: string | null;
 }>();
 
 defineEmits<{
@@ -2073,6 +2075,7 @@ function onSortChange(value: FeedSort): void {
 }
 
 const emptyMessage = computed(() => {
+  if (props.currentTag) return `No posts tagged #${props.currentTag}`;
   switch (props.currentFilter) {
     case 'mine':
       return "You haven't created any posts yet";
@@ -2397,6 +2400,9 @@ git commit -m "feat(client): restructure router with layout components, wire Hom
 - Create: `packages/client/src/__tests__/components/shell/TheSidebar.test.ts`
 - Create: `packages/client/src/__tests__/components/shell/UserAvatar.test.ts`
 - Create: `packages/client/src/__tests__/pages/HomePage.test.ts`
+- Create: `packages/client/src/__tests__/components/post/PostListItem.test.ts`
+- Create: `packages/client/src/__tests__/components/post/PostMetaHeader.test.ts`
+- Create: `packages/server/src/__tests__/services/feed.test.ts`
 
 - [ ] **Step 1: Create PostHistoryPage stub**
 
@@ -2629,19 +2635,271 @@ describe('HomePage', () => {
     await flushPromises();
     expect(mockApiFetch.mock.calls.length).toBeGreaterThan(callCount);
   });
+
+  it('reloads when filter prop changes (route reuse)', async () => {
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/', component: HomePage },
+        { path: '/my-snippets', component: HomePage, props: { filter: 'mine' } },
+      ],
+    });
+    await router.push('/');
+    await router.isReady();
+    const wrapper = mount(HomePage, {
+      props: { filter: undefined },
+      global: { plugins: [router] },
+    });
+    await flushPromises();
+    const callCount = mockApiFetch.mock.calls.length;
+
+    await wrapper.setProps({ filter: 'mine' });
+    await flushPromises();
+    expect(mockApiFetch.mock.calls.length).toBeGreaterThan(callCount);
+    expect(mockApiFetch).toHaveBeenLastCalledWith(expect.stringContaining('filter=mine'));
+  });
+
+  it('auto-selects first post on desktop after load', async () => {
+    mockApiFetch.mockResolvedValue(mockFeedResponse());
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/', component: HomePage }],
+    });
+    await router.push('/');
+    await router.isReady();
+    mount(HomePage, { global: { plugins: [router] } });
+    await flushPromises();
+    // Verify selectedPostId is set in the feed store
+    const { useFeedStore } = await import('../../stores/feed.js');
+    const store = useFeedStore();
+    expect(store.selectedPostId).toBe('1');
+  });
 });
 ```
 
-- [ ] **Step 5: Run all tests**
+- [ ] **Step 5: Write PostListItem mobile routing test**
 
-Run: `npm test --workspace=packages/client`
-Expected: All PASS
+```typescript
+// packages/client/src/__tests__/components/post/PostListItem.test.ts
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { mount } from '@vue/test-utils';
+import { createRouter, createMemoryHistory } from 'vue-router';
+import PostListItem from '../../../components/post/PostListItem.vue';
+import type { PostWithAuthor } from '@forge/shared';
 
-- [ ] **Step 6: Commit**
+const mockPost: PostWithAuthor = {
+  id: '1',
+  authorId: 'u1',
+  title: 'Test Post',
+  contentType: 'snippet',
+  language: 'ts',
+  visibility: 'public',
+  isDraft: false,
+  forkedFromId: null,
+  linkUrl: null,
+  linkPreview: null,
+  voteCount: 5,
+  viewCount: 10,
+  deletedAt: null,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+  author: { id: 'u1', displayName: 'Test User', avatarUrl: null },
+  tags: [],
+};
+
+describe('PostListItem', () => {
+  it('emits select on click (desktop)', async () => {
+    Object.defineProperty(window, 'matchMedia', {
+      value: vi.fn().mockReturnValue({ matches: false }), // >767px = false for max-width:767px
+    });
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/', component: { template: '<div />' } },
+        { path: '/posts/:id', component: { template: '<div />' } },
+      ],
+    });
+    const wrapper = mount(PostListItem, {
+      props: { post: mockPost, selected: false },
+      global: { plugins: [router] },
+    });
+    await wrapper.trigger('click');
+    expect(wrapper.emitted('select')).toBeTruthy();
+    expect(wrapper.emitted('select')![0]).toEqual(['1']);
+  });
+
+  it('navigates to /posts/:id on click (mobile)', async () => {
+    Object.defineProperty(window, 'matchMedia', {
+      value: vi.fn().mockReturnValue({ matches: true }), // max-width:767px matches = mobile
+    });
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/', component: { template: '<div />' } },
+        { path: '/posts/:id', component: { template: '<div />' } },
+      ],
+    });
+    const pushSpy = vi.spyOn(router, 'push');
+    const wrapper = mount(PostListItem, {
+      props: { post: mockPost, selected: false },
+      global: { plugins: [router] },
+    });
+    await wrapper.trigger('click');
+    expect(pushSpy).toHaveBeenCalledWith('/posts/1');
+  });
+
+  it('shows draft badge when isDraft is true', () => {
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/', component: { template: '<div />' } }],
+    });
+    const draftPost = { ...mockPost, isDraft: true };
+    const wrapper = mount(PostListItem, {
+      props: { post: draftPost, selected: false },
+      global: { plugins: [router] },
+    });
+    expect(wrapper.text()).toContain('Draft');
+  });
+});
+```
+
+- [ ] **Step 6: Write PostMetaHeader component test**
+
+```typescript
+// packages/client/src/__tests__/components/post/PostMetaHeader.test.ts
+import { describe, it, expect } from 'vitest';
+import { mount } from '@vue/test-utils';
+import PostMetaHeader from '../../../components/post/PostMetaHeader.vue';
+import type { PostWithAuthor } from '@forge/shared';
+
+const mockPost: PostWithAuthor = {
+  id: '1',
+  authorId: 'u1',
+  title: 'Test Post',
+  contentType: 'snippet',
+  language: 'ts',
+  visibility: 'public',
+  isDraft: false,
+  forkedFromId: null,
+  linkUrl: null,
+  linkPreview: null,
+  voteCount: 5,
+  viewCount: 10,
+  deletedAt: null,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+  author: { id: 'u1', displayName: 'Test User', avatarUrl: null },
+  tags: ['frontend', 'vue'],
+};
+
+describe('PostMetaHeader', () => {
+  it('renders post title', () => {
+    const wrapper = mount(PostMetaHeader, { props: { post: mockPost } });
+    expect(wrapper.text()).toContain('Test Post');
+  });
+
+  it('renders author name', () => {
+    const wrapper = mount(PostMetaHeader, { props: { post: mockPost } });
+    expect(wrapper.text()).toContain('Test User');
+  });
+
+  it('renders tag chips', () => {
+    const wrapper = mount(PostMetaHeader, { props: { post: mockPost } });
+    expect(wrapper.text()).toContain('#frontend');
+    expect(wrapper.text()).toContain('#vue');
+  });
+
+  it('does not render tags section when tags is empty', () => {
+    const noTagsPost = { ...mockPost, tags: [] };
+    const wrapper = mount(PostMetaHeader, { props: { post: noTagsPost } });
+    expect(wrapper.text()).not.toContain('#');
+  });
+
+  it('renders draft badge when isDraft is true', () => {
+    const draftPost = { ...mockPost, isDraft: true };
+    const wrapper = mount(PostMetaHeader, { props: { post: draftPost } });
+    expect(wrapper.text()).toContain('Draft');
+  });
+});
+```
+
+- [ ] **Step 7: Write toPostWithAuthor transform test**
+
+```typescript
+// packages/server/src/__tests__/services/feed.test.ts
+import { describe, it, expect } from 'vitest';
+import { toPostWithAuthor } from '../../services/feed.js';
+import type { PostWithAuthorRow } from '../../db/queries/feed.js';
+
+const sampleRow: PostWithAuthorRow = {
+  id: '1',
+  author_id: 'u1',
+  title: 'Test',
+  content_type: 'snippet',
+  language: 'typescript',
+  visibility: 'public',
+  is_draft: false,
+  forked_from_id: null,
+  link_url: null,
+  link_preview: null,
+  vote_count: 5,
+  view_count: 10,
+  search_vector: null,
+  deleted_at: null,
+  created_at: new Date('2026-01-01'),
+  updated_at: new Date('2026-01-01'),
+  author_display_name: 'Test User',
+  author_avatar_url: 'https://example.com/avatar.png',
+  tags: 'frontend,vue,typescript',
+};
+
+describe('toPostWithAuthor', () => {
+  it('maps snake_case row to camelCase DTO', () => {
+    const result = toPostWithAuthor(sampleRow);
+    expect(result.id).toBe('1');
+    expect(result.authorId).toBe('u1');
+    expect(result.contentType).toBe('snippet');
+    expect(result.isDraft).toBe(false);
+    expect(result.voteCount).toBe(5);
+    expect(result.createdAt).toEqual(new Date('2026-01-01'));
+  });
+
+  it('maps author fields correctly', () => {
+    const result = toPostWithAuthor(sampleRow);
+    expect(result.author).toEqual({
+      id: 'u1',
+      displayName: 'Test User',
+      avatarUrl: 'https://example.com/avatar.png',
+    });
+  });
+
+  it('splits comma-separated tags into array', () => {
+    const result = toPostWithAuthor(sampleRow);
+    expect(result.tags).toEqual(['frontend', 'vue', 'typescript']);
+  });
+
+  it('returns empty tags array when tags column is null', () => {
+    const result = toPostWithAuthor({ ...sampleRow, tags: null });
+    expect(result.tags).toEqual([]);
+  });
+
+  it('returns empty tags array when tags column is empty string', () => {
+    const result = toPostWithAuthor({ ...sampleRow, tags: '' });
+    expect(result.tags).toEqual([]);
+  });
+});
+```
+
+- [ ] **Step 8: Run all tests**
+
+Run: `npm test`
+Expected: All PASS across all workspaces
+
+- [ ] **Step 9: Commit**
 
 ```bash
-git add packages/client/src/pages/PostHistoryPage.vue packages/client/src/__tests__/components/shell/TheSidebar.test.ts packages/client/src/__tests__/components/shell/UserAvatar.test.ts packages/client/src/__tests__/pages/HomePage.test.ts
-git commit -m "feat(client): add PostHistoryPage stub and component integration tests"
+git add packages/client/src/pages/PostHistoryPage.vue packages/client/src/__tests__/components/shell/TheSidebar.test.ts packages/client/src/__tests__/components/shell/UserAvatar.test.ts packages/client/src/__tests__/pages/HomePage.test.ts packages/client/src/__tests__/components/post/PostListItem.test.ts packages/client/src/__tests__/components/post/PostMetaHeader.test.ts packages/server/src/__tests__/services/feed.test.ts
+git commit -m "feat: add PostHistoryPage stub, component integration tests, and transform tests"
 ```
 
 ---
