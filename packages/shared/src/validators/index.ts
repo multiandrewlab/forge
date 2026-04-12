@@ -1,20 +1,6 @@
-import { z } from 'zod';
-import { ContentType, Visibility } from '../constants/index.js';
+export { createPostSchema, updatePostSchema, createRevisionSchema } from './post.js';
 
-export const createPostSchema = z.object({
-  title: z.string().min(1).max(255),
-  contentType: z.enum([
-    ContentType.Snippet,
-    ContentType.Prompt,
-    ContentType.Document,
-    ContentType.Link,
-  ]),
-  language: z.string().nullable().optional(),
-  visibility: z.enum([Visibility.Public, Visibility.Private]).default(Visibility.Public),
-  isDraft: z.boolean().default(true),
-});
-
-export type CreatePostInput = z.infer<typeof createPostSchema>;
+export type { CreatePostInput, UpdatePostInput, CreateRevisionInput } from './post.js';
 
 export { loginSchema, registerSchema, updateProfileSchema } from './auth.js';
 
