@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
 import { createPostSchema, updatePostSchema, createRevisionSchema } from '@forge/shared';
 import {
   findPostById,
@@ -15,6 +16,17 @@ import {
   createRevisionAtomic,
 } from '../db/queries/revisions.js';
 import { toPost, toRevision, toPostWithRevision } from '../services/posts.js';
+import { findFeedPosts } from '../db/queries/feed.js';
+import { toPostWithAuthor } from '../services/feed.js';
+
+const feedQuerySchema = z.object({
+  sort: z.enum(['trending', 'recent', 'top']).default('recent'),
+  filter: z.enum(['mine', 'bookmarked']).optional(),
+  tag: z.string().max(50).optional(),
+  type: z.enum(['snippet', 'prompt', 'document', 'link']).optional(),
+  cursor: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+});
 
 export async function postRoutes(app: FastifyInstance): Promise<void> {
   // POST / — create post + initial revision
@@ -49,6 +61,42 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
     return reply.status(201).send({
       post: toPost(postRow),
       revision: toRevision(revisionRow),
+    });
+  });
+
+  // GET / — feed (must be registered BEFORE /:id)
+  app.get('/', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const parsed = feedQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply
+        .status(400)
+        .send({ error: parsed.error.errors.map((e) => e.message).join(', ') });
+    }
+
+    const { sort, filter, tag, type, cursor, limit } = parsed.data;
+    const userId = request.user.id;
+
+    const { posts: rows, hasMore } = await findFeedPosts({
+      userId,
+      sort,
+      filter,
+      tag,
+      type,
+      cursor,
+      limit,
+    });
+
+    const lastRow = rows.at(-1);
+    const nextCursor =
+      hasMore && lastRow
+        ? Buffer.from(
+            JSON.stringify({ createdAt: lastRow.created_at.toISOString(), id: lastRow.id }),
+          ).toString('base64')
+        : null;
+
+    return reply.send({
+      posts: rows.map(toPostWithAuthor),
+      cursor: nextCursor,
     });
   });
 
