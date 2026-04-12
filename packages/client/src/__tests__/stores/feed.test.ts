@@ -1,0 +1,89 @@
+import { describe, it, expect, beforeEach } from 'vitest';
+import { setActivePinia, createPinia } from 'pinia';
+import { useFeedStore } from '../../stores/feed.js';
+import type { PostWithAuthor } from '@forge/shared';
+
+const mockPost: PostWithAuthor = {
+  id: '1',
+  authorId: 'u1',
+  title: 'Test',
+  contentType: 'snippet',
+  language: 'ts',
+  visibility: 'public',
+  isDraft: false,
+  forkedFromId: null,
+  linkUrl: null,
+  linkPreview: null,
+  voteCount: 5,
+  viewCount: 10,
+  deletedAt: null,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+  author: { id: 'u1', displayName: 'Test', avatarUrl: null },
+  tags: [],
+};
+
+describe('useFeedStore', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+  });
+
+  it('initializes with empty posts and default sort', () => {
+    const store = useFeedStore();
+    expect(store.posts).toEqual([]);
+    expect(store.sort).toBe('recent');
+    expect(store.selectedPostId).toBeNull();
+    expect(store.cursor).toBeNull();
+    expect(store.filter).toBeNull();
+    expect(store.tag).toBeNull();
+    expect(store.contentType).toBeNull();
+  });
+
+  it('setPosts replaces posts array', () => {
+    const store = useFeedStore();
+    store.setPosts([mockPost]);
+    expect(store.posts).toEqual([mockPost]);
+  });
+
+  it('appendPosts adds to existing posts', () => {
+    const store = useFeedStore();
+    store.setPosts([mockPost]);
+    const post2 = { ...mockPost, id: '2' };
+    store.appendPosts([post2]);
+    expect(store.posts).toHaveLength(2);
+  });
+
+  it('hasMore is derived from cursor', () => {
+    const store = useFeedStore();
+    expect(store.hasMore).toBe(false);
+    store.setCursor('abc');
+    expect(store.hasMore).toBe(true);
+    store.setCursor(null);
+    expect(store.hasMore).toBe(false);
+  });
+
+  it('setSort updates sort', () => {
+    const store = useFeedStore();
+    store.setSort('trending');
+    expect(store.sort).toBe('trending');
+  });
+
+  it('setFilter updates filter', () => {
+    const store = useFeedStore();
+    store.setFilter('mine');
+    expect(store.filter).toBe('mine');
+  });
+
+  it('reset clears all state', () => {
+    const store = useFeedStore();
+    store.setPosts([mockPost]);
+    store.setSort('trending');
+    store.setFilter('mine');
+    store.setCursor('abc');
+    store.reset();
+    expect(store.posts).toEqual([]);
+    expect(store.sort).toBe('recent');
+    expect(store.filter).toBeNull();
+    expect(store.cursor).toBeNull();
+  });
+});
