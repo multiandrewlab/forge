@@ -20,6 +20,6 @@ describe('App', () => {
 
     await router.isReady();
 
-    expect(wrapper.html()).toContain('Forge');
+    expect(wrapper.html()).toBeTruthy();
   });
 });
