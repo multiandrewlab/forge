@@ -81,6 +81,7 @@ describe('post queries', () => {
   describe('findPostWithLatestRevision', () => {
     const samplePostWithRevision: PostWithRevisionRow = {
       ...samplePost,
+      revision_id: '880e8400-e29b-41d4-a716-446655440000',
       content: '# Hello World',
       revision_number: 2,
       message: 'Updated content',
@@ -90,7 +91,7 @@ describe('post queries', () => {
       mockQuery.mockResolvedValue({ rows: [samplePostWithRevision], rowCount: 1 });
       const result = await findPostWithLatestRevision(samplePost.id);
       expect(mockQuery).toHaveBeenCalledWith(
-        `SELECT p.*, pr.content, pr.revision_number, pr.message FROM posts p INNER JOIN post_revisions pr ON pr.post_id = p.id WHERE p.id = $1 AND p.deleted_at IS NULL ORDER BY pr.revision_number DESC LIMIT 1`,
+        `SELECT p.*, pr.id AS revision_id, pr.content, pr.revision_number, pr.message FROM posts p INNER JOIN post_revisions pr ON pr.post_id = p.id WHERE p.id = $1 AND p.deleted_at IS NULL ORDER BY pr.revision_number DESC LIMIT 1`,
         [samplePost.id],
       );
       expect(result).toEqual(samplePostWithRevision);

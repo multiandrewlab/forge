@@ -39,6 +39,7 @@ export interface PostRevisionRow {
 }
 
 export type PostWithRevisionRow = PostRow & {
+  revision_id: string;
   content: string;
   revision_number: number;
   message: string | null;

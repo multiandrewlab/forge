@@ -34,7 +34,7 @@ export async function createPost(input: CreatePostInput): Promise<PostRow> {
 
 export async function findPostWithLatestRevision(id: string): Promise<PostWithRevisionRow | null> {
   const result = await query<PostWithRevisionRow>(
-    `SELECT p.*, pr.content, pr.revision_number, pr.message FROM posts p INNER JOIN post_revisions pr ON pr.post_id = p.id WHERE p.id = $1 AND p.deleted_at IS NULL ORDER BY pr.revision_number DESC LIMIT 1`,
+    `SELECT p.*, pr.id AS revision_id, pr.content, pr.revision_number, pr.message FROM posts p INNER JOIN post_revisions pr ON pr.post_id = p.id WHERE p.id = $1 AND p.deleted_at IS NULL ORDER BY pr.revision_number DESC LIMIT 1`,
     [id],
   );
   return result.rows[0] ?? null;
