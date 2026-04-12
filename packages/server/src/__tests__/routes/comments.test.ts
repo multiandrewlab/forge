@@ -242,6 +242,22 @@ describe('comment routes', () => {
   // ─── PATCH /api/posts/:id/comments/:cid ─────────────────────────────
 
   describe('PATCH /api/posts/:id/comments/:cid', () => {
+    it('returns 404 when post not found', async () => {
+      // findPostById — no post
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+      const response = await app.inject({
+        method: 'PATCH',
+        url: `/api/posts/${postId}/comments/${commentId}`,
+        headers: { authorization: `Bearer ${token}` },
+        payload: { body: 'Updated' },
+      });
+
+      expect(response.statusCode).toBe(404);
+      const json = response.json();
+      expect(json.error).toBe('Post not found');
+    });
+
     it('updates comment body and returns 200', async () => {
       const updatedRow: CommentWithAuthorRow = {
         ...sampleCommentWithAuthor,
