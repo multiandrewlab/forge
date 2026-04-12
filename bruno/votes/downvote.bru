@@ -1,0 +1,26 @@
+meta {
+  name: Downvote Post
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/posts/{{postId}}/vote
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "value": -1
+  }
+}
+
+docs {
+  Same toggle logic as upvote but with value: -1.
+  Response: { voteCount: number, userVote: 1 | -1 | null }
+}

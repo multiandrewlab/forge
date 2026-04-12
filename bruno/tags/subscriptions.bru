@@ -1,0 +1,20 @@
+meta {
+  name: My Tag Subscriptions
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/tags/subscriptions
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+docs {
+  Returns the authenticated user's subscribed tags.
+  Response: { tags: Tag[] }
+}

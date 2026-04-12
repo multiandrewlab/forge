@@ -1,0 +1,23 @@
+meta {
+  name: List Bookmarks
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/bookmarks?limit=20
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+docs {
+  Returns paginated list of user's bookmarked posts.
+  Query params:
+  - cursor: base64 pagination cursor (optional)
+  - limit: 1-100 (default: 20)
+  Response: { posts: PostWithAuthor[], cursor: string | null }
+}

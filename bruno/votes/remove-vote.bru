@@ -1,0 +1,21 @@
+meta {
+  name: Remove Vote
+  type: http
+  seq: 3
+}
+
+delete {
+  url: {{baseUrl}}/api/posts/{{postId}}/vote
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+docs {
+  Explicit vote removal (DELETE instead of toggle).
+  Returns 404 if no vote exists.
+  Response: { voteCount: number, userVote: null }
+}
