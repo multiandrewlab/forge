@@ -5,7 +5,7 @@ vi.mock('../../../db/connection.js', () => ({
 }));
 
 import { query } from '../../../db/connection.js';
-import { createBookmark, deleteBookmark } from '../../../db/queries/bookmarks.js';
+import { createBookmark, deleteBookmark, getUserBookmark } from '../../../db/queries/bookmarks.js';
 import type { BookmarkRow } from '../../../db/queries/types.js';
 
 const mockQuery = query as Mock;
@@ -60,6 +60,24 @@ describe('bookmark queries', () => {
       mockQuery.mockResolvedValue({ rowCount: null });
       const result = await deleteBookmark('u1', 'p1');
       expect(result).toBe(false);
+    });
+  });
+
+  describe('getUserBookmark', () => {
+    it('returns the bookmark row when it exists', async () => {
+      mockQuery.mockResolvedValue({ rows: [sampleBookmark], rowCount: 1 });
+      const result = await getUserBookmark(sampleBookmark.user_id, sampleBookmark.post_id);
+      expect(mockQuery).toHaveBeenCalledWith(
+        'SELECT * FROM bookmarks WHERE user_id = $1 AND post_id = $2',
+        [sampleBookmark.user_id, sampleBookmark.post_id],
+      );
+      expect(result).toEqual(sampleBookmark);
+    });
+
+    it('returns null when no bookmark exists', async () => {
+      mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });
+      const result = await getUserBookmark('u1', 'p1');
+      expect(result).toBeNull();
     });
   });
 });

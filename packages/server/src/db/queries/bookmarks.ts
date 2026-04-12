@@ -16,3 +16,11 @@ export async function deleteBookmark(userId: string, postId: string): Promise<bo
   ]);
   return (result.rowCount ?? 0) > 0;
 }
+
+export async function getUserBookmark(userId: string, postId: string): Promise<BookmarkRow | null> {
+  const result = await query<BookmarkRow>(
+    'SELECT * FROM bookmarks WHERE user_id = $1 AND post_id = $2',
+    [userId, postId],
+  );
+  return result.rows[0] ?? null;
+}
