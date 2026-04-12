@@ -29,7 +29,12 @@ import { query } from '../../db/connection.js';
 import { buildApp } from '../../app.js';
 import { createPostSchema } from '@forge/shared';
 import type { FastifyInstance } from 'fastify';
-import type { PostRow, PostRevisionRow, PostWithRevisionRow } from '../../db/queries/types.js';
+import type {
+  PostRow,
+  PostRevisionRow,
+  PostWithRevisionRow,
+  TagRow,
+} from '../../db/queries/types.js';
 
 const mockCreatePostSchema = createPostSchema as { safeParse: Mock };
 
@@ -209,6 +214,136 @@ describe('post routes', () => {
       });
 
       expect(response.statusCode).toBe(201);
+    });
+
+    it('processes tags when provided — creates new tags and links them', async () => {
+      const tagRow: TagRow = { id: 'tag-1', name: 'typescript', post_count: 0 };
+
+      // createPost query
+      mockQuery.mockResolvedValueOnce({ rows: [samplePostRow], rowCount: 1 });
+      // createRevision query
+      mockQuery.mockResolvedValueOnce({ rows: [sampleRevisionRow], rowCount: 1 });
+      // findTagByName('typescript') — not found
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+      // createTag('typescript')
+      mockQuery.mockResolvedValueOnce({ rows: [tagRow], rowCount: 1 });
+      // addPostTag(postId, tagId)
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ post_id: postId, tag_id: 'tag-1' }],
+        rowCount: 1,
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/posts',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { ...validPayload, tags: ['typescript'] },
+      });
+
+      expect(response.statusCode).toBe(201);
+      // Verify findTagByName was called
+      expect(mockQuery).toHaveBeenCalledWith('SELECT * FROM tags WHERE name = $1', ['typescript']);
+      // Verify createTag was called (tag didn't exist)
+      expect(mockQuery).toHaveBeenCalledWith('INSERT INTO tags (name) VALUES ($1) RETURNING *', [
+        'typescript',
+      ]);
+      // Verify addPostTag was called
+      expect(mockQuery).toHaveBeenCalledWith(
+        'INSERT INTO post_tags (post_id, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING *',
+        [postId, 'tag-1'],
+      );
+    });
+
+    it('processes tags when tag already exists — links without creating', async () => {
+      const existingTag: TagRow = { id: 'tag-2', name: 'javascript', post_count: 5 };
+
+      // createPost query
+      mockQuery.mockResolvedValueOnce({ rows: [samplePostRow], rowCount: 1 });
+      // createRevision query
+      mockQuery.mockResolvedValueOnce({ rows: [sampleRevisionRow], rowCount: 1 });
+      // findTagByName('javascript') — found
+      mockQuery.mockResolvedValueOnce({ rows: [existingTag], rowCount: 1 });
+      // addPostTag(postId, tagId)
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ post_id: postId, tag_id: 'tag-2' }],
+        rowCount: 1,
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/posts',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { ...validPayload, tags: ['javascript'] },
+      });
+
+      expect(response.statusCode).toBe(201);
+      // Verify findTagByName was called
+      expect(mockQuery).toHaveBeenCalledWith('SELECT * FROM tags WHERE name = $1', ['javascript']);
+      // Verify createTag was NOT called (tag exists)
+      expect(mockQuery).not.toHaveBeenCalledWith(
+        'INSERT INTO tags (name) VALUES ($1) RETURNING *',
+        ['javascript'],
+      );
+      // Verify addPostTag was called with existing tag's id
+      expect(mockQuery).toHaveBeenCalledWith(
+        'INSERT INTO post_tags (post_id, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING *',
+        [postId, 'tag-2'],
+      );
+    });
+
+    it('skips tag processing when tags array is empty', async () => {
+      // createPost query
+      mockQuery.mockResolvedValueOnce({ rows: [samplePostRow], rowCount: 1 });
+      // createRevision query
+      mockQuery.mockResolvedValueOnce({ rows: [sampleRevisionRow], rowCount: 1 });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/posts',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { ...validPayload, tags: [] },
+      });
+
+      expect(response.statusCode).toBe(201);
+      // Only 2 queries: createPost + createRevision, no tag queries
+      expect(mockQuery).toHaveBeenCalledTimes(2);
+    });
+
+    it('processes multiple tags correctly', async () => {
+      const tag1: TagRow = { id: 'tag-1', name: 'react', post_count: 0 };
+      const tag2: TagRow = { id: 'tag-2', name: 'node', post_count: 3 };
+
+      // createPost query
+      mockQuery.mockResolvedValueOnce({ rows: [samplePostRow], rowCount: 1 });
+      // createRevision query
+      mockQuery.mockResolvedValueOnce({ rows: [sampleRevisionRow], rowCount: 1 });
+      // findTagByName('react') — not found
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+      // createTag('react')
+      mockQuery.mockResolvedValueOnce({ rows: [tag1], rowCount: 1 });
+      // addPostTag for react
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ post_id: postId, tag_id: 'tag-1' }],
+        rowCount: 1,
+      });
+      // findTagByName('node') — found
+      mockQuery.mockResolvedValueOnce({ rows: [tag2], rowCount: 1 });
+      // addPostTag for node
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ post_id: postId, tag_id: 'tag-2' }],
+        rowCount: 1,
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/posts',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { ...validPayload, tags: ['react', 'node'] },
+      });
+
+      expect(response.statusCode).toBe(201);
+      // 2 base + 5 tag queries = 7 total
+      expect(mockQuery).toHaveBeenCalledTimes(7);
     });
   });
 

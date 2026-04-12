@@ -18,9 +18,10 @@ import {
 import { toPost, toRevision, toPostWithRevision } from '../services/posts.js';
 import { findFeedPosts } from '../db/queries/feed.js';
 import { toPostWithAuthor } from '../services/feed.js';
+import { findTagByName, createTag, addPostTag } from '../db/queries/tags.js';
 
 const feedQuerySchema = z.object({
-  sort: z.enum(['trending', 'recent', 'top']).default('recent'),
+  sort: z.enum(['trending', 'recent', 'top', 'personalized']).default('recent'),
   filter: z.enum(['mine', 'bookmarked']).optional(),
   tag: z.string().max(50).optional(),
   type: z.enum(['snippet', 'prompt', 'document', 'link']).optional(),
@@ -57,6 +58,16 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
       message: null,
       revisionNumber: 1,
     });
+
+    if (parsed.data.tags && parsed.data.tags.length > 0) {
+      for (const tagName of parsed.data.tags) {
+        let tag = await findTagByName(tagName);
+        if (!tag) {
+          tag = await createTag(tagName);
+        }
+        await addPostTag(postRow.id, tag.id);
+      }
+    }
 
     return reply.status(201).send({
       post: toPost(postRow),
