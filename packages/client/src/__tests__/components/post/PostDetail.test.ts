@@ -71,6 +71,19 @@ function mockErrorResponse(): Response {
   } as Response;
 }
 
+function setupUrlAwareMock(postData: unknown): void {
+  mockApiFetch.mockImplementation((url: string) => {
+    if (url.includes('/comments')) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ comments: [] }),
+      } as Response);
+    }
+    return Promise.resolve(mockOkResponse(postData));
+  });
+}
+
 describe('PostDetail', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
@@ -85,7 +98,7 @@ describe('PostDetail', () => {
   });
 
   it('fetches and renders post content when post prop is provided', async () => {
-    mockApiFetch.mockResolvedValue(mockOkResponse(mockPostWithRevision));
+    setupUrlAwareMock(mockPostWithRevision);
 
     const wrapper = mount(PostDetail, { props: { post: mockPost } });
     await flushPromises();
@@ -95,7 +108,7 @@ describe('PostDetail', () => {
   });
 
   it('sets fullPost to null when post prop becomes null', async () => {
-    mockApiFetch.mockResolvedValue(mockOkResponse(mockPostWithRevision));
+    setupUrlAwareMock(mockPostWithRevision);
 
     const wrapper = mount(PostDetail, { props: { post: mockPost } });
     await flushPromises();
@@ -127,14 +140,14 @@ describe('PostDetail', () => {
   });
 
   it('refetches when post id changes', async () => {
-    mockApiFetch.mockResolvedValue(mockOkResponse(mockPostWithRevision));
+    setupUrlAwareMock(mockPostWithRevision);
 
     const wrapper = mount(PostDetail, { props: { post: mockPost } });
     await flushPromises();
 
     const post2: PostWithAuthor = { ...mockPost, id: 'post-2' };
     const post2WithRevision: PostWithRevision = { ...mockPostWithRevision, id: 'post-2' };
-    mockApiFetch.mockResolvedValue(mockOkResponse(post2WithRevision));
+    setupUrlAwareMock(post2WithRevision);
 
     await wrapper.setProps({ post: post2 });
     await flushPromises();
@@ -149,7 +162,7 @@ describe('PostDetail', () => {
       ...mockPostWithRevision,
       language: null,
     };
-    mockApiFetch.mockResolvedValue(mockOkResponse(nullLangPostWithRevision));
+    setupUrlAwareMock(nullLangPostWithRevision);
 
     const wrapper = mount(PostDetail, { props: { post: nullLangPost } });
     await flushPromises();
