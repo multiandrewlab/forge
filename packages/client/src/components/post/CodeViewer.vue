@@ -41,6 +41,7 @@ function handleLineClick(event: MouseEvent): void {
   const line = target.closest('.line');
   if (!line) return;
   const container = line.parentElement;
+  /* v8 ignore next -- parentElement is never null for a mounted DOM element */
   if (!container) return;
   const lines = Array.from(container.querySelectorAll('.line'));
   const lineNumber = lines.indexOf(line) + 1;

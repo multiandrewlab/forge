@@ -17,7 +17,8 @@ vi.mock('../../../lib/api.js', () => ({
 
 import { apiFetch } from '../../../lib/api.js';
 import PostDetail from '../../../components/post/PostDetail.vue';
-import type { PostWithAuthor, PostWithRevision } from '@forge/shared';
+import { useCommentsStore } from '../../../stores/comments.js';
+import type { PostWithAuthor, PostWithRevision, Comment } from '@forge/shared';
 
 const mockApiFetch = apiFetch as ReturnType<typeof vi.fn>;
 
@@ -184,19 +185,19 @@ describe('PostDetail', () => {
       updatedAt: '2026-01-01T00:00:00.000Z',
     };
 
-    mockApiFetch.mockImplementation((url: string) => {
-      if (url === '/api/posts/post-1/comments' && arguments.length === 1) {
+    mockApiFetch.mockImplementation((url: string, opts?: Record<string, string>) => {
+      if (url.includes('/comments') && opts?.method === 'POST') {
         return Promise.resolve({
           ok: true,
-          status: 200,
-          json: () => Promise.resolve({ comments: [] }),
+          status: 201,
+          json: () => Promise.resolve({ comment: mockComment }),
         } as Response);
       }
       if (url.includes('/comments')) {
         return Promise.resolve({
           ok: true,
-          status: 201,
-          json: () => Promise.resolve({ comment: mockComment }),
+          status: 200,
+          json: () => Promise.resolve({ comments: [] }),
         } as Response);
       }
       return Promise.resolve(mockOkResponse(mockPostWithRevision));
@@ -210,14 +211,17 @@ describe('PostDetail', () => {
     codeViewer.vm.$emit('line-click', 5);
     await wrapper.vm.$nextTick();
 
-    // Fill and submit the inline comment form
-    const textarea = wrapper.find('[placeholder="Add inline comment..."]');
-    await textarea.setValue('Inline note');
-    const form = textarea.element.closest('form');
-    if (form) {
-      await wrapper.find('form').trigger('submit');
-      await flushPromises();
-    }
+    // Find the inline comment form specifically (the one with "Add inline comment..." placeholder)
+    const inlineTextarea = wrapper.find('[placeholder="Add inline comment..."]');
+    expect(inlineTextarea.exists()).toBe(true);
+    await inlineTextarea.setValue('Inline note');
+
+    // Find the form that contains this textarea and submit it
+    const forms = wrapper.findAll('form');
+    const inlineForm = forms.find((f) => f.find('[placeholder="Add inline comment..."]').exists());
+    expect(inlineForm).toBeDefined();
+    await inlineForm?.trigger('submit');
+    await flushPromises();
 
     // Verify addComment was called with the POST endpoint
     const postCalls = mockApiFetch.mock.calls.filter(
@@ -239,6 +243,96 @@ describe('PostDetail', () => {
     // inlineCommentLine is null by default — the inline comment form isn't shown
     // This covers the guard: if (inlineCommentLine.value === null || !fullPost.value) return;
     expect(wrapper.find('[placeholder="Add inline comment..."]').exists()).toBe(false);
+  });
+
+  it('passes null currentUserId to CommentSection when user is not authenticated', async () => {
+    setupUrlAwareMock(mockPostWithRevision);
+
+    const wrapper = mount(PostDetail, { props: { post: mockPost } });
+    await flushPromises();
+
+    // authStore.user is null by default — covers authStore.user?.id optional chaining
+    const section = wrapper.findComponent({ name: 'CommentSection' });
+    expect(section.exists()).toBe(true);
+    expect(section.props('currentUserId')).toBeUndefined();
+  });
+
+  it('handleInlineComment does nothing when fullPost is null', async () => {
+    // Mount with null post — fullPost stays null
+    const wrapper = mount(PostDetail, { props: { post: null } });
+    await flushPromises();
+
+    // Access the component's internal handleInlineComment via vm
+    // Since fullPost is null, the guard returns early
+    const vm = wrapper.vm as unknown as { handleInlineComment: (body: string) => Promise<void> };
+    if (vm.handleInlineComment) {
+      await vm.handleInlineComment('test');
+    }
+    // No crash, no API call
+    expect(mockApiFetch).not.toHaveBeenCalled();
+  });
+
+  it('renders inline comment indicators when store has inline comments', async () => {
+    setupUrlAwareMock(mockPostWithRevision);
+
+    const wrapper = mount(PostDetail, { props: { post: mockPost } });
+    await flushPromises();
+
+    // Populate the comments store with an inline comment on the current revision
+    const store = useCommentsStore();
+    store.setCurrentRevisionId('rev-1');
+    const inlineComment: Comment = {
+      id: 'ic1',
+      postId: 'post-1',
+      author: { id: 'u1', displayName: 'Alice', avatarUrl: null },
+      parentId: null,
+      lineNumber: 3,
+      revisionId: 'rev-1',
+      revisionNumber: 1,
+      body: 'Nice line',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    store.setComments([inlineComment]);
+    await wrapper.vm.$nextTick();
+
+    // The indicator button should show "1 comment on line 3"
+    expect(wrapper.text()).toContain('1 comment on line');
+  });
+
+  it('clicking an inline indicator sets inlineCommentLine and shows comments', async () => {
+    setupUrlAwareMock(mockPostWithRevision);
+
+    const wrapper = mount(PostDetail, { props: { post: mockPost } });
+    await flushPromises();
+
+    const store = useCommentsStore();
+    store.setCurrentRevisionId('rev-1');
+    const inlineComment: Comment = {
+      id: 'ic1',
+      postId: 'post-1',
+      author: { id: 'u1', displayName: 'Alice', avatarUrl: null },
+      parentId: null,
+      lineNumber: 7,
+      revisionId: 'rev-1',
+      revisionNumber: 1,
+      body: 'Check this line',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    store.setComments([inlineComment]);
+    await wrapper.vm.$nextTick();
+
+    // Click the indicator button
+    const indicatorBtn = wrapper.find('button.text-primary');
+    expect(indicatorBtn.exists()).toBe(true);
+    await indicatorBtn.trigger('click');
+    await wrapper.vm.$nextTick();
+
+    // Now the inline comment body and input should be visible
+    expect(wrapper.text()).toContain('Line 7');
+    expect(wrapper.text()).toContain('Check this line');
+    expect(wrapper.find('[placeholder="Add inline comment..."]').exists()).toBe(true);
   });
 
   it('passes undefined language to CodeViewer when post.language is null (??  branch)', async () => {

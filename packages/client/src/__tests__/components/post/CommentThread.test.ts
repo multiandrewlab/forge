@@ -218,4 +218,28 @@ describe('CommentThread', () => {
       method: 'DELETE',
     });
   });
+
+  it('displays "Xm ago" for comments created minutes ago', () => {
+    const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    const wrapper = mount(CommentThread, {
+      props: { node: makeNode({ createdAt: fiveMinAgo }), postId: 'p1' },
+    });
+    expect(wrapper.text()).toContain('5m ago');
+  });
+
+  it('displays "Xh ago" for comments created hours ago', () => {
+    const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
+    const wrapper = mount(CommentThread, {
+      props: { node: makeNode({ createdAt: threeHoursAgo }), postId: 'p1' },
+    });
+    expect(wrapper.text()).toContain('3h ago');
+  });
+
+  it('displays "Xd ago" for comments created days ago', () => {
+    const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+    const wrapper = mount(CommentThread, {
+      props: { node: makeNode({ createdAt: twoDaysAgo }), postId: 'p1' },
+    });
+    expect(wrapper.text()).toContain('2d ago');
+  });
 });
