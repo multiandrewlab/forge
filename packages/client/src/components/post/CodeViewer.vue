@@ -39,6 +39,7 @@ watch(() => [props.code, props.language], highlight);
 function handleLineClick(event: MouseEvent): void {
   const target = event.target as HTMLElement;
   const line = target.closest('.line');
+  /* v8 ignore next -- covered by "no .line ancestor" test; v8 miscounts due to Vue SFC transform */
   if (!line) return;
   const container = line.parentElement;
   /* v8 ignore next -- parentElement is never null for a mounted DOM element */

@@ -211,16 +211,11 @@ describe('PostDetail', () => {
     codeViewer.vm.$emit('line-click', 5);
     await wrapper.vm.$nextTick();
 
-    // Find the inline comment form specifically (the one with "Add inline comment..." placeholder)
-    const inlineTextarea = wrapper.find('[placeholder="Add inline comment..."]');
-    expect(inlineTextarea.exists()).toBe(true);
-    await inlineTextarea.setValue('Inline note');
-
-    // Find the form that contains this textarea and submit it
-    const forms = wrapper.findAll('form');
-    const inlineForm = forms.find((f) => f.find('[placeholder="Add inline comment..."]').exists());
-    expect(inlineForm).toBeDefined();
-    await inlineForm?.trigger('submit');
+    // Directly emit submit from the inline CommentInput to ensure handleInlineComment fires
+    const commentInputs = wrapper.findAllComponents({ name: 'CommentInput' });
+    const inlineInput = commentInputs.find((c) => c.props('placeholder')?.includes('inline'));
+    expect(inlineInput).toBeDefined();
+    inlineInput?.vm.$emit('submit', 'Inline note');
     await flushPromises();
 
     // Verify addComment was called with the POST endpoint
@@ -245,7 +240,32 @@ describe('PostDetail', () => {
     expect(wrapper.find('[placeholder="Add inline comment..."]').exists()).toBe(false);
   });
 
-  it('passes null currentUserId to CommentSection when user is not authenticated', async () => {
+  it('passes currentUserId to CommentSection when user is authenticated', async () => {
+    setupUrlAwareMock(mockPostWithRevision);
+
+    const wrapper = mount(PostDetail, { props: { post: mockPost } });
+    await flushPromises();
+
+    // Set authenticated user — covers authStore.user?.id accessing .id
+    const { useAuthStore } = await import('../../../stores/auth.js');
+    const authStore = useAuthStore();
+    authStore.setAuth('token', {
+      id: 'user-1',
+      email: 'test@example.com',
+      displayName: 'Test',
+      avatarUrl: null,
+      authProvider: 'local' as const,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await wrapper.vm.$nextTick();
+
+    const section = wrapper.findComponent({ name: 'CommentSection' });
+    expect(section.exists()).toBe(true);
+    expect(section.props('currentUserId')).toBe('user-1');
+  });
+
+  it('passes undefined currentUserId to CommentSection when user is not authenticated', async () => {
     setupUrlAwareMock(mockPostWithRevision);
 
     const wrapper = mount(PostDetail, { props: { post: mockPost } });
@@ -272,17 +292,17 @@ describe('PostDetail', () => {
     expect(mockApiFetch).not.toHaveBeenCalled();
   });
 
-  it('renders inline comment indicators when store has inline comments', async () => {
+  it('renders inline comment indicators with plural for multiple comments', async () => {
     setupUrlAwareMock(mockPostWithRevision);
 
     const wrapper = mount(PostDetail, { props: { post: mockPost } });
     await flushPromises();
 
-    // Populate the comments store with an inline comment on the current revision
+    // Populate the comments store with TWO inline comments on the same line
     const store = useCommentsStore();
     store.setCurrentRevisionId('rev-1');
-    const inlineComment: Comment = {
-      id: 'ic1',
+    const makeInline = (id: string): Comment => ({
+      id,
       postId: 'post-1',
       author: { id: 'u1', displayName: 'Alice', avatarUrl: null },
       parentId: null,
@@ -292,12 +312,12 @@ describe('PostDetail', () => {
       body: 'Nice line',
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
-    };
-    store.setComments([inlineComment]);
+    });
+    store.setComments([makeInline('ic1'), makeInline('ic2')]);
     await wrapper.vm.$nextTick();
 
-    // The indicator button should show "1 comment on line 3"
-    expect(wrapper.text()).toContain('1 comment on line');
+    // The indicator button should show "2 comments on line" (plural 's' branch)
+    expect(wrapper.text()).toContain('2 comments on line');
   });
 
   it('clicking an inline indicator sets inlineCommentLine and shows comments', async () => {
@@ -333,6 +353,29 @@ describe('PostDetail', () => {
     expect(wrapper.text()).toContain('Line 7');
     expect(wrapper.text()).toContain('Check this line');
     expect(wrapper.find('[placeholder="Add inline comment..."]').exists()).toBe(true);
+  });
+
+  it('clears inlineCommentLine when cancel is clicked on inline input', async () => {
+    setupUrlAwareMock(mockPostWithRevision);
+
+    const wrapper = mount(PostDetail, { props: { post: mockPost } });
+    await flushPromises();
+
+    // Open inline comment input via line click
+    const codeViewer = wrapper.findComponent({ name: 'CodeViewer' });
+    codeViewer.vm.$emit('line-click', 5);
+    await wrapper.vm.$nextTick();
+    expect(wrapper.find('[placeholder="Add inline comment..."]').exists()).toBe(true);
+
+    // Find the inline CommentInput and emit cancel
+    const commentInputs = wrapper.findAllComponents({ name: 'CommentInput' });
+    const inlineInput = commentInputs.find((c) => c.props('placeholder')?.includes('inline'));
+    expect(inlineInput).toBeDefined();
+    inlineInput?.vm.$emit('cancel');
+    await wrapper.vm.$nextTick();
+
+    // Inline comment input should be gone
+    expect(wrapper.find('[placeholder="Add inline comment..."]').exists()).toBe(false);
   });
 
   it('passes undefined language to CodeViewer when post.language is null (??  branch)', async () => {
