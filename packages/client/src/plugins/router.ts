@@ -35,6 +35,24 @@ const router = createRouter({
       component: () => import('@/pages/AccountLinkPage.vue'),
       meta: { guest: true },
     },
+    {
+      path: '/posts/new',
+      name: 'post-new',
+      component: () => import('@/pages/PostNewPage.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/posts/:id/edit',
+      name: 'post-edit',
+      component: () => import('@/pages/PostEditPage.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/posts/:id',
+      name: 'post-view',
+      component: () => import('@/pages/PostViewPage.vue'),
+      meta: { requiresAuth: true },
+    },
   ],
 });
 

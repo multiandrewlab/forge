@@ -36,3 +36,4 @@ export interface LinkPreview {
 }
 
 export type { AuthTokens, AuthResponse } from './user.js';
+export type { PostRevision, PostWithRevision } from './post.js';
