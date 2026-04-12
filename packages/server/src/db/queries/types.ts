@@ -38,6 +38,12 @@ export interface PostRevisionRow {
   created_at: Date;
 }
 
+export type PostWithRevisionRow = PostRow & {
+  content: string;
+  revision_number: number;
+  message: string | null;
+};
+
 export interface PostFileRow {
   id: string;
   post_id: string;
