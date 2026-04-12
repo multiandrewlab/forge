@@ -1,6 +1,19 @@
 @import 'tailwindcss';
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --color-primary: #f06a11ff;
   --color-surface: #1e1e2e;
+}
+
+/* Default dark theme — sets base text color on html/body */
+html {
+  background-color: var(--color-surface);
+  color: #e2e8f0;
+}
+
+html.dark {
+  background-color: var(--color-surface);
+  color: #e2e8f0;
 }
