@@ -1,0 +1,31 @@
+meta {
+  name: Create Inline Comment
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/posts/{{postId}}/comments
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "body": "Nice line of code!",
+    "lineNumber": 5,
+    "revisionId": "{{revisionId}}"
+  }
+}
+
+docs {
+  Create an inline comment anchored to a specific line and revision.
+
+  Response: 201 { comment: Comment }
+
+  Requires {{postId}} and {{revisionId}}.
+}

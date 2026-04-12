@@ -1,0 +1,19 @@
+meta {
+  name: List Comments by Revision
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/posts/{{postId}}/comments?revision={{revisionId}}
+  body: none
+  auth: none
+}
+
+docs {
+  Fetch comments filtered to a specific revision (plus general comments with no revision).
+
+  Response: { comments: Comment[] }
+
+  Requires {{postId}} and {{revisionId}}.
+}

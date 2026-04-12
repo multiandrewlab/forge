@@ -1,0 +1,30 @@
+meta {
+  name: Edit Comment
+  type: http
+  seq: 6
+}
+
+patch {
+  url: {{baseUrl}}/api/posts/{{postId}}/comments/{{commentId}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "body": "Updated comment text"
+  }
+}
+
+docs {
+  Edit a comment's body. Only the comment author can edit.
+
+  Response: 200 { comment: Comment }
+  Errors: 403 (not owner), 404 (not found)
+
+  Requires {{postId}} and {{commentId}}.
+}

@@ -1,0 +1,40 @@
+meta {
+  name: Create Comment
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/posts/{{postId}}/comments
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "body": "This is a great post!"
+  }
+}
+
+script:post-response {
+  if (res.body.comment) {
+    bru.setVar("commentId", res.body.comment.id);
+  }
+}
+
+docs {
+  Create a general comment on a post.
+
+  Optional fields:
+  - parentId: UUID — for threaded replies
+  - lineNumber: number — for inline comments
+  - revisionId: UUID — anchors inline comment to a revision
+
+  Response: 201 { comment: Comment }
+
+  Requires {{postId}} from Create Post or Get Feed.
+}

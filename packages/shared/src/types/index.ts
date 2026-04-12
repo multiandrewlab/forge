@@ -49,3 +49,4 @@ export type {
 export type { VoteValue, VoteResponse } from './vote.js';
 export type { BookmarkToggleResponse } from './bookmark.js';
 export type { Tag, TagSubscriptionResponse } from './tag.js';
+export type { Comment, CommentAuthor } from './comment.js';

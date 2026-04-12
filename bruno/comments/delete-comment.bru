@@ -1,0 +1,25 @@
+meta {
+  name: Delete Comment
+  type: http
+  seq: 7
+}
+
+delete {
+  url: {{baseUrl}}/api/posts/{{postId}}/comments/{{commentId}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+docs {
+  Delete a comment. Only the comment author can delete.
+  Child comments are cascade-deleted by the database.
+
+  Response: 204 No Content
+  Errors: 403 (not owner), 404 (not found)
+
+  Requires {{postId}} and {{commentId}}.
+}
