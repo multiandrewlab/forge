@@ -26,8 +26,10 @@ const emit = defineEmits<{
   publish: [];
 }>();
 
-function onTitleInput(event: { target: { value: string } }): void {
-  emit('update:title', event.target.value);
+/* global Event */
+function onTitleInput(event: Event): void {
+  const target = event.target as unknown as { value: string };
+  emit('update:title', target.value);
 }
 </script>
 

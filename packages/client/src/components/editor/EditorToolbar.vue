@@ -42,12 +42,15 @@ const contentTypes: { label: string; value: ContentType }[] = [
 
 const tagInput = ref('');
 
-function onLanguageChange(event: { target: { value: string } }): void {
-  emit('update:language', event.target.value);
+/* global Event */
+function onLanguageChange(event: Event): void {
+  const target = event.target as unknown as { value: string };
+  emit('update:language', target.value);
 }
 
-function onContentTypeChange(event: { target: { value: string } }): void {
-  emit('update:contentType', event.target.value as ContentType);
+function onContentTypeChange(event: Event): void {
+  const target = event.target as unknown as { value: string };
+  emit('update:contentType', target.value as ContentType);
 }
 
 function toggleVisibility(): void {
