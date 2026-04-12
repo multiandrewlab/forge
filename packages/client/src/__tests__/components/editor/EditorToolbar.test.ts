@@ -1,6 +1,16 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { mount, VueWrapper } from '@vue/test-utils';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { mount, VueWrapper, flushPromises } from '@vue/test-utils';
 import EditorToolbar from '@/components/editor/EditorToolbar.vue';
+import type { Tag } from '@forge/shared';
+
+// --- Mock useTags composable ---
+const mockSearchTags = vi.fn<(query: string, limit?: number) => Promise<Tag[]>>();
+
+vi.mock('@/composables/useTags', () => ({
+  useTags: () => ({
+    searchTags: mockSearchTags,
+  }),
+}));
 
 describe('EditorToolbar', () => {
   const defaultProps = {
@@ -13,7 +23,14 @@ describe('EditorToolbar', () => {
   let wrapper: VueWrapper;
 
   beforeEach(() => {
+    vi.useFakeTimers();
+    mockSearchTags.mockReset();
+    mockSearchTags.mockResolvedValue([]);
     wrapper = mount(EditorToolbar, { props: { ...defaultProps } });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   describe('language picker', () => {
@@ -226,6 +243,288 @@ describe('EditorToolbar', () => {
       const emitted = wrapper.emitted('update:tags');
       expect(emitted).toBeTruthy();
       expect((emitted as unknown[][])[0]).toEqual([['vue']]);
+    });
+  });
+
+  describe('tag autocomplete', () => {
+    const mockTags: Tag[] = [
+      { id: '1', name: 'vue', postCount: 5 },
+      { id: '2', name: 'vuex', postCount: 3 },
+      { id: '3', name: 'vue-router', postCount: 2 },
+    ];
+
+    it('should call searchTags after debounce when typing in input', async () => {
+      mockSearchTags.mockResolvedValue(mockTags);
+
+      const input = wrapper.find('[data-testid="tag-input"]');
+      await input.setValue('vu');
+
+      // Should not call immediately
+      expect(mockSearchTags).not.toHaveBeenCalled();
+
+      // Advance past the debounce delay
+      vi.advanceTimersByTime(200);
+      await flushPromises();
+
+      expect(mockSearchTags).toHaveBeenCalledWith('vu', 10);
+    });
+
+    it('should not call searchTags for empty input', async () => {
+      const input = wrapper.find('[data-testid="tag-input"]');
+      await input.setValue('');
+
+      vi.advanceTimersByTime(200);
+      await flushPromises();
+
+      expect(mockSearchTags).not.toHaveBeenCalled();
+    });
+
+    it('should not call searchTags for whitespace-only input', async () => {
+      const input = wrapper.find('[data-testid="tag-input"]');
+      await input.setValue('   ');
+
+      vi.advanceTimersByTime(200);
+      await flushPromises();
+
+      expect(mockSearchTags).not.toHaveBeenCalled();
+    });
+
+    it('should debounce multiple keystrokes and only call searchTags once', async () => {
+      mockSearchTags.mockResolvedValue(mockTags);
+
+      const input = wrapper.find('[data-testid="tag-input"]');
+      await input.setValue('v');
+      vi.advanceTimersByTime(100);
+      await input.setValue('vu');
+      vi.advanceTimersByTime(100);
+      await input.setValue('vue');
+
+      vi.advanceTimersByTime(200);
+      await flushPromises();
+
+      expect(mockSearchTags).toHaveBeenCalledTimes(1);
+      expect(mockSearchTags).toHaveBeenCalledWith('vue', 10);
+    });
+
+    it('should display suggestions dropdown when results are returned', async () => {
+      mockSearchTags.mockResolvedValue(mockTags);
+
+      const input = wrapper.find('[data-testid="tag-input"]');
+      await input.setValue('vu');
+      vi.advanceTimersByTime(200);
+      await flushPromises();
+
+      const dropdown = wrapper.find('[data-testid="tag-suggestions"]');
+      expect(dropdown.exists()).toBe(true);
+
+      const items = wrapper.findAll('[data-testid="tag-suggestion-item"]');
+      expect(items).toHaveLength(3);
+      expect(items[0].text()).toContain('vue');
+      expect(items[1].text()).toContain('vuex');
+      expect(items[2].text()).toContain('vue-router');
+    });
+
+    it('should display post count in suggestions', async () => {
+      mockSearchTags.mockResolvedValue(mockTags);
+
+      const input = wrapper.find('[data-testid="tag-input"]');
+      await input.setValue('vu');
+      vi.advanceTimersByTime(200);
+      await flushPromises();
+
+      const items = wrapper.findAll('[data-testid="tag-suggestion-item"]');
+      expect(items[0].text()).toContain('5');
+      expect(items[1].text()).toContain('3');
+      expect(items[2].text()).toContain('2');
+    });
+
+    it('should not show dropdown when there are no suggestions and input is empty', async () => {
+      mockSearchTags.mockResolvedValue([]);
+
+      const dropdown = wrapper.find('[data-testid="tag-suggestions"]');
+      expect(dropdown.exists()).toBe(false);
+    });
+
+    it('should add tag when clicking a suggestion', async () => {
+      mockSearchTags.mockResolvedValue(mockTags);
+
+      const input = wrapper.find('[data-testid="tag-input"]');
+      await input.setValue('vu');
+      vi.advanceTimersByTime(200);
+      await flushPromises();
+
+      const items = wrapper.findAll('[data-testid="tag-suggestion-item"]');
+      await items[1].trigger('click');
+
+      const emitted = wrapper.emitted('update:tags');
+      expect(emitted).toBeTruthy();
+      expect((emitted as unknown[][])[0]).toEqual([['vuex']]);
+    });
+
+    it('should clear input and hide suggestions after selecting a suggestion', async () => {
+      mockSearchTags.mockResolvedValue(mockTags);
+
+      const input = wrapper.find('[data-testid="tag-input"]');
+      await input.setValue('vu');
+      vi.advanceTimersByTime(200);
+      await flushPromises();
+
+      const items = wrapper.findAll('[data-testid="tag-suggestion-item"]');
+      await items[0].trigger('click');
+
+      expect((input.element as HTMLInputElement).value).toBe('');
+
+      const dropdown = wrapper.find('[data-testid="tag-suggestions"]');
+      expect(dropdown.exists()).toBe(false);
+    });
+
+    it('should add typed tag on Enter when no suggestions match', async () => {
+      mockSearchTags.mockResolvedValue([]);
+
+      const input = wrapper.find('[data-testid="tag-input"]');
+      await input.setValue('newtag');
+      vi.advanceTimersByTime(200);
+      await flushPromises();
+
+      await input.trigger('keydown.enter');
+
+      const emitted = wrapper.emitted('update:tags');
+      expect(emitted).toBeTruthy();
+      expect((emitted as unknown[][])[0]).toEqual([['newtag']]);
+    });
+
+    it('should clear suggestions after adding a tag via Enter', async () => {
+      mockSearchTags.mockResolvedValue(mockTags);
+
+      const input = wrapper.find('[data-testid="tag-input"]');
+      await input.setValue('vue');
+      vi.advanceTimersByTime(200);
+      await flushPromises();
+
+      // Suggestions should be visible
+      expect(wrapper.find('[data-testid="tag-suggestions"]').exists()).toBe(true);
+
+      await input.trigger('keydown.enter');
+
+      // Suggestions should be cleared
+      expect(wrapper.find('[data-testid="tag-suggestions"]').exists()).toBe(false);
+    });
+
+    it('should add a non-duplicate tag from filtered suggestion list', async () => {
+      const tagWrapper = mount(EditorToolbar, {
+        props: { ...defaultProps, tags: ['vue'] },
+      });
+
+      mockSearchTags.mockResolvedValue(mockTags);
+
+      const input = tagWrapper.find('[data-testid="tag-input"]');
+      await input.setValue('vu');
+      vi.advanceTimersByTime(200);
+      await flushPromises();
+
+      // After filtering, items[0] is 'vuex' (not 'vue'), so clicking it adds a valid tag
+      const items = tagWrapper.findAll('[data-testid="tag-suggestion-item"]');
+      expect(items).toHaveLength(2); // vue is filtered out, vuex and vue-router remain
+      await items[0].trigger('click');
+
+      const emitted = tagWrapper.emitted('update:tags');
+      expect(emitted).toBeTruthy();
+      expect((emitted as unknown[][])[0]).toEqual([['vue', 'vuex']]);
+    });
+
+    it('should guard against duplicate when props change between render and click', async () => {
+      // Simulate race condition: suggestions render, then props update to include a tag,
+      // then user clicks the now-stale suggestion item before Vue re-renders.
+      const tagWrapper = mount(EditorToolbar, {
+        props: { ...defaultProps, tags: [] },
+      });
+
+      mockSearchTags.mockResolvedValue(mockTags);
+
+      const input = tagWrapper.find('[data-testid="tag-input"]');
+      await input.setValue('vu');
+      vi.advanceTimersByTime(200);
+      await flushPromises();
+
+      // Suggestions are rendered with 3 items
+      const items = tagWrapper.findAll('[data-testid="tag-suggestion-item"]');
+      expect(items).toHaveLength(3);
+
+      // Props update: 'vue' is now already in tags (simulating concurrent add)
+      await tagWrapper.setProps({ tags: ['vue'] });
+
+      // Click the first suggestion which was 'vue' before re-render.
+      // The click handler calls selectSuggestion with the original Tag object.
+      await items[0].trigger('click');
+
+      // The guard in selectSuggestion prevents duplicate emission
+      const emitted = tagWrapper.emitted('update:tags');
+      expect(emitted).toBeUndefined();
+    });
+
+    it('should filter out already-selected tags from suggestions', async () => {
+      const tagWrapper = mount(EditorToolbar, {
+        props: { ...defaultProps, tags: ['vue'] },
+      });
+
+      mockSearchTags.mockResolvedValue(mockTags);
+
+      const input = tagWrapper.find('[data-testid="tag-input"]');
+      await input.setValue('vu');
+      vi.advanceTimersByTime(200);
+      await flushPromises();
+
+      const items = tagWrapper.findAll('[data-testid="tag-suggestion-item"]');
+      // 'vue' is already selected, so only vuex and vue-router should show
+      expect(items).toHaveLength(2);
+      expect(items[0].text()).toContain('vuex');
+      expect(items[1].text()).toContain('vue-router');
+    });
+
+    it('should hide suggestions when input is cleared', async () => {
+      mockSearchTags.mockResolvedValue(mockTags);
+
+      const input = wrapper.find('[data-testid="tag-input"]');
+      await input.setValue('vu');
+      vi.advanceTimersByTime(200);
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid="tag-suggestions"]').exists()).toBe(true);
+
+      await input.setValue('');
+      vi.advanceTimersByTime(200);
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid="tag-suggestions"]').exists()).toBe(false);
+    });
+
+    it('should handle searchTags errors gracefully', async () => {
+      mockSearchTags.mockRejectedValue(new Error('Network error'));
+
+      const input = wrapper.find('[data-testid="tag-input"]');
+      await input.setValue('vu');
+      vi.advanceTimersByTime(200);
+      await flushPromises();
+
+      // Should not show dropdown on error
+      const dropdown = wrapper.find('[data-testid="tag-suggestions"]');
+      expect(dropdown.exists()).toBe(false);
+    });
+
+    it('should not show suggestions dropdown when all results are already selected', async () => {
+      const tagWrapper = mount(EditorToolbar, {
+        props: { ...defaultProps, tags: ['vue', 'vuex', 'vue-router'] },
+      });
+
+      mockSearchTags.mockResolvedValue(mockTags);
+
+      const input = tagWrapper.find('[data-testid="tag-input"]');
+      await input.setValue('vu');
+      vi.advanceTimersByTime(200);
+      await flushPromises();
+
+      const dropdown = tagWrapper.find('[data-testid="tag-suggestions"]');
+      expect(dropdown.exists()).toBe(false);
     });
   });
 });
