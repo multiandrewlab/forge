@@ -22,6 +22,19 @@ body:json {
   }
 }
 
+script:pre-request {
+  // Ensure accessToken is set — in `-r` regression runs, `ai/` is alphabetically
+  // ahead of `auth/`, so login has not run yet.
+  if (!bru.getVar('accessToken')) {
+    const axios = require('axios');
+    const res = await axios.post(bru.getEnvVar('baseUrl') + '/api/auth/login', {
+      email: 'testuser@example.com',
+      password: 'password123',
+    });
+    bru.setVar('accessToken', res.data.accessToken);
+  }
+}
+
 script:post-response {
   // SSE returns text/event-stream; Bruno captures raw body as res.body (string).
   if (typeof res.body === 'string' && res.body.indexOf('event: done') === -1) {
