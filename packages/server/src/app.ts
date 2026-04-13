@@ -13,6 +13,7 @@ import { bookmarkRoutes } from './routes/bookmarks.js';
 import { tagRoutes } from './routes/tags.js';
 import { commentRoutes } from './routes/comments.js';
 import { searchRoutes } from './routes/search.js';
+import { aiRoutes } from './routes/ai.js';
 import { langchainPlugin } from './plugins/langchain/index.js';
 import { websocketPlugin } from './plugins/websocket/index.js';
 
@@ -62,6 +63,7 @@ export async function buildApp() {
   await app.register(bookmarkRoutes, { prefix: '/api' });
   await app.register(tagRoutes, { prefix: '/api/tags' });
   await app.register(commentRoutes, { prefix: '/api/posts' });
+  await app.register(aiRoutes, { prefix: '/api/ai' });
 
   return app;
 }
