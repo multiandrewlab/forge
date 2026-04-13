@@ -33,6 +33,43 @@ describe('langchainPlugin', () => {
     await app.close();
   });
 
+  it('aiRateLimit returns 401 when request.user is not set (defensive guard)', async () => {
+    const app = buildFake();
+    await app.register(fakeAuthPlugin);
+    await app.register(langchainPlugin);
+
+    // Register a route that uses aiRateLimit DIRECTLY, bypassing authenticate,
+    // so request.user stays undefined and the defensive 401 branch fires.
+    const rateLimitOnly = (app as unknown as { aiRateLimit: never }).aiRateLimit;
+    app.get('/unauth', { preHandler: rateLimitOnly }, async () => ({ ok: true }));
+
+    await app.ready();
+    const res = await app.inject({ method: 'GET', url: '/unauth' });
+    expect(res.statusCode).toBe(401);
+    expect(JSON.parse(res.body)).toEqual({ error: 'unauthorized' });
+    await app.close();
+  });
+
+  it('onError hook releases the slot so a later request succeeds', async () => {
+    const app = buildFake();
+    await app.register(fakeAuthPlugin);
+    await app.register(langchainPlugin);
+
+    app.get('/boom', { preHandler: (app as unknown as { aiGate: never }).aiGate }, async () => {
+      // Throw after aiGate has attached request.aiSlot, so onError releases it.
+      throw new Error('kaboom');
+    });
+
+    await app.ready();
+    const first = await app.inject({ method: 'GET', url: '/boom' });
+    expect(first.statusCode).toBe(500);
+
+    // If onError didn't release, a second request would 429. It should 500 again.
+    const second = await app.inject({ method: 'GET', url: '/boom' });
+    expect(second.statusCode).toBe(500);
+    await app.close();
+  });
+
   it('aiRateLimit attaches a slot on first call and rejects second concurrent', async () => {
     const app = buildFake();
     await app.register(fakeAuthPlugin);

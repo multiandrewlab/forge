@@ -143,4 +143,36 @@ describe('useAiComplete', () => {
     expect(c.suggestion.value).toBeNull();
     expect(c.isLoading.value).toBe(false);
   });
+
+  it('cancel() clears a pending debounce timer before it fires', async () => {
+    mockFetch.mockResolvedValue(sseStreamOf(['event: done\ndata: {}\n\n']));
+    const c = useAiComplete();
+    c.requestCompletion({ before: 'x', after: '', language: 'js' });
+    // Debounce is scheduled but not yet fired — cancel() must hit the
+    // clearTimeout branch.
+    c.cancel();
+    // Advance past the original debounce window; fetch should NEVER be called.
+    await vi.advanceTimersByTimeAsync(500);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('cancel() is a no-op when nothing is pending', () => {
+    const c = useAiComplete();
+    // No debounce scheduled, no controller in flight — both guards skipped.
+    c.cancel();
+    expect(c.isLoading.value).toBe(false);
+    expect(c.suggestion.value).toBeNull();
+  });
+
+  it('handles a non-ok fetch response by clearing suggestion', async () => {
+    mockFetch.mockResolvedValue(
+      new Response('', { status: 500, headers: { 'content-type': 'text/plain' } }),
+    );
+    const c = useAiComplete();
+    c.requestCompletion({ before: '', after: '', language: 'js' });
+    await vi.advanceTimersByTimeAsync(300);
+    await vi.runAllTimersAsync();
+    expect(c.suggestion.value).toBeNull();
+    expect(c.isLoading.value).toBe(false);
+  });
 });

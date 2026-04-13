@@ -6,6 +6,7 @@ import {
   ghostTextExtension,
   acceptGhostText,
   currentGhostText,
+  GhostWidget,
 } from '../../../lib/ai/ghost-text.js';
 
 function makeView(doc = 'const x = ') {
@@ -62,5 +63,18 @@ describe('ghost text extension', () => {
     // Verify by looking at the view's DOM for our widget marker class.
     expect(view.dom.querySelector('.cm-ghost-text')).not.toBeNull();
     view.destroy();
+  });
+
+  it('GhostWidget.eq() compares text', () => {
+    const a = new GhostWidget('hello');
+    const b = new GhostWidget('hello');
+    const c = new GhostWidget('world');
+    expect(a.eq(b)).toBe(true);
+    expect(a.eq(c)).toBe(false);
+  });
+
+  it('GhostWidget.ignoreEvent() returns true', () => {
+    const w = new GhostWidget('x');
+    expect(w.ignoreEvent()).toBe(true);
   });
 });

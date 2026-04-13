@@ -52,4 +52,12 @@ describe('parseSseStream', () => {
     for await (const e of parseSseStream(s)) events.push(e);
     expect(events).toEqual([]);
   });
+
+  it('skips frames that have no data: line', async () => {
+    // A frame with only an event: line and no data: line should be dropped.
+    const s = streamFrom(['event: heartbeat\n\nevent: token\ndata: {"text":"x"}\n\n']);
+    const events = [];
+    for await (const e of parseSseStream(s)) events.push(e);
+    expect(events).toEqual([{ event: 'token', data: { text: 'x' } }]);
+  });
 });

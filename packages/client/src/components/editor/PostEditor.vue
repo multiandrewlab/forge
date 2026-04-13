@@ -41,7 +41,7 @@ watch([() => props.modelValue, () => props.language, editorView], () => {
   aiRef.value.requestCompletion({
     before: doc.slice(0, cursor),
     after: doc.slice(cursor),
-    language: props.language ?? 'plaintext',
+    language: props.language,
   });
 });
 

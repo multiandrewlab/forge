@@ -3,7 +3,7 @@ import { Decoration, EditorView, WidgetType } from '@codemirror/view';
 
 export const setGhostText = StateEffect.define<string | null>();
 
-class GhostWidget extends WidgetType {
+export class GhostWidget extends WidgetType {
   constructor(readonly text: string) {
     super();
   }
