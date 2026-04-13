@@ -1,11 +1,14 @@
 <script setup lang="ts">
-import type { ContentType, Visibility } from '@forge/shared';
+import { ref, computed, watch } from 'vue';
+import type { ContentType, Visibility, AiCompleteRequest } from '@forge/shared';
+import type { EditorView } from '@codemirror/view';
 import type { SaveStatus } from '@/stores/posts';
 import CodeEditor from '@/components/editor/CodeEditor.vue';
 import EditorToolbar from '@/components/editor/EditorToolbar.vue';
 import DraftStatus from '@/components/editor/DraftStatus.vue';
+import AiSuggestion from '@/components/editor/AiSuggestion.vue';
 
-defineProps<{
+const props = defineProps<{
   modelValue: string;
   title: string;
   language: string;
@@ -25,6 +28,22 @@ const emit = defineEmits<{
   'update:tags': [value: string[]];
   publish: [];
 }>();
+
+const editorRef = ref<{ view: EditorView | null } | null>(null);
+const editorView = computed(() => editorRef.value?.view ?? null);
+const aiRef = ref<{ requestCompletion: (input: AiCompleteRequest) => void } | null>(null);
+
+watch([() => props.modelValue, () => props.language, editorView], () => {
+  const view = editorView.value;
+  if (!view || !aiRef.value) return;
+  const doc = view.state.doc.toString();
+  const cursor = view.state.selection.main.head;
+  aiRef.value.requestCompletion({
+    before: doc.slice(0, cursor),
+    after: doc.slice(cursor),
+    language: props.language ?? 'plaintext',
+  });
+});
 
 /* global Event */
 function onTitleInput(event: Event): void {
@@ -69,10 +88,12 @@ function onTitleInput(event: Event): void {
 
     <div class="flex-1">
       <CodeEditor
+        ref="editorRef"
         :model-value="modelValue"
         :language="language"
         @update:model-value="(val) => emit('update:modelValue', val)"
       />
+      <AiSuggestion v-if="editorView" ref="aiRef" :editor-view="editorView as EditorView" />
     </div>
   </div>
 </template>
