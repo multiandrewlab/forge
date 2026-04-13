@@ -1,0 +1,34 @@
+meta {
+  name: Basic Query
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/search?q=react
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+  res.body.snippets: isArray
+  res.body.aiActions: isArray
+  res.body.people: isArray
+  res.body.totalResults: isNumber
+}
+
+script:post-response {
+  if (res.body.snippets && res.body.snippets.length > 0) {
+    bru.setVar("firstSnippetId", res.body.snippets[0].id);
+  }
+}
+
+docs {
+  Basic full-text search for "react". No auth required.
+  Query params:
+  - q: search term (required)
+  Response: { snippets, aiActions, people, query, totalResults }
+
+  Post-response script captures first snippet ID as {{firstSnippetId}}.
+}

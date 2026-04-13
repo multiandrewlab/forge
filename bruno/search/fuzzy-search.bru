@@ -1,0 +1,28 @@
+meta {
+  name: Fuzzy Search
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/search?q=reakt&fuzzy=true
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+  res.body.snippets: isArray
+  res.body.aiActions: isArray
+  res.body.people: isArray
+  res.body.totalResults: isNumber
+}
+
+docs {
+  Fuzzy search using trigram matching. No auth required.
+  Misspelled query "reakt" should still find "react" results via trigram similarity.
+  Query params:
+  - q: search term (required)
+  - fuzzy: enable trigram-only search (optional, boolean)
+  Response: { snippets, aiActions, people, query, totalResults }
+}
