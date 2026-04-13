@@ -24,5 +24,6 @@ body:json {
 script:post-response {
   if (res.body.revision) {
     bru.setVar("revisionNumber", res.body.revision.revisionNumber);
+    bru.setVar("revisionId", res.body.revision.id);
   }
 }

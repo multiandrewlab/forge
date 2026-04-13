@@ -31,7 +31,7 @@ INSERT INTO tags (id, name) VALUES
   ('b0000000-0000-0000-0000-000000000005', 'devops');
 
 -- ============================================================
--- Posts (12: mix of snippet/prompt/document/link)
+-- Posts (13: mix of snippet/prompt/document/link + testuser fixture)
 -- ============================================================
 -- vote_count omitted -- triggers compute it from votes inserts
 INSERT INTO posts (id, author_id, title, content_type, language, visibility, is_draft, view_count) VALUES
@@ -46,7 +46,9 @@ INSERT INTO posts (id, author_id, title, content_type, language, visibility, is_
   ('c0000000-0000-0000-0000-000000000009', 'a0000000-0000-0000-0000-000000000001', 'Zod Validation Patterns', 'snippet', 'typescript', 'public', false, 120),
   ('c0000000-0000-0000-0000-000000000010', 'a0000000-0000-0000-0000-000000000003', 'Claude API Integration Guide', 'document', NULL, 'public', false, 250),
   ('c0000000-0000-0000-0000-000000000011', 'a0000000-0000-0000-0000-000000000002', 'React Testing Library Tips', 'snippet', 'typescript', 'public', false, 60),
-  ('c0000000-0000-0000-0000-000000000012', 'a0000000-0000-0000-0000-000000000001', 'SQL Performance Tuning', 'document', NULL, 'public', false, 40);
+  ('c0000000-0000-0000-0000-000000000012', 'a0000000-0000-0000-0000-000000000001', 'SQL Performance Tuning', 'document', NULL, 'public', false, 40),
+  -- testuser-owned fixture post for Bruno regression tests
+  ('c0000000-0000-0000-0000-000000000099', 'a0000000-0000-0000-0000-000000000099', 'Test Fixture Post (testuser-owned)', 'snippet', 'typescript', 'public', false, 0);
 
 -- Update link post
 UPDATE posts SET
@@ -70,7 +72,8 @@ INSERT INTO post_revisions (id, post_id, author_id, content, message, revision_n
   ('d0000000-0000-0000-0000-000000000010', 'c0000000-0000-0000-0000-000000000009', 'a0000000-0000-0000-0000-000000000001', E'import { z } from "zod";\n\nconst userSchema = z.object({\n  name: z.string().min(1),\n  email: z.string().email(),\n});', 'Initial version', 1),
   ('d0000000-0000-0000-0000-000000000011', 'c0000000-0000-0000-0000-000000000010', 'a0000000-0000-0000-0000-000000000003', E'# Claude API Integration\n\nHow to use the Anthropic API with streaming, tool use, and prompt caching...', 'Initial version', 1),
   ('d0000000-0000-0000-0000-000000000012', 'c0000000-0000-0000-0000-000000000011', 'a0000000-0000-0000-0000-000000000002', E'import { render, screen } from "@testing-library/react";\n\ntest("renders component", () => {\n  render(<MyComponent />);\n  expect(screen.getByText("Hello")).toBeInTheDocument();\n});', 'Initial version', 1),
-  ('d0000000-0000-0000-0000-000000000013', 'c0000000-0000-0000-0000-000000000012', 'a0000000-0000-0000-0000-000000000001', E'# SQL Performance Tuning\n\nKey techniques for optimizing PostgreSQL queries...', 'Initial version', 1);
+  ('d0000000-0000-0000-0000-000000000013', 'c0000000-0000-0000-0000-000000000012', 'a0000000-0000-0000-0000-000000000001', E'# SQL Performance Tuning\n\nKey techniques for optimizing PostgreSQL queries...', 'Initial version', 1),
+  ('d0000000-0000-0000-0000-000000000099', 'c0000000-0000-0000-0000-000000000099', 'a0000000-0000-0000-0000-000000000099', 'const testFixture: string = "hello from testuser";', 'Initial version', 1);
 
 -- ============================================================
 -- Post Tags
@@ -125,7 +128,9 @@ INSERT INTO comments (id, post_id, author_id, parent_id, line_number, revision_i
   ('e0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000001', NULL, NULL, 'Thanks Bob! I plan to add more utility types soon.'),
   ('e0000000-0000-0000-0000-000000000003', 'c0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000003', NULL, 2, 'd0000000-0000-0000-0000-000000000002', 'Could you add an example for the Required type?'),
   ('e0000000-0000-0000-0000-000000000004', 'c0000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000001', NULL, NULL, NULL, 'This prompt works really well for catching security issues.'),
-  ('e0000000-0000-0000-0000-000000000005', 'c0000000-0000-0000-0000-000000000010', 'a0000000-0000-0000-0000-000000000001', NULL, NULL, NULL, 'The streaming section is especially helpful.');
+  ('e0000000-0000-0000-0000-000000000005', 'c0000000-0000-0000-0000-000000000010', 'a0000000-0000-0000-0000-000000000001', NULL, NULL, NULL, 'The streaming section is especially helpful.'),
+  -- testuser-owned fixture comment for Bruno regression tests
+  ('e0000000-0000-0000-0000-000000000099', 'c0000000-0000-0000-0000-000000000099', 'a0000000-0000-0000-0000-000000000099', NULL, NULL, NULL, 'Fixture comment by testuser');
 
 -- ============================================================
 -- Prompt Variables (for prompt posts)
