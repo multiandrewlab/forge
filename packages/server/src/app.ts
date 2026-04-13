@@ -13,6 +13,7 @@ import { bookmarkRoutes } from './routes/bookmarks.js';
 import { tagRoutes } from './routes/tags.js';
 import { commentRoutes } from './routes/comments.js';
 import { searchRoutes } from './routes/search.js';
+import { langchainPlugin } from './plugins/langchain/index.js';
 import { websocketPlugin } from './plugins/websocket/index.js';
 
 export async function buildApp() {
@@ -51,6 +52,7 @@ export async function buildApp() {
 
   await app.register(rateLimitPlugin);
   await app.register(authPlugin);
+  await app.register(langchainPlugin);
   await app.register(websocketPlugin);
   await app.register(healthRoutes);
   await app.register(authRoutes, { prefix: '/api/auth' });
