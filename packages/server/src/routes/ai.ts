@@ -1,9 +1,10 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { aiCompleteRequestSchema } from '@forge/shared';
+import { aiCompleteRequestSchema, aiGenerateRequestSchema } from '@forge/shared';
 import {
   createAutocompleteChain,
   streamAutocomplete,
 } from '../plugins/langchain/chains/autocomplete.js';
+import { createGenerateChain, streamGenerate } from '../plugins/langchain/chains/generate.js';
 
 const SSE_HEADERS = {
   'Content-Type': 'text/event-stream',
@@ -62,6 +63,45 @@ export async function aiRoutes(app: FastifyInstance): Promise<void> {
       try {
         const chain = createAutocompleteChain(app.aiProvider());
         for await (const token of streamAutocomplete(chain, parsed.data, {
+          signal: slot.controller.signal,
+        })) {
+          writeEvent(reply, 'token', { text: token });
+        }
+        writeEvent(reply, 'done', {});
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'stream_error';
+        writeEvent(reply, 'error', { message });
+      } finally {
+        cleanupAborts();
+        slot.release();
+        reply.raw.end();
+      }
+    },
+  );
+
+  app.post(
+    '/generate',
+    { preHandler: app.aiGate },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const parsed = aiGenerateRequestSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: parsed.error.errors.map((e) => e.message).join(', '),
+        });
+      }
+
+      const slot = request.aiSlot;
+      if (!slot) {
+        return reply.status(500).send({ error: 'internal_error' });
+      }
+
+      const cleanupAborts = createAbortHandlers(request, slot, TIMEOUT_MS);
+
+      reply.raw.writeHead(200, SSE_HEADERS);
+
+      try {
+        const chain = createGenerateChain(app.aiProvider());
+        for await (const token of streamGenerate(chain, parsed.data, {
           signal: slot.controller.signal,
         })) {
           writeEvent(reply, 'token', { text: token });
