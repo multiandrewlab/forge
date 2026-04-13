@@ -52,9 +52,10 @@ const {
 } = useFeed();
 
 function autoSelectFirst(): void {
-  if (posts.value.length > 0 && !selectedPostId.value) {
+  const first = posts.value[0];
+  if (first && !selectedPostId.value) {
     if (window.matchMedia('(min-width: 768px)').matches) {
-      selectPost(posts.value[0].id);
+      selectPost(first.id);
     }
   }
 }
