@@ -152,40 +152,41 @@ node -e 'import("bcryptjs").then(b => b.default.hash("password123", 12).then(h =
 
 ## Expected Status-Code Reference
 
-| Endpoint                       | Method | Expected                            |
-| ------------------------------ | ------ | ----------------------------------- |
-| `/api/health`                  | GET    | 200                                 |
-| `/api/auth/register`           | POST   | 200 (runtime email via pre-request) |
-| `/api/auth/login`              | POST   | 200                                 |
-| `/api/auth/logout`             | POST   | 204                                 |
-| `/api/auth/refresh`            | POST   | 200                                 |
-| `/api/auth/me`                 | GET    | 200                                 |
-| `/api/auth/me`                 | PATCH  | 200                                 |
-| `/api/auth/google/callback`    | GET    | 501 (stub — no OAuth configured)    |
-| `/api/auth/link-google`        | POST   | 401 (stub)                          |
-| `/api/posts`                   | POST   | 201                                 |
-| `/api/posts/feed`              | GET    | 200                                 |
-| `/api/posts/:id`               | GET    | 200                                 |
-| `/api/posts/:id`               | PATCH  | 200                                 |
-| `/api/posts/:id/publish`       | POST   | 200                                 |
-| `/api/posts/:id`               | DELETE | 204                                 |
-| `/api/posts/:id/revisions`     | POST   | 201                                 |
-| `/api/posts/:id/revisions`     | GET    | 200                                 |
-| `/api/posts/:id/revisions/:n`  | GET    | 200                                 |
-| `/api/posts/:id/comments`      | GET    | 200                                 |
-| `/api/posts/:id/comments`      | POST   | 201                                 |
-| `/api/posts/:id/comments/:cid` | PATCH  | 200                                 |
-| `/api/posts/:id/comments/:cid` | DELETE | 204                                 |
-| `/api/posts/:id/bookmark`      | POST   | 200                                 |
-| `/api/bookmarks`               | GET    | 200                                 |
-| `/api/posts/:id/vote`          | POST   | 200                                 |
-| `/api/posts/:id/vote`          | DELETE | 200 on success / 404 when no vote   |
-| `/api/tags`                    | GET    | 200                                 |
-| `/api/tags/popular`            | GET    | 200                                 |
-| `/api/tags/:id/subscribe`      | POST   | 201                                 |
-| `/api/tags/:id/subscribe`      | DELETE | 204                                 |
-| `/api/tags/subscriptions`      | GET    | 200                                 |
-| `/api/search`                  | GET    | 200                                 |
+| Endpoint                       | Method | Expected                              |
+| ------------------------------ | ------ | ------------------------------------- |
+| `/api/health`                  | GET    | 200                                   |
+| `/api/auth/register`           | POST   | 200 (runtime email via pre-request)   |
+| `/api/auth/login`              | POST   | 200                                   |
+| `/api/auth/logout`             | POST   | 204                                   |
+| `/api/auth/refresh`            | POST   | 200                                   |
+| `/api/auth/me`                 | GET    | 200                                   |
+| `/api/auth/me`                 | PATCH  | 200                                   |
+| `/api/auth/google/callback`    | GET    | 501 (stub — no OAuth configured)      |
+| `/api/auth/link-google`        | POST   | 401 (stub)                            |
+| `/api/posts`                   | POST   | 201                                   |
+| `/api/posts/feed`              | GET    | 200                                   |
+| `/api/posts/:id`               | GET    | 200                                   |
+| `/api/posts/:id`               | PATCH  | 200                                   |
+| `/api/posts/:id/publish`       | POST   | 200                                   |
+| `/api/posts/:id`               | DELETE | 204                                   |
+| `/api/posts/:id/revisions`     | POST   | 201                                   |
+| `/api/posts/:id/revisions`     | GET    | 200                                   |
+| `/api/posts/:id/revisions/:n`  | GET    | 200                                   |
+| `/api/posts/:id/comments`      | GET    | 200                                   |
+| `/api/posts/:id/comments`      | POST   | 201                                   |
+| `/api/posts/:id/comments/:cid` | PATCH  | 200                                   |
+| `/api/posts/:id/comments/:cid` | DELETE | 204                                   |
+| `/api/posts/:id/bookmark`      | POST   | 200                                   |
+| `/api/bookmarks`               | GET    | 200                                   |
+| `/api/posts/:id/vote`          | POST   | 200                                   |
+| `/api/posts/:id/vote`          | DELETE | 200 on success / 404 when no vote     |
+| `/api/tags`                    | GET    | 200                                   |
+| `/api/tags/popular`            | GET    | 200                                   |
+| `/api/tags/:id/subscribe`      | POST   | 201                                   |
+| `/api/tags/:id/subscribe`      | DELETE | 204                                   |
+| `/api/tags/subscriptions`      | GET    | 200                                   |
+| `/api/search`                  | GET    | 200                                   |
+| `/api/ai/complete`             | POST   | 200 (SSE stream ending `event: done`) |
 
 ## Structure
 
@@ -197,6 +198,7 @@ bruno/
 ├── environments/
 │   ├── local.bru            # localhost:3001 (pinned seed UUIDs + testuser creds)
 │   └── ci.bru               # CI mirror — same baseUrl, same UUIDs
+├── ai/                      # 1 request (SSE autocomplete — requires LLM_PROVIDER)
 ├── auth/                    # 8 requests
 ├── bookmarks/               # 2 requests
 ├── comments/                # 7 requests
@@ -214,6 +216,8 @@ bruno/
 **An endpoint returns 5xx unexpectedly**: re-run the seed (`psql "$DATABASE_URL" -f scripts/seed.sql`). Most failures are caused by a test mutating seeded state (e.g. `delete-comment` removes the fixture comment). The seed is idempotent — re-running it restores state.
 
 **The suite passes locally but fails in CI**: confirm the migration + seed step ran before the server started. The CI job requires the DB to be fully populated before the server polls `/api/health`.
+
+**`ai/complete` returns `event: error` with `fetch failed` or the post-response throws "Expected SSE stream to contain a done event"**: the AI autocomplete test requires a working LLM provider. Local dev defaults to `LLM_PROVIDER=openai` (see `.env.example`) — make sure `OPENAI_API_KEY` is set in `.env` and valid. If you switched to Ollama (`LLM_PROVIDER=ollama`), confirm the ollama service is running (`docker compose up ollama`) and the model named in `LLM_MODEL` has been pulled. After changing `.env`, restart the server — provider config is read at boot. Note: the `bruno-regression` CI workflow does not currently set AI provider secrets, so this test may need secrets wired into the workflow or a conditional skip before the full suite can pass in CI.
 
 ## Notes
 
