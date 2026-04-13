@@ -11,6 +11,15 @@ vi.mock('../../plugins/rate-limit.js', () => ({
   },
 }));
 
+// Mock findFeedPostById so we can control broadcast data in route tests
+vi.mock('../../db/queries/feed.js', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../../db/queries/feed.js')>();
+  return {
+    ...original,
+    findFeedPostById: vi.fn(),
+  };
+});
+
 // Allow spy on @forge/shared schema methods to exercise unreachable ?? branches
 vi.mock('@forge/shared', async (importOriginal) => {
   const original = await importOriginal<typeof import('@forge/shared')>();
@@ -28,6 +37,8 @@ vi.mock('@forge/shared', async (importOriginal) => {
 import { query } from '../../db/connection.js';
 import { buildApp } from '../../app.js';
 import { createPostSchema } from '@forge/shared';
+import { findFeedPostById } from '../../db/queries/feed.js';
+import type { PostWithAuthorRow } from '../../db/queries/feed.js';
 import type { FastifyInstance } from 'fastify';
 import type {
   PostRow,
@@ -37,6 +48,7 @@ import type {
 } from '../../db/queries/types.js';
 
 const mockCreatePostSchema = createPostSchema as { safeParse: Mock };
+const mockFindFeedPostById = findFeedPostById as Mock;
 
 const mockQuery = query as Mock;
 
@@ -81,10 +93,18 @@ const samplePostWithRevisionRow: PostWithRevisionRow = {
   message: 'Initial version',
 };
 
+const sampleFeedRow: PostWithAuthorRow = {
+  ...samplePostRow,
+  author_display_name: 'Test User',
+  author_avatar_url: null,
+  tags: 'typescript',
+};
+
 describe('post routes', () => {
   let app: FastifyInstance;
   let token: string;
   let otherToken: string;
+  let broadcastSpy: ReturnType<typeof vi.spyOn>;
 
   beforeAll(async () => {
     app = await buildApp();
@@ -94,6 +114,7 @@ describe('post routes', () => {
       email: 'other@example.com',
       displayName: 'Other User',
     });
+    broadcastSpy = vi.spyOn(app.websocket.channels, 'broadcast');
   });
 
   afterAll(async () => {
@@ -120,6 +141,8 @@ describe('post routes', () => {
       mockQuery.mockResolvedValueOnce({ rows: [samplePostRow], rowCount: 1 });
       // createRevision query
       mockQuery.mockResolvedValueOnce({ rows: [sampleRevisionRow], rowCount: 1 });
+      // findFeedPostById for broadcast
+      mockFindFeedPostById.mockResolvedValueOnce(sampleFeedRow);
 
       const response = await app.inject({
         method: 'POST',
@@ -134,6 +157,13 @@ describe('post routes', () => {
       expect(body.post.authorId).toBe(userId);
       expect(body.revision.content).toBe('console.log("hello");');
       expect(body.revision.revisionNumber).toBe(1);
+
+      // Verify post:new broadcast on feed channel
+      expect(broadcastSpy).toHaveBeenCalledWith(
+        'feed',
+        expect.objectContaining({ type: 'post:new', channel: 'feed' }),
+        undefined,
+      );
     });
 
     it('returns 400 for invalid body', async () => {
@@ -165,6 +195,7 @@ describe('post routes', () => {
         rowCount: 1,
       });
       mockQuery.mockResolvedValueOnce({ rows: [sampleRevisionRow], rowCount: 1 });
+      mockFindFeedPostById.mockResolvedValueOnce(sampleFeedRow);
 
       const response = await app.inject({
         method: 'POST',
@@ -199,6 +230,7 @@ describe('post routes', () => {
         rowCount: 1,
       });
       mockQuery.mockResolvedValueOnce({ rows: [sampleRevisionRow], rowCount: 1 });
+      mockFindFeedPostById.mockResolvedValueOnce(sampleFeedRow);
 
       const response = await app.inject({
         method: 'POST',
@@ -232,6 +264,8 @@ describe('post routes', () => {
         rows: [{ post_id: postId, tag_id: 'tag-1' }],
         rowCount: 1,
       });
+      // findFeedPostById for broadcast
+      mockFindFeedPostById.mockResolvedValueOnce(sampleFeedRow);
 
       const response = await app.inject({
         method: 'POST',
@@ -268,6 +302,8 @@ describe('post routes', () => {
         rows: [{ post_id: postId, tag_id: 'tag-2' }],
         rowCount: 1,
       });
+      // findFeedPostById for broadcast
+      mockFindFeedPostById.mockResolvedValueOnce(sampleFeedRow);
 
       const response = await app.inject({
         method: 'POST',
@@ -291,11 +327,32 @@ describe('post routes', () => {
       );
     });
 
+    it('skips post:new broadcast when findFeedPostById returns null', async () => {
+      // createPost query
+      mockQuery.mockResolvedValueOnce({ rows: [samplePostRow], rowCount: 1 });
+      // createRevision query
+      mockQuery.mockResolvedValueOnce({ rows: [sampleRevisionRow], rowCount: 1 });
+      // findFeedPostById returns null (e.g. race condition)
+      mockFindFeedPostById.mockResolvedValueOnce(null);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/posts',
+        headers: { authorization: `Bearer ${token}` },
+        payload: validPayload,
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(broadcastSpy).not.toHaveBeenCalled();
+    });
+
     it('skips tag processing when tags array is empty', async () => {
       // createPost query
       mockQuery.mockResolvedValueOnce({ rows: [samplePostRow], rowCount: 1 });
       // createRevision query
       mockQuery.mockResolvedValueOnce({ rows: [sampleRevisionRow], rowCount: 1 });
+      // findFeedPostById for broadcast
+      mockFindFeedPostById.mockResolvedValueOnce(sampleFeedRow);
 
       const response = await app.inject({
         method: 'POST',
@@ -333,6 +390,8 @@ describe('post routes', () => {
         rows: [{ post_id: postId, tag_id: 'tag-2' }],
         rowCount: 1,
       });
+      // findFeedPostById for broadcast
+      mockFindFeedPostById.mockResolvedValueOnce(sampleFeedRow);
 
       const response = await app.inject({
         method: 'POST',
@@ -393,6 +452,9 @@ describe('post routes', () => {
       // updatePost query
       const updatedRow = { ...samplePostRow, title: 'Updated Title' };
       mockQuery.mockResolvedValueOnce({ rows: [updatedRow], rowCount: 1 });
+      // findFeedPostById for broadcast
+      const updatedFeedRow: PostWithAuthorRow = { ...sampleFeedRow, title: 'Updated Title' };
+      mockFindFeedPostById.mockResolvedValueOnce(updatedFeedRow);
 
       const response = await app.inject({
         method: 'PATCH',
@@ -404,6 +466,33 @@ describe('post routes', () => {
       expect(response.statusCode).toBe(200);
       const body = response.json();
       expect(body.post.title).toBe('Updated Title');
+
+      // Verify post:updated broadcast on feed channel
+      expect(broadcastSpy).toHaveBeenCalledWith(
+        'feed',
+        expect.objectContaining({ type: 'post:updated', channel: 'feed' }),
+        undefined,
+      );
+    });
+
+    it('skips post:updated broadcast when findFeedPostById returns null', async () => {
+      // findPostById for ownership check
+      mockQuery.mockResolvedValueOnce({ rows: [samplePostRow], rowCount: 1 });
+      // updatePost query
+      const updatedRow = { ...samplePostRow, title: 'Updated Title' };
+      mockQuery.mockResolvedValueOnce({ rows: [updatedRow], rowCount: 1 });
+      // findFeedPostById returns null
+      mockFindFeedPostById.mockResolvedValueOnce(null);
+
+      const response = await app.inject({
+        method: 'PATCH',
+        url: `/api/posts/${postId}`,
+        headers: { authorization: `Bearer ${token}` },
+        payload: { title: 'Updated Title' },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(broadcastSpy).not.toHaveBeenCalled();
     });
 
     it('returns 403 when user is not the author', async () => {
@@ -481,7 +570,7 @@ describe('post routes', () => {
   // ─── DELETE /api/posts/:id ─────────────────────────────────────────
 
   describe('DELETE /api/posts/:id', () => {
-    it('soft-deletes and returns 204', async () => {
+    it('soft-deletes and returns 204 without broadcasting', async () => {
       // findPostById for ownership check
       mockQuery.mockResolvedValueOnce({ rows: [samplePostRow], rowCount: 1 });
       // softDeletePost query
@@ -494,6 +583,8 @@ describe('post routes', () => {
       });
 
       expect(response.statusCode).toBe(204);
+      // Soft-delete does NOT broadcast — clients invalidate via other mechanisms
+      expect(broadcastSpy).not.toHaveBeenCalled();
     });
 
     it('returns 403 when user is not the author', async () => {
@@ -539,6 +630,9 @@ describe('post routes', () => {
       // publishPost query
       const publishedRow = { ...samplePostRow, is_draft: false };
       mockQuery.mockResolvedValueOnce({ rows: [publishedRow], rowCount: 1 });
+      // findFeedPostById for broadcast
+      const publishedFeedRow: PostWithAuthorRow = { ...sampleFeedRow, is_draft: false };
+      mockFindFeedPostById.mockResolvedValueOnce(publishedFeedRow);
 
       const response = await app.inject({
         method: 'POST',
@@ -549,6 +643,32 @@ describe('post routes', () => {
       expect(response.statusCode).toBe(200);
       const body = response.json();
       expect(body.post.isDraft).toBe(false);
+
+      // Verify post:updated broadcast on feed channel
+      expect(broadcastSpy).toHaveBeenCalledWith(
+        'feed',
+        expect.objectContaining({ type: 'post:updated', channel: 'feed' }),
+        undefined,
+      );
+    });
+
+    it('skips post:updated broadcast on publish when findFeedPostById returns null', async () => {
+      // findPostById for ownership check
+      mockQuery.mockResolvedValueOnce({ rows: [samplePostRow], rowCount: 1 });
+      // publishPost query
+      const publishedRow = { ...samplePostRow, is_draft: false };
+      mockQuery.mockResolvedValueOnce({ rows: [publishedRow], rowCount: 1 });
+      // findFeedPostById returns null
+      mockFindFeedPostById.mockResolvedValueOnce(null);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/posts/${postId}/publish`,
+        headers: { authorization: `Bearer ${token}` },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(broadcastSpy).not.toHaveBeenCalled();
     });
 
     it('returns 403 when user is not the author', async () => {
@@ -617,6 +737,8 @@ describe('post routes', () => {
         message: 'Updated code',
       };
       mockQuery.mockResolvedValueOnce({ rows: [newRevision], rowCount: 1 });
+      // findFeedPostById for feed broadcast
+      mockFindFeedPostById.mockResolvedValueOnce(sampleFeedRow);
 
       const response = await app.inject({
         method: 'POST',
@@ -629,6 +751,31 @@ describe('post routes', () => {
       const body = response.json();
       expect(body.revision.content).toBe('console.log("updated");');
       expect(body.revision.revisionNumber).toBe(2);
+
+      // Verify revision:new broadcast on post channel
+      expect(broadcastSpy).toHaveBeenCalledWith(
+        `post:${postId}`,
+        {
+          type: 'revision:new',
+          channel: `post:${postId}`,
+          data: {
+            id: '880e8400-e29b-41d4-a716-446655440000',
+            postId,
+            content: 'console.log("updated");',
+            message: 'Updated code',
+            revisionNumber: 2,
+            createdAt: new Date('2026-01-01'),
+          },
+        },
+        undefined,
+      );
+
+      // Verify post:updated broadcast on feed channel
+      expect(broadcastSpy).toHaveBeenCalledWith(
+        'feed',
+        expect.objectContaining({ type: 'post:updated', channel: 'feed' }),
+        undefined,
+      );
     });
 
     it('returns 403 when user is not the author', async () => {
@@ -688,6 +835,7 @@ describe('post routes', () => {
         revision_number: 2,
       };
       mockQuery.mockResolvedValueOnce({ rows: [noMsgRevision], rowCount: 1 });
+      mockFindFeedPostById.mockResolvedValueOnce(sampleFeedRow);
 
       const response = await app.inject({
         method: 'POST',
@@ -698,6 +846,55 @@ describe('post routes', () => {
       });
 
       expect(response.statusCode).toBe(201);
+
+      // Broadcast is still called for revisions without a message
+      expect(broadcastSpy).toHaveBeenCalledWith(
+        `post:${postId}`,
+        expect.objectContaining({ type: 'revision:new' }),
+        undefined,
+      );
+    });
+
+    it('broadcasts revision:new with excludeWs when x-ws-client-id header is present', async () => {
+      const clientId = 'ws-rev-client-1';
+      const fakeSocket = { readyState: 1, send: () => {} };
+      app.websocket.connections.addConnection(userId, fakeSocket, clientId);
+
+      mockQuery.mockResolvedValueOnce({ rows: [samplePostRow], rowCount: 1 });
+      const newRevision: PostRevisionRow = {
+        ...sampleRevisionRow,
+        id: '880e8400-e29b-41d4-a716-446655440000',
+        revision_number: 3,
+        content: 'ws revision content',
+        message: 'ws revision',
+      };
+      mockQuery.mockResolvedValueOnce({ rows: [newRevision], rowCount: 1 });
+      mockFindFeedPostById.mockResolvedValueOnce(sampleFeedRow);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/posts/${postId}/revisions`,
+        headers: {
+          authorization: `Bearer ${token}`,
+          'x-ws-client-id': clientId,
+        },
+        payload: { content: 'ws revision content', message: 'ws revision' },
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(broadcastSpy).toHaveBeenCalledWith(
+        `post:${postId}`,
+        expect.objectContaining({ type: 'revision:new' }),
+        fakeSocket,
+      );
+      // Feed broadcast also uses excludeWs
+      expect(broadcastSpy).toHaveBeenCalledWith(
+        'feed',
+        expect.objectContaining({ type: 'post:updated', channel: 'feed' }),
+        fakeSocket,
+      );
+
+      app.websocket.connections.removeConnection(userId, fakeSocket, clientId);
     });
   });
 

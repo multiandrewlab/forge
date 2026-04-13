@@ -5,7 +5,7 @@ vi.mock('../../../db/connection.js', () => ({
 }));
 
 import { query } from '../../../db/connection.js';
-import { findFeedPosts } from '../../../db/queries/feed.js';
+import { findFeedPosts, findFeedPostById } from '../../../db/queries/feed.js';
 import type { PostWithAuthorRow } from '../../../db/queries/feed.js';
 
 const mockQuery = query as Mock;
@@ -231,5 +231,45 @@ describe('findFeedPosts', () => {
       const [sql] = mockQuery.mock.calls[0] as [string, unknown[]];
       expect(sql).not.toContain("'; DROP TABLE posts; --");
     });
+  });
+});
+
+describe('findFeedPostById', () => {
+  beforeEach(() => {
+    mockQuery.mockReset();
+  });
+
+  it('returns PostWithAuthorRow when post exists', async () => {
+    mockQuery.mockResolvedValue({ rows: [sampleRow], rowCount: 1 });
+
+    const result = await findFeedPostById(sampleRow.id);
+
+    expect(result).toEqual(sampleRow);
+    expect(mockQuery).toHaveBeenCalledOnce();
+    const [sql, params] = mockQuery.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('p.id =');
+    expect(sql).toContain('author_display_name');
+    expect(sql).toContain('author_avatar_url');
+    expect(sql).toContain('tags');
+    expect(params).toEqual([sampleRow.id]);
+  });
+
+  it('returns null when post does not exist', async () => {
+    mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });
+
+    const result = await findFeedPostById('nonexistent-id');
+
+    expect(result).toBeNull();
+    expect(mockQuery).toHaveBeenCalledOnce();
+  });
+
+  it('handles post without tags (tags column is null)', async () => {
+    const rowWithoutTags: PostWithAuthorRow = { ...sampleRow, tags: null };
+    mockQuery.mockResolvedValue({ rows: [rowWithoutTags], rowCount: 1 });
+
+    const result = await findFeedPostById(sampleRow.id);
+
+    expect(result).toEqual(rowWithoutTags);
+    expect(result?.tags).toBeNull();
   });
 });

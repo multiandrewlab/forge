@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { voteSchema } from '@forge/shared';
 import { findPostById } from '../db/queries/posts.js';
 import { getUserVote, upsertVote, deleteVote } from '../db/queries/votes.js';
+import { getExcludeWs } from '../plugins/websocket/broadcast.js';
 
 export async function voteRoutes(app: FastifyInstance): Promise<void> {
   // POST /:id/vote — idempotent toggle
@@ -39,6 +40,13 @@ export async function voteRoutes(app: FastifyInstance): Promise<void> {
     const updatedPost = await findPostById(id);
     const voteCount = updatedPost?.vote_count ?? post.vote_count;
 
+    const excludeWs = getExcludeWs(app, request);
+    app.websocket.channels.broadcast(
+      `post:${id}`,
+      { type: 'vote:updated', channel: `post:${id}`, data: { voteCount } },
+      excludeWs,
+    );
+
     return reply.send({ voteCount, userVote });
   });
 
@@ -59,6 +67,13 @@ export async function voteRoutes(app: FastifyInstance): Promise<void> {
     // Re-read post for updated vote_count (DB trigger has fired)
     const updatedPost = await findPostById(id);
     const voteCount = updatedPost?.vote_count ?? post.vote_count;
+
+    const excludeWs = getExcludeWs(app, request);
+    app.websocket.channels.broadcast(
+      `post:${id}`,
+      { type: 'vote:updated', channel: `post:${id}`, data: { voteCount } },
+      excludeWs,
+    );
 
     return reply.send({ voteCount, userVote: null });
   });

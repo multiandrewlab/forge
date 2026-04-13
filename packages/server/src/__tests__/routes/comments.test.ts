@@ -65,6 +65,7 @@ describe('comment routes', () => {
   let app: FastifyInstance;
   let token: string;
   let otherToken: string;
+  let broadcastSpy: ReturnType<typeof vi.spyOn>;
 
   beforeAll(async () => {
     app = await buildApp();
@@ -74,6 +75,7 @@ describe('comment routes', () => {
       email: 'other@example.com',
       displayName: 'Other User',
     });
+    broadcastSpy = vi.spyOn(app.websocket.channels, 'broadcast');
   });
 
   afterAll(async () => {
@@ -176,6 +178,17 @@ describe('comment routes', () => {
         displayName: 'Test User',
         avatarUrl: null,
       });
+
+      // Verify broadcast was called
+      expect(broadcastSpy).toHaveBeenCalledWith(
+        `post:${postId}`,
+        {
+          type: 'comment:new',
+          channel: `post:${postId}`,
+          data: json.comment,
+        },
+        undefined,
+      );
     });
 
     it('returns 201 with fallback when re-read does not find created comment', async () => {
@@ -197,6 +210,49 @@ describe('comment routes', () => {
       const json = response.json();
       expect(json.comment.id).toBe(commentId);
       expect(json.comment.body).toBe('Test comment');
+
+      // Broadcast is still called with fallback comment data
+      expect(broadcastSpy).toHaveBeenCalledWith(
+        `post:${postId}`,
+        {
+          type: 'comment:new',
+          channel: `post:${postId}`,
+          data: json.comment,
+        },
+        undefined,
+      );
+    });
+
+    it('broadcasts with excludeWs when x-ws-client-id header is present', async () => {
+      const clientId = 'ws-client-abc';
+      const fakeSocket = { readyState: 1, send: () => {} };
+      app.websocket.connections.addConnection(userId, fakeSocket, clientId);
+
+      // findPostById — post exists
+      mockQuery.mockResolvedValueOnce({ rows: [samplePostRow], rowCount: 1 });
+      // createComment — insert
+      mockQuery.mockResolvedValueOnce({ rows: [sampleCommentRow], rowCount: 1 });
+      // findCommentsByPostIdWithAuthor — re-read with author join
+      mockQuery.mockResolvedValueOnce({ rows: [sampleCommentWithAuthor], rowCount: 1 });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/posts/${postId}/comments`,
+        headers: {
+          authorization: `Bearer ${token}`,
+          'x-ws-client-id': clientId,
+        },
+        payload: { body: 'Test comment' },
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(broadcastSpy).toHaveBeenCalledWith(
+        `post:${postId}`,
+        expect.objectContaining({ type: 'comment:new' }),
+        fakeSocket,
+      );
+
+      app.websocket.connections.removeConnection(userId, fakeSocket, clientId);
     });
 
     it('returns 400 for empty body', async () => {
@@ -287,6 +343,17 @@ describe('comment routes', () => {
       expect(response.statusCode).toBe(200);
       const json = response.json();
       expect(json.comment.body).toBe('Updated comment');
+
+      // Verify broadcast was called
+      expect(broadcastSpy).toHaveBeenCalledWith(
+        `post:${postId}`,
+        {
+          type: 'comment:updated',
+          channel: `post:${postId}`,
+          data: json.comment,
+        },
+        undefined,
+      );
     });
 
     it('returns 403 when not the comment owner', async () => {
@@ -372,6 +439,17 @@ describe('comment routes', () => {
       const json = response.json();
       expect(json.comment).toBeDefined();
       expect(json.comment.body).toBe('Updated');
+
+      // Broadcast is still called with fallback comment data
+      expect(broadcastSpy).toHaveBeenCalledWith(
+        `post:${postId}`,
+        {
+          type: 'comment:updated',
+          channel: `post:${postId}`,
+          data: json.comment,
+        },
+        undefined,
+      );
     });
   });
 
@@ -393,6 +471,17 @@ describe('comment routes', () => {
       });
 
       expect(response.statusCode).toBe(204);
+
+      // Verify broadcast was called
+      expect(broadcastSpy).toHaveBeenCalledWith(
+        `post:${postId}`,
+        {
+          type: 'comment:deleted',
+          channel: `post:${postId}`,
+          data: { id: commentId },
+        },
+        undefined,
+      );
     });
 
     it('returns 403 when not the comment owner', async () => {

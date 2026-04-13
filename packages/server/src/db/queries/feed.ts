@@ -28,6 +28,31 @@ interface CursorData {
   id: string;
 }
 
+/**
+ * Fetch a single post by ID with author and tags — the same shape as findFeedPosts
+ * but without cursor/limit/sort logic. Used by mutation routes to build broadcast payloads.
+ */
+export async function findFeedPostById(postId: string): Promise<PostWithAuthorRow | null> {
+  const sql = `
+    SELECT
+      p.*,
+      u.display_name AS author_display_name,
+      u.avatar_url   AS author_avatar_url,
+      (
+        SELECT string_agg(t.name, ',' ORDER BY t.name)
+        FROM post_tags pt
+        JOIN tags t ON t.id = pt.tag_id
+        WHERE pt.post_id = p.id
+      ) AS tags
+    FROM posts p
+    JOIN users u ON u.id = p.author_id
+    WHERE p.id = $1 AND p.deleted_at IS NULL
+  `.trim();
+
+  const result = await query<PostWithAuthorRow>(sql, [postId]);
+  return result.rows[0] ?? null;
+}
+
 export async function findFeedPosts(input: FindFeedPostsInput): Promise<FindFeedPostsResult> {
   const { userId, sort = 'trending', filter, tag, type, cursor, limit } = input;
 
