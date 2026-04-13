@@ -33,6 +33,10 @@ services:
       timeout: 3s
       retries: 5
 
+  # Optional: local Ollama runtime for the /api/ai/complete endpoint.
+  # Local dev defaults to LLM_PROVIDER=openai (see .env.example); this
+  # service is only needed if you switch to LLM_PROVIDER=ollama.
+  # Start selectively with: docker compose up ollama
   ollama:
     image: ollama/ollama:latest
     ports:
