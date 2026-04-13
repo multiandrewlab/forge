@@ -1,0 +1,53 @@
+meta {
+  name: AI Complete (SSE)
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/ai/complete
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "before": "function add(a, b) {",
+    "after": "}",
+    "language": "javascript"
+  }
+}
+
+script:pre-request {
+  // Ensure accessToken is set — in `-r` regression runs, `ai/` is alphabetically
+  // ahead of `auth/`, so login has not run yet.
+  if (!bru.getVar('accessToken')) {
+    const axios = require('axios');
+    const res = await axios.post(bru.getEnvVar('baseUrl') + '/api/auth/login', {
+      email: 'testuser@example.com',
+      password: 'password123',
+    });
+    bru.setVar('accessToken', res.data.accessToken);
+  }
+}
+
+script:post-response {
+  // SSE returns text/event-stream; Bruno captures raw body as res.body (string).
+  if (typeof res.body === 'string' && res.body.indexOf('event: done') === -1) {
+    throw new Error('Expected SSE stream to contain a done event');
+  }
+}
+
+tests {
+  test("status 200", function() {
+    expect(res.status).to.equal(200);
+  });
+
+  test("content-type is event-stream", function() {
+    expect(res.headers['content-type']).to.match(/text\/event-stream/);
+  });
+}

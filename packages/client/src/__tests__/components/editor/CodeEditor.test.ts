@@ -2,14 +2,27 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
 
+const fakeEditorView = {
+  state: {
+    doc: { toString: () => '' },
+    selection: { main: { head: 0 } },
+  },
+  contentDOM: document.createElement('div'),
+};
+
 // Mock all CodeMirror language modules before importing the component.
 // Each module exports a function that returns an Extension (empty array for test).
 vi.mock('vue-codemirror', () => ({
   Codemirror: {
     name: 'Codemirror',
     props: ['modelValue', 'extensions', 'disabled', 'style', 'tabSize', 'indentWithTab'],
-    emits: ['update:model-value'],
+    emits: ['update:model-value', 'ready'],
     template: '<div data-testid="codemirror-stub"><slot /></div>',
+    mounted() {
+      (this as unknown as { $emit: (event: string, payload: unknown) => void }).$emit('ready', {
+        view: fakeEditorView,
+      });
+    },
   },
 }));
 
@@ -65,7 +78,12 @@ vi.mock('@codemirror/lang-php', () => ({
   php: vi.fn(() => Symbol('php')),
 }));
 
+vi.mock('@/lib/ai/ghost-text', () => ({
+  ghostTextExtension: Symbol('ghostTextExtension'),
+}));
+
 import CodeEditor from '@/components/editor/CodeEditor.vue';
+import { ghostTextExtension } from '@/lib/ai/ghost-text';
 import { javascript } from '@codemirror/lang-javascript';
 import { python } from '@codemirror/lang-python';
 import { html } from '@codemirror/lang-html';
@@ -106,7 +124,7 @@ describe('CodeEditor', () => {
     expect(codemirror.props('modelValue')).toBe('const x = 42;');
   });
 
-  it('should apply oneDark theme by default with no language', () => {
+  it('should apply oneDark theme and ghostTextExtension by default with no language', () => {
     const wrapper = mount(CodeEditor, {
       props: {
         modelValue: '',
@@ -115,8 +133,9 @@ describe('CodeEditor', () => {
 
     const codemirror = wrapper.findComponent({ name: 'Codemirror' });
     const extensions = codemirror.props('extensions') as symbol[];
-    expect(extensions).toHaveLength(1);
+    expect(extensions).toHaveLength(2);
     expect(extensions[0]).toBe(oneDark);
+    expect(extensions[1]).toBe(ghostTextExtension);
   });
 
   it('should include language extension when language prop is provided', () => {
@@ -129,8 +148,9 @@ describe('CodeEditor', () => {
 
     const codemirror = wrapper.findComponent({ name: 'Codemirror' });
     const extensions = codemirror.props('extensions') as symbol[];
-    expect(extensions).toHaveLength(2);
+    expect(extensions).toHaveLength(3);
     expect(extensions[0]).toBe(oneDark);
+    expect(extensions[1]).toBe(ghostTextExtension);
     expect(python).toHaveBeenCalled();
   });
 
@@ -147,7 +167,7 @@ describe('CodeEditor', () => {
 
     const codemirror = wrapper.findComponent({ name: 'Codemirror' });
     const extensions = codemirror.props('extensions') as symbol[];
-    expect(extensions).toHaveLength(2);
+    expect(extensions).toHaveLength(3);
     expect(javascript).toHaveBeenCalled();
   });
 
@@ -200,7 +220,7 @@ describe('CodeEditor', () => {
     expect(javascript).toHaveBeenCalledWith({ jsx: true });
   });
 
-  it('should fall back to oneDark only for unknown language', () => {
+  it('should fall back to oneDark and ghostTextExtension for unknown language', () => {
     const wrapper = mount(CodeEditor, {
       props: {
         modelValue: '',
@@ -210,8 +230,9 @@ describe('CodeEditor', () => {
 
     const codemirror = wrapper.findComponent({ name: 'Codemirror' });
     const extensions = codemirror.props('extensions') as symbol[];
-    expect(extensions).toHaveLength(1);
+    expect(extensions).toHaveLength(2);
     expect(extensions[0]).toBe(oneDark);
+    expect(extensions[1]).toBe(ghostTextExtension);
   });
 
   it('should support html language', () => {
@@ -267,5 +288,19 @@ describe('CodeEditor', () => {
   it('should support php language', () => {
     mount(CodeEditor, { props: { modelValue: '', language: 'php' } });
     expect(php).toHaveBeenCalled();
+  });
+
+  it('should expose EditorView via defineExpose after ready event', async () => {
+    const wrapper = mount(CodeEditor, {
+      props: { modelValue: '' },
+    });
+    await nextTick();
+
+    expect(wrapper.vm.view).toBeTruthy();
+    expect(
+      (
+        wrapper.vm.view as unknown as { state: { doc: { toString: () => string } } }
+      ).state.doc.toString(),
+    ).toBe('');
   });
 });

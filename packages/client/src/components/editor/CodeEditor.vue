@@ -15,6 +15,8 @@ import { cpp } from '@codemirror/lang-cpp';
 import { rust } from '@codemirror/lang-rust';
 import { php } from '@codemirror/lang-php';
 import type { Extension } from '@codemirror/state';
+import type { EditorView } from '@codemirror/view';
+import { ghostTextExtension } from '@/lib/ai/ghost-text';
 
 const props = defineProps<{
   modelValue: string;
@@ -43,16 +45,26 @@ const languageExtensions: Record<string, () => Extension> = {
   php: () => php(),
 };
 
-const extensions = shallowRef<Extension[]>([oneDark]);
+const view = shallowRef<EditorView | null>(null);
+
+function onReady(payload: { view: EditorView }): void {
+  view.value = payload.view;
+}
+
+const extensions = shallowRef<Extension[]>([oneDark, ghostTextExtension]);
 
 watch(
   () => props.language,
   (lang) => {
     const langExt = lang ? languageExtensions[lang]?.() : undefined;
-    extensions.value = langExt ? [oneDark, langExt] : [oneDark];
+    extensions.value = langExt
+      ? [oneDark, ghostTextExtension, langExt]
+      : [oneDark, ghostTextExtension];
   },
   { immediate: true },
 );
+
+defineExpose({ view });
 </script>
 
 <template>
@@ -64,5 +76,6 @@ watch(
     :tab-size="2"
     :indent-with-tab="true"
     @update:model-value="(val: string) => emit('update:modelValue', val)"
+    @ready="onReady"
   />
 </template>
