@@ -14,6 +14,10 @@ auth:bearer {
   token: {{accessToken}}
 }
 
+assert {
+  res.status: eq 204
+}
+
 docs {
   Delete a comment. Only the comment author can delete.
   Child comments are cascade-deleted by the database.

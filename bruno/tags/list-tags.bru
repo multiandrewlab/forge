@@ -16,6 +16,10 @@ script:post-response {
   }
 }
 
+assert {
+  res.status: eq 200
+}
+
 docs {
   List or search tags. No auth required.
   Query params:

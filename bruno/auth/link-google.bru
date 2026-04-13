@@ -17,9 +17,14 @@ body:json {
   }
 }
 
+assert {
+  res.status: eq 401
+}
+
 docs {
   Links a Google account to an existing local account.
   The linkToken comes from the Google OAuth callback redirect.
+  Returns 401 with an invalid/dummy linkToken (expected in test suite).
 }
 
 script:post-response {

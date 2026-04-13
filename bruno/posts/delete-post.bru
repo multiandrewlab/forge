@@ -5,13 +5,17 @@ meta {
 }
 
 delete {
-  url: {{baseUrl}}/api/posts/{{postId}}
+  url: {{baseUrl}}/api/posts/{{createdPostId}}
   body: none
   auth: bearer
 }
 
 auth:bearer {
   token: {{accessToken}}
+}
+
+assert {
+  res.status: eq 204
 }
 
 docs {

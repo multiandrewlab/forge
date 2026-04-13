@@ -1,0 +1,109 @@
+# Bruno API regression gate — blocks merge if any endpoint assertion fails
+# Runs the full Bruno collection against a real server + seeded Postgres
+
+name: Bruno API Regression
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  bruno-regression:
+    name: Bruno API Regression
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: forge
+          POSTGRES_PASSWORD: forge
+          POSTGRES_DB: forge
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U forge"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgres://forge:forge@localhost:5432/forge
+      JWT_SECRET: ci-test-secret
+      JWT_REFRESH_SECRET: ci-test-refresh-secret
+      NODE_ENV: test
+      PORT: 3001
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Wait for Postgres
+        run: |
+          for i in $(seq 1 60); do
+            pg_isready -h localhost -p 5432 -U forge && exit 0
+            echo "Waiting for Postgres... ($i/60)"
+            sleep 1
+          done
+          echo "Postgres did not become ready in time"
+          exit 1
+
+      - name: Run migrations
+        run: cd packages/server && npm run migrate:up
+
+      - name: Seed database
+        run: psql "$DATABASE_URL" -f scripts/seed.sql
+
+      - name: Lint — verify all .bru files have assertion blocks
+        run: |
+          set -e
+          missing=$(find bruno -name '*.bru' \
+            -not -path 'bruno/environments/*' \
+            -not -name 'collection.bru' \
+            | xargs grep -L -E '^(assert|tests) \{' || true)
+          if [ -n "$missing" ]; then
+            echo "FAIL: .bru files without assert {} or tests {} block:"
+            echo "$missing"
+            exit 1
+          fi
+          echo "All .bru files have assertion blocks."
+
+      - name: Start server
+        run: |
+          cd packages/server
+          npx tsx src/server.ts > /tmp/forge-server.log 2>&1 &
+          echo $! > /tmp/forge-server.pid
+          echo "Server PID: $(cat /tmp/forge-server.pid)"
+
+      - name: Wait for server health
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:3001/api/health > /dev/null 2>&1; then
+              echo "Server is healthy"
+              exit 0
+            fi
+            echo "Waiting for server... ($i/60)"
+            sleep 1
+          done
+          echo "Server did not become healthy in 60s. Last 50 lines of log:"
+          tail -50 /tmp/forge-server.log
+          exit 1
+
+      - name: Run Bruno regression suite
+        run: cd bruno && npx @usebruno/cli run -r --env ci
+
+      - name: Teardown server
+        if: always()
+        run: |
+          if [ -f /tmp/forge-server.pid ]; then
+            kill "$(cat /tmp/forge-server.pid)" 2>/dev/null || true
+          fi

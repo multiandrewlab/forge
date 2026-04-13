@@ -10,6 +10,10 @@ get {
   auth: none
 }
 
+assert {
+  res.status: eq 200
+}
+
 docs {
   Fetch all comments for a post, with author info and revision numbers.
   Returns flat array — client builds the tree from parent_id.

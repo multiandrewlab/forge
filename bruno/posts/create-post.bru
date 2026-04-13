@@ -27,10 +27,16 @@ body:json {
 }
 
 script:post-response {
+  // Capture the ephemeral created post into a DIFFERENT variable than the fixture.
+  // The fixture {{postId}} stays pinned via env vars so downstream reads find a stable target.
   if (res.body.post) {
-    bru.setVar("postId", res.body.post.id);
+    bru.setVar("createdPostId", res.body.post.id);
   }
   if (res.body.revision) {
-    bru.setVar("revisionId", res.body.revision.id);
+    bru.setVar("createdRevisionId", res.body.revision.id);
   }
+}
+
+assert {
+  res.status: eq 201
 }

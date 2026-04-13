@@ -16,6 +16,10 @@ script:post-response {
   }
 }
 
+assert {
+  res.status: eq 200
+}
+
 docs {
   Top tags by post count. No auth required.
   Query params:

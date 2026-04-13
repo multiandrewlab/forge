@@ -22,3 +22,7 @@ script:post-response {
     bru.setVar("accessToken", res.body.accessToken);
   }
 }
+
+assert {
+  res.status: eq 200
+}
