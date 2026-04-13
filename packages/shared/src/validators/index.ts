@@ -11,3 +11,5 @@ export type { VoteInput } from './vote.js';
 
 export { createCommentSchema, updateCommentSchema } from './comment.js';
 export type { CreateCommentInput, UpdateCommentInput } from './comment.js';
+
+export * from './ai.js';

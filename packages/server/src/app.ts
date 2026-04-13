@@ -13,7 +13,9 @@ import { bookmarkRoutes } from './routes/bookmarks.js';
 import { tagRoutes } from './routes/tags.js';
 import { commentRoutes } from './routes/comments.js';
 import { searchRoutes } from './routes/search.js';
+import { aiRoutes } from './routes/ai.js';
 import { websocketPlugin } from './plugins/websocket/index.js';
+import { langchainPlugin } from './plugins/langchain/index.js';
 
 export async function buildApp() {
   const app = Fastify({
@@ -51,6 +53,7 @@ export async function buildApp() {
 
   await app.register(rateLimitPlugin);
   await app.register(authPlugin);
+  await app.register(langchainPlugin);
   await app.register(websocketPlugin);
   await app.register(healthRoutes);
   await app.register(authRoutes, { prefix: '/api/auth' });
@@ -60,6 +63,7 @@ export async function buildApp() {
   await app.register(bookmarkRoutes, { prefix: '/api' });
   await app.register(tagRoutes, { prefix: '/api/tags' });
   await app.register(commentRoutes, { prefix: '/api/posts' });
+  await app.register(aiRoutes, { prefix: '/api/ai' });
 
   return app;
 }
