@@ -1,1 +1,25 @@
-
+script:pre-request {
+  // Idempotent auth bootstrap: logs in once per `bruno run -r` invocation.
+  // If accessToken is not yet set, authenticate as the test user and cache tokens.
+  const token = bru.getVar("accessToken");
+  if (!token) {
+    // Check if we already failed login this run — avoid hammering a rate limiter.
+    const loginFailed = bru.getVar("_authBootstrapFailed");
+    if (loginFailed) {
+      return;
+    }
+    const axios = require("axios");
+    const baseUrl = bru.getEnvVar("baseUrl");
+    const email = bru.getEnvVar("testEmail");
+    const password = bru.getEnvVar("testPassword");
+    try {
+      const res = await axios.post(baseUrl + "/api/auth/login", { email, password });
+      bru.setVar("accessToken", res.data.accessToken);
+      bru.setVar("refreshToken", res.data.refreshToken);
+    } catch (err) {
+      bru.setVar("_authBootstrapFailed", "true");
+      console.error("[auth-bootstrap] login failed:", err.message);
+      throw err;
+    }
+  }
+}
