@@ -1,7 +1,8 @@
 import { ref } from 'vue';
 import { apiFetch } from '../lib/api.js';
 import { useFeedStore } from '../stores/feed.js';
-import type { VoteValue, VoteResponse } from '@forge/shared';
+import { useWebSocket } from './useWebSocket.js';
+import type { VoteValue, VoteResponse, ServerMessage } from '@forge/shared';
 
 async function parseErrorMessage(response: Response, fallback: string): Promise<string> {
   try {
@@ -63,10 +64,23 @@ export function useVotes() {
     }
   }
 
+  function subscribeRealtime(postId: string): () => void {
+    const { subscribe } = useWebSocket();
+
+    return subscribe(`post:${postId}`, (event: ServerMessage) => {
+      if (event.type === 'vote:updated') {
+        // Only update the aggregate voteCount — the WS event doesn't carry
+        // per-user vote info, so we must not overwrite userVote.
+        store.updateVoteCount(postId, (event.data as { voteCount: number }).voteCount);
+      }
+    });
+  }
+
   return {
     error,
     loading,
     vote,
     removeVote,
+    subscribeRealtime,
   };
 }

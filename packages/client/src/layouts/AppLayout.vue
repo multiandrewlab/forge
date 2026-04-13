@@ -16,10 +16,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, watch, onUnmounted } from 'vue';
 import { RouterView } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import { useUiStore } from '../stores/ui.js';
+import { useAuthStore } from '../stores/auth.js';
+import { useWebSocket } from '../composables/useWebSocket.js';
+import { useFeed } from '../composables/useFeed.js';
 import TheSidebar from '../components/shell/TheSidebar.vue';
 import TheTopBar from '../components/shell/TheTopBar.vue';
 
@@ -37,4 +40,36 @@ function handleToggleSidebar(): void {
     uiStore.toggleSidebar();
   }
 }
+
+// ── WebSocket lifecycle tied to auth state ──────────────────────────────
+const authStore = useAuthStore();
+const ws = useWebSocket();
+const feed = useFeed();
+
+let feedCleanup: (() => void) | null = null;
+
+watch(
+  () => authStore.isAuthenticated,
+  (isAuth) => {
+    if (isAuth) {
+      ws.connect(() => Promise.resolve(authStore.accessToken ?? ''));
+      feedCleanup = feed.subscribeRealtime();
+    } else {
+      if (feedCleanup) {
+        feedCleanup();
+        feedCleanup = null;
+      }
+      ws.disconnect();
+    }
+  },
+  { immediate: true },
+);
+
+onUnmounted(() => {
+  if (feedCleanup) {
+    feedCleanup();
+    feedCleanup = null;
+  }
+  ws.disconnect();
+});
 </script>

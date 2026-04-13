@@ -60,6 +60,45 @@ vi.mock('@/components/post/CodeViewer.vue', () => ({
   },
 }));
 
+// --- Mock PresenceIndicator component ---
+vi.mock('@/components/post/PresenceIndicator.vue', () => ({
+  default: {
+    name: 'PresenceIndicator',
+    props: ['postId'],
+    template: '<div data-testid="presence-indicator"></div>',
+  },
+}));
+
+// --- Mock useComments composable (subscribeRealtime) ---
+const mockCommentsSubscribeCleanup = vi.fn();
+const mockCommentsSubscribeRealtime = vi.fn().mockReturnValue(mockCommentsSubscribeCleanup);
+
+vi.mock('@/composables/useComments', () => ({
+  useComments: () => ({
+    subscribeRealtime: mockCommentsSubscribeRealtime,
+    fetchComments: vi.fn(),
+    addComment: vi.fn(),
+    editComment: vi.fn(),
+    deleteComment: vi.fn(),
+    error: ref(null),
+    loading: ref(false),
+  }),
+}));
+
+// --- Mock useVotes composable (subscribeRealtime) ---
+const mockVotesSubscribeCleanup = vi.fn();
+const mockVotesSubscribeRealtime = vi.fn().mockReturnValue(mockVotesSubscribeCleanup);
+
+vi.mock('@/composables/useVotes', () => ({
+  useVotes: () => ({
+    subscribeRealtime: mockVotesSubscribeRealtime,
+    vote: vi.fn(),
+    removeVote: vi.fn(),
+    error: ref(null),
+    loading: ref(false),
+  }),
+}));
+
 import PostViewPage from '@/pages/PostViewPage.vue';
 
 function createMockPost(overrides: Partial<PostWithRevision> = {}): PostWithRevision {
@@ -139,6 +178,10 @@ describe('PostViewPage', () => {
     mockPostError.value = null;
     mockCurrentPost.value = null;
     mockUser.value = null;
+    mockCommentsSubscribeRealtime.mockClear();
+    mockCommentsSubscribeCleanup.mockClear();
+    mockVotesSubscribeRealtime.mockClear();
+    mockVotesSubscribeCleanup.mockClear();
   });
 
   async function mountPage(postId = 'post-1') {
@@ -405,6 +448,51 @@ describe('PostViewPage', () => {
 
       // Should stay on the post-view route, not navigate to '/'
       expect(router.currentRoute.value.name).toBe('post-view');
+    });
+  });
+
+  describe('realtime subscriptions', () => {
+    it('should subscribe to comments and votes realtime on mount', async () => {
+      const post = createMockPost();
+      mockFetchPost.mockImplementation(async () => {
+        mockCurrentPost.value = post;
+      });
+      mockUser.value = createMockUser();
+
+      await mountPage();
+      await flushPromises();
+
+      expect(mockCommentsSubscribeRealtime).toHaveBeenCalledWith('post-1');
+      expect(mockVotesSubscribeRealtime).toHaveBeenCalledWith('post-1');
+    });
+
+    it('should clean up subscriptions on unmount', async () => {
+      const post = createMockPost();
+      mockFetchPost.mockImplementation(async () => {
+        mockCurrentPost.value = post;
+      });
+      mockUser.value = createMockUser();
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      wrapper.unmount();
+
+      expect(mockCommentsSubscribeCleanup).toHaveBeenCalled();
+      expect(mockVotesSubscribeCleanup).toHaveBeenCalled();
+    });
+
+    it('should render PresenceIndicator when post is loaded', async () => {
+      const post = createMockPost();
+      mockFetchPost.mockImplementation(async () => {
+        mockCurrentPost.value = post;
+      });
+      mockUser.value = createMockUser();
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid="presence-indicator"]').exists()).toBe(true);
     });
   });
 });

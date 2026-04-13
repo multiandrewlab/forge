@@ -1,11 +1,24 @@
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { setActivePinia, createPinia } from 'pinia';
 import { apiFetch } from '../../lib/api.js';
+import { useFeedStore } from '../../stores/feed.js';
 import { useFeed } from '../../composables/useFeed.js';
 import type { PostWithAuthor } from '@forge/shared';
 
 vi.mock('../../lib/api.js', () => ({ apiFetch: vi.fn() }));
 const mockApiFetch = apiFetch as Mock;
+
+const mockSubscribe = vi.fn();
+vi.mock('../../composables/useWebSocket.js', () => ({
+  useWebSocket: () => ({
+    subscribe: mockSubscribe,
+    send: vi.fn(),
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+    clientId: 'test-client-id',
+    status: { value: 'idle' },
+  }),
+}));
 
 const mockPost: PostWithAuthor = {
   id: '1',
@@ -39,6 +52,7 @@ describe('useFeed', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     mockApiFetch.mockReset();
+    mockSubscribe.mockReset();
   });
 
   it('loadPosts fetches and populates store', async () => {
@@ -205,5 +219,88 @@ describe('useFeed', () => {
     await loadPosts();
 
     expect(error.value).toBe('Failed to load posts');
+  });
+
+  describe('subscribeRealtime', () => {
+    it('should subscribe to the feed channel', () => {
+      const mockCleanup = vi.fn();
+      mockSubscribe.mockReturnValue(mockCleanup);
+
+      const { subscribeRealtime } = useFeed();
+      const cleanup = subscribeRealtime();
+
+      expect(mockSubscribe).toHaveBeenCalledWith('feed', expect.any(Function));
+      expect(cleanup).toBe(mockCleanup);
+    });
+
+    it('should handle post:new by prepending to feed', () => {
+      const store = useFeedStore();
+      store.setPosts([mockPost]);
+
+      const newPost: PostWithAuthor = { ...mockPost, id: 'new-1', title: 'New Post' };
+      mockSubscribe.mockImplementation((_channel: string, handler: (event: unknown) => void) => {
+        handler({ type: 'post:new', channel: 'feed', data: newPost });
+        return vi.fn();
+      });
+
+      const { subscribeRealtime } = useFeed();
+      subscribeRealtime();
+
+      expect(store.posts).toHaveLength(2);
+      expect(store.posts[0].id).toBe('new-1');
+      expect(store.posts[1].id).toBe('1');
+    });
+
+    it('should handle post:updated by updating in place', () => {
+      const store = useFeedStore();
+      store.setPosts([mockPost]);
+
+      const updatedPost: PostWithAuthor = { ...mockPost, title: 'Updated Title' };
+      mockSubscribe.mockImplementation((_channel: string, handler: (event: unknown) => void) => {
+        handler({ type: 'post:updated', channel: 'feed', data: updatedPost });
+        return vi.fn();
+      });
+
+      const { subscribeRealtime } = useFeed();
+      subscribeRealtime();
+
+      expect(store.posts).toHaveLength(1);
+      expect(store.posts[0].title).toBe('Updated Title');
+    });
+
+    it('should ignore post:updated for posts not in feed', () => {
+      const store = useFeedStore();
+      store.setPosts([mockPost]);
+
+      const unknownPost: PostWithAuthor = { ...mockPost, id: 'unknown-1', title: 'Unknown' };
+      mockSubscribe.mockImplementation((_channel: string, handler: (event: unknown) => void) => {
+        handler({ type: 'post:updated', channel: 'feed', data: unknownPost });
+        return vi.fn();
+      });
+
+      const { subscribeRealtime } = useFeed();
+      subscribeRealtime();
+
+      // Feed should be unchanged
+      expect(store.posts).toHaveLength(1);
+      expect(store.posts[0].id).toBe('1');
+    });
+
+    it('should ignore non-feed event types', () => {
+      const store = useFeedStore();
+      store.setPosts([mockPost]);
+
+      mockSubscribe.mockImplementation((_channel: string, handler: (event: unknown) => void) => {
+        handler({ type: 'vote:updated', channel: 'feed', data: { voteCount: 99 } });
+        return vi.fn();
+      });
+
+      const { subscribeRealtime } = useFeed();
+      subscribeRealtime();
+
+      // Feed should be unchanged
+      expect(store.posts).toHaveLength(1);
+      expect(store.posts[0].title).toBe('Test');
+    });
   });
 });
