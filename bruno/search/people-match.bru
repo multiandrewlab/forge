@@ -1,0 +1,28 @@
+meta {
+  name: People Match
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/search?q=test
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+  res.body.snippets: isArray
+  res.body.aiActions: isArray
+  res.body.people: isArray
+  res.body.totalResults: isNumber
+}
+
+docs {
+  Search with a generic term to exercise people matching. No auth required.
+  Uses "test" as the query — may or may not match users depending on test DB state,
+  but the request structure and response shape are validated.
+  Query params:
+  - q: search term (required)
+  Response: { snippets, aiActions, people, query, totalResults }
+}

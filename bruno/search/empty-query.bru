@@ -1,0 +1,28 @@
+meta {
+  name: Empty Query
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/search?q=
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+  res.body.snippets: isArray
+  res.body.aiActions: isArray
+  res.body.people: isArray
+  res.body.totalResults: isNumber
+  res.body.totalResults: eq 0
+}
+
+docs {
+  Empty query returns zero results. No auth required.
+  The server trims q and returns an empty response when the trimmed value is "".
+  Query params:
+  - q: empty string
+  Response: { snippets: [], aiActions: [], people: [], query: "", totalResults: 0 }
+}

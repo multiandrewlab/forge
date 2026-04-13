@@ -53,6 +53,12 @@ const router = createRouter({
           name: 'post-history',
           component: () => import('@/pages/PostHistoryPage.vue'),
         },
+        {
+          path: 'search',
+          name: 'search',
+          component: () => import('@/pages/SearchPage.vue'),
+          meta: { requiresAuth: false },
+        },
       ],
     },
     // Login — wrapped in AuthLayout

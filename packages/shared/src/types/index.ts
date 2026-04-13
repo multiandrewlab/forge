@@ -88,3 +88,11 @@ export {
   postUpdatedMessageSchema,
   serverMessageSchema,
 } from './websocket.js';
+export type {
+  SearchQuery,
+  SearchSnippet,
+  AiAction,
+  UserSummary,
+  SearchResponse,
+} from './search.js';
+export { searchQuerySchema } from './search.js';

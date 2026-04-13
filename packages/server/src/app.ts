@@ -12,6 +12,7 @@ import { voteRoutes } from './routes/votes.js';
 import { bookmarkRoutes } from './routes/bookmarks.js';
 import { tagRoutes } from './routes/tags.js';
 import { commentRoutes } from './routes/comments.js';
+import { searchRoutes } from './routes/search.js';
 import { websocketPlugin } from './plugins/websocket/index.js';
 
 export async function buildApp() {
@@ -54,6 +55,7 @@ export async function buildApp() {
   await app.register(healthRoutes);
   await app.register(authRoutes, { prefix: '/api/auth' });
   await app.register(postRoutes, { prefix: '/api/posts' });
+  await app.register(searchRoutes, { prefix: '/api' });
   await app.register(voteRoutes, { prefix: '/api/posts' });
   await app.register(bookmarkRoutes, { prefix: '/api' });
   await app.register(tagRoutes, { prefix: '/api/tags' });

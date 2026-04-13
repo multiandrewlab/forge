@@ -1,0 +1,27 @@
+meta {
+  name: Filter by Type
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/search?q=react&type=snippet
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+  res.body.snippets: isArray
+  res.body.aiActions: isArray
+  res.body.people: isArray
+  res.body.totalResults: isNumber
+}
+
+docs {
+  Search with content type filter. No auth required.
+  Query params:
+  - q: search term (required)
+  - type: content type filter (snippet | prompt | document | link)
+  Response: { snippets, aiActions, people, query, totalResults }
+}

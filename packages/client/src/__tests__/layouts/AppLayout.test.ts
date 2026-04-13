@@ -23,6 +23,13 @@ vi.mock('../../components/shell/TheTopBar.vue', () => ({
   },
 }));
 
+vi.mock('../../components/shell/TheSearchModal.vue', () => ({
+  default: {
+    name: 'TheSearchModal',
+    template: '<div data-testid="search-modal"></div>',
+  },
+}));
+
 // --- Mock useWebSocket ---
 const mockConnect = vi.fn();
 const mockDisconnect = vi.fn();
@@ -265,5 +272,11 @@ describe('AppLayout', () => {
 
       expect(sidebar.props('overlayOpen')).toBe(false);
     });
+  });
+
+  // ── DoD #17: TheSearchModal is rendered ──
+  it('should render TheSearchModal', () => {
+    const wrapper = mountLayout();
+    expect(wrapper.find('[data-testid="search-modal"]').exists()).toBe(true);
   });
 });

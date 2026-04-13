@@ -93,6 +93,16 @@ describe('Router', () => {
       expect(route.name).toBe('auth-link');
     });
 
+    it('should have a search route at "/search"', () => {
+      const route = router.resolve('/search');
+      expect(route.name).toBe('search');
+    });
+
+    it('should mark search route as not requiring auth', () => {
+      const route = router.resolve('/search');
+      expect(route.meta.requiresAuth).toBe(false);
+    });
+
     it('should mark home route as requiresAuth', () => {
       const route = router.resolve('/');
       expect(route.meta.requiresAuth).toBe(true);
@@ -242,6 +252,21 @@ describe('Router', () => {
       await router.push('/auth/link');
 
       expect(router.currentRoute.value.name).toBe('auth-link');
+    });
+
+    it('should allow unauthenticated user to access search route', async () => {
+      await router.push('/search');
+
+      expect(router.currentRoute.value.name).toBe('search');
+    });
+
+    it('should allow authenticated user to access search route', async () => {
+      const store = useAuthStore();
+      store.setAuth('token', createMockUser());
+
+      await router.push('/search');
+
+      expect(router.currentRoute.value.name).toBe('search');
     });
   });
 });
