@@ -12,6 +12,7 @@
         <RouterView />
       </main>
     </div>
+    <TheSearchModal />
   </div>
 </template>
 
@@ -25,6 +26,7 @@ import { useWebSocket } from '../composables/useWebSocket.js';
 import { useFeed } from '../composables/useFeed.js';
 import TheSidebar from '../components/shell/TheSidebar.vue';
 import TheTopBar from '../components/shell/TheTopBar.vue';
+import TheSearchModal from '../components/shell/TheSearchModal.vue';
 
 const uiStore = useUiStore();
 const { sidebarCollapsed } = storeToRefs(uiStore);
