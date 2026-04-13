@@ -27,3 +27,6 @@ coverage/
 *.tsbuildinfo
 .superpowers/
 packages/server/.env
+
+# Git worktrees
+.worktrees/
