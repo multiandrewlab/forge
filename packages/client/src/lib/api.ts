@@ -1,4 +1,5 @@
 import { useAuthStore } from '@/stores/auth';
+import { useWebSocket } from '@/composables/useWebSocket';
 
 let refreshPromise: Promise<boolean> | null = null;
 
@@ -43,6 +44,15 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
 
   if (store.accessToken) {
     headers.set('Authorization', `Bearer ${store.accessToken}`);
+  }
+
+  // Inject WebSocket client ID on mutating HTTP methods so the server can
+  // exclude the originating client from its own broadcast.
+  const method = (options.method ?? 'GET').toUpperCase();
+  const MUTATING_METHODS = ['POST', 'PATCH', 'PUT', 'DELETE'];
+  if (MUTATING_METHODS.includes(method)) {
+    const { clientId } = useWebSocket();
+    headers.set('x-ws-client-id', clientId);
   }
 
   const mergedOptions: RequestInit = {

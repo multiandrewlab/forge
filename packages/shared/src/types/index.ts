@@ -46,3 +46,53 @@ export type {
   FeedResponse,
   FeedQuery,
 } from './feed.js';
+export type { VoteValue, VoteResponse } from './vote.js';
+export type { BookmarkToggleResponse } from './bookmark.js';
+export type { Tag, TagSubscriptionResponse } from './tag.js';
+export type { Comment, CommentAuthor } from './comment.js';
+export type {
+  AuthMessage,
+  SubscribeMessage,
+  UnsubscribeMessage,
+  PresenceMessage,
+  ClientMessage,
+  AuthOkMessage,
+  AuthErrorMessage,
+  AuthExpiredMessage,
+  CommentNewMessage,
+  CommentUpdatedMessage,
+  CommentDeletedMessage,
+  VoteUpdatedMessage,
+  RevisionNewMessage,
+  PresenceUpdateMessage,
+  PostNewMessage,
+  PostUpdatedMessage,
+  ServerMessage,
+} from './websocket.js';
+export {
+  authMessageSchema,
+  subscribeMessageSchema,
+  unsubscribeMessageSchema,
+  presenceMessageSchema,
+  clientMessageSchema,
+  authOkMessageSchema,
+  authErrorMessageSchema,
+  authExpiredMessageSchema,
+  commentNewMessageSchema,
+  commentUpdatedMessageSchema,
+  commentDeletedMessageSchema,
+  voteUpdatedMessageSchema,
+  revisionNewMessageSchema,
+  presenceUpdateMessageSchema,
+  postNewMessageSchema,
+  postUpdatedMessageSchema,
+  serverMessageSchema,
+} from './websocket.js';
+export type {
+  SearchQuery,
+  SearchSnippet,
+  AiAction,
+  UserSummary,
+  SearchResponse,
+} from './search.js';
+export { searchQuerySchema } from './search.js';

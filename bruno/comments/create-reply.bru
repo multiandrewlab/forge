@@ -1,0 +1,30 @@
+meta {
+  name: Create Reply
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/posts/{{postId}}/comments
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "body": "I agree with this comment!",
+    "parentId": "{{commentId}}"
+  }
+}
+
+docs {
+  Create a threaded reply to an existing comment.
+
+  Response: 201 { comment: Comment }
+
+  Requires {{postId}} and {{commentId}} from Create Comment.
+}

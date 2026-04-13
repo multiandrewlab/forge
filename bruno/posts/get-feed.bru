@@ -16,10 +16,14 @@ auth:bearer {
 
 docs {
   Query params:
-  - sort: trending | recent | top (default: recent)
+  - sort: trending | recent | top | personalized (default: recent)
   - filter: mine | bookmarked (optional)
   - tag: string (optional)
   - type: snippet | prompt | document | link (optional)
   - cursor: base64 pagination cursor (optional)
   - limit: 1-100 (default: 20)
+
+  sort=personalized returns posts tagged with the user's subscribed tags,
+  ranked by recency weighted by vote_count. Falls back to trending if the
+  user has no tag subscriptions.
 }

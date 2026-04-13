@@ -1,0 +1,20 @@
+meta {
+  name: Unsubscribe from Tag
+  type: http
+  seq: 4
+}
+
+delete {
+  url: {{baseUrl}}/api/tags/{{tagId}}/subscribe
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+docs {
+  Unsubscribe from a tag. Returns 404 if not subscribed.
+  Response: { subscribed: false }
+}

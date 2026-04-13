@@ -5,7 +5,7 @@ vi.mock('../../../db/connection.js', () => ({
 }));
 
 import { query } from '../../../db/connection.js';
-import { findFeedPosts } from '../../../db/queries/feed.js';
+import { findFeedPosts, findFeedPostById } from '../../../db/queries/feed.js';
 import type { PostWithAuthorRow } from '../../../db/queries/feed.js';
 
 const mockQuery = query as Mock;
@@ -85,6 +85,58 @@ describe('findFeedPosts', () => {
       const [sql] = mockQuery.mock.calls[0] as [string, unknown[]];
       // trending sort formula includes time decay
       expect(sql.toLowerCase()).toContain('epoch');
+    });
+  });
+
+  describe('sort=personalized', () => {
+    it('checks subscriptions and adds EXISTS clause with hotness ORDER BY when user has subscriptions', async () => {
+      // First call: subscription check returns a row (user has subscriptions)
+      mockQuery.mockResolvedValueOnce({ rows: [{ '?column?': 1 }], rowCount: 1 });
+      // Second call: the actual feed query
+      mockQuery.mockResolvedValueOnce({ rows: [sampleRow], rowCount: 1 });
+
+      const result = await findFeedPosts({ userId, sort: 'personalized' });
+
+      // Should have made 2 queries: subscription check + feed query
+      expect(mockQuery).toHaveBeenCalledTimes(2);
+
+      // First query: subscription check
+      const [subSql, subParams] = mockQuery.mock.calls[0] as [string, unknown[]];
+      expect(subSql).toContain('user_tag_subscriptions');
+      expect(subSql).toContain('LIMIT 1');
+      expect(subParams).toEqual([userId]);
+
+      // Second query: feed query with EXISTS and hotness ORDER BY
+      const [feedSql, feedParams] = mockQuery.mock.calls[1] as [string, unknown[]];
+      expect(feedSql).toContain('EXISTS');
+      expect(feedSql).toContain('post_tags pt_sub');
+      expect(feedSql).toContain('user_tag_subscriptions uts');
+      expect(feedSql).toContain('uts.user_id');
+      expect(feedParams).toContain(userId);
+      // Hotness ORDER BY: vote_count with time decay
+      expect(feedSql).toContain('vote_count');
+      expect(feedSql.toLowerCase()).toContain('epoch');
+
+      expect(result.posts).toHaveLength(1);
+    });
+
+    it('falls back to trending sort when user has no subscriptions', async () => {
+      // First call: subscription check returns no rows
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+      // Second call: the actual feed query (trending fallback)
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+      await findFeedPosts({ userId, sort: 'personalized' });
+
+      // Should have made 2 queries: subscription check + feed query
+      expect(mockQuery).toHaveBeenCalledTimes(2);
+
+      // Second query: should use trending sort (GREATEST pattern), no EXISTS clause
+      const [feedSql] = mockQuery.mock.calls[1] as [string, unknown[]];
+      expect(feedSql).not.toContain('EXISTS');
+      // Trending sort uses GREATEST pattern
+      expect(feedSql).toContain('GREATEST');
+      expect(feedSql.toLowerCase()).toContain('epoch');
     });
   });
 
@@ -179,5 +231,45 @@ describe('findFeedPosts', () => {
       const [sql] = mockQuery.mock.calls[0] as [string, unknown[]];
       expect(sql).not.toContain("'; DROP TABLE posts; --");
     });
+  });
+});
+
+describe('findFeedPostById', () => {
+  beforeEach(() => {
+    mockQuery.mockReset();
+  });
+
+  it('returns PostWithAuthorRow when post exists', async () => {
+    mockQuery.mockResolvedValue({ rows: [sampleRow], rowCount: 1 });
+
+    const result = await findFeedPostById(sampleRow.id);
+
+    expect(result).toEqual(sampleRow);
+    expect(mockQuery).toHaveBeenCalledOnce();
+    const [sql, params] = mockQuery.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('p.id =');
+    expect(sql).toContain('author_display_name');
+    expect(sql).toContain('author_avatar_url');
+    expect(sql).toContain('tags');
+    expect(params).toEqual([sampleRow.id]);
+  });
+
+  it('returns null when post does not exist', async () => {
+    mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });
+
+    const result = await findFeedPostById('nonexistent-id');
+
+    expect(result).toBeNull();
+    expect(mockQuery).toHaveBeenCalledOnce();
+  });
+
+  it('handles post without tags (tags column is null)', async () => {
+    const rowWithoutTags: PostWithAuthorRow = { ...sampleRow, tags: null };
+    mockQuery.mockResolvedValue({ rows: [rowWithoutTags], rowCount: 1 });
+
+    const result = await findFeedPostById(sampleRow.id);
+
+    expect(result).toEqual(rowWithoutTags);
+    expect(result?.tags).toBeNull();
   });
 });

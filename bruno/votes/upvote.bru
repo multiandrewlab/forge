@@ -1,0 +1,32 @@
+meta {
+  name: Upvote Post
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/posts/{{postId}}/vote
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "value": 1
+  }
+}
+
+docs {
+  Idempotent vote toggle.
+  - If no existing vote: creates upvote
+  - If already upvoted: removes vote (toggle off)
+  - If downvoted: switches to upvote
+
+  Response: { voteCount: number, userVote: 1 | -1 | null }
+
+  Requires {{postId}} from Create Post or Get Feed.
+}

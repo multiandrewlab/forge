@@ -1,0 +1,21 @@
+meta {
+  name: Toggle Bookmark
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/posts/{{postId}}/bookmark
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+docs {
+  Toggles bookmark on a post.
+  - If not bookmarked: creates bookmark, returns { bookmarked: true }
+  - If already bookmarked: removes bookmark, returns { bookmarked: false }
+}

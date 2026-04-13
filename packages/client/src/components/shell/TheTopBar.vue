@@ -19,12 +19,17 @@
       <span class="text-lg font-bold text-primary">Forge</span>
     </div>
     <div class="relative mx-4 flex-1">
-      <input
-        type="text"
-        placeholder="Search... (Cmd+K)"
-        readonly
-        class="w-full max-w-md rounded-lg border border-gray-600 bg-gray-800 px-4 py-1.5 text-sm text-gray-400 placeholder-gray-500 focus:outline-none"
-      />
+      <button
+        data-testid="search-trigger"
+        class="flex w-full max-w-md items-center justify-between rounded-lg border border-gray-600 bg-gray-800 px-4 py-1.5 text-sm text-gray-400 hover:border-gray-500 focus:outline-none"
+        @click="searchStore.open()"
+      >
+        <span>Search...</span>
+        <kbd
+          class="ml-2 rounded border border-gray-600 bg-gray-700 px-1.5 py-0.5 text-xs text-gray-400"
+          >Cmd+K</kbd
+        >
+      </button>
     </div>
     <button class="text-gray-400 hover:text-white" aria-label="Toggle dark mode" @click="toggle">
       <svg v-if="darkMode" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -49,9 +54,15 @@
 
 <script setup lang="ts">
 import { useDarkMode } from '../../composables/useDarkMode.js';
+import { useSearchStore } from '../../stores/search.js';
+import { useKeyboard } from '../../composables/useKeyboard.js';
 
 defineProps<{ sidebarCollapsed: boolean }>();
 defineEmits<{ toggleSidebar: [] }>();
 
 const { darkMode, toggle } = useDarkMode();
+const searchStore = useSearchStore();
+const { register } = useKeyboard();
+
+register('mod+k', () => searchStore.open());
 </script>

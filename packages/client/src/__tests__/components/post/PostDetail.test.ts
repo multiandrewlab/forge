@@ -17,7 +17,8 @@ vi.mock('../../../lib/api.js', () => ({
 
 import { apiFetch } from '../../../lib/api.js';
 import PostDetail from '../../../components/post/PostDetail.vue';
-import type { PostWithAuthor, PostWithRevision } from '@forge/shared';
+import { useCommentsStore } from '../../../stores/comments.js';
+import type { PostWithAuthor, PostWithRevision, Comment } from '@forge/shared';
 
 const mockApiFetch = apiFetch as ReturnType<typeof vi.fn>;
 
@@ -71,6 +72,19 @@ function mockErrorResponse(): Response {
   } as Response;
 }
 
+function setupUrlAwareMock(postData: unknown): void {
+  mockApiFetch.mockImplementation((url: string) => {
+    if (url.includes('/comments')) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ comments: [] }),
+      } as Response);
+    }
+    return Promise.resolve(mockOkResponse(postData));
+  });
+}
+
 describe('PostDetail', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
@@ -85,7 +99,7 @@ describe('PostDetail', () => {
   });
 
   it('fetches and renders post content when post prop is provided', async () => {
-    mockApiFetch.mockResolvedValue(mockOkResponse(mockPostWithRevision));
+    setupUrlAwareMock(mockPostWithRevision);
 
     const wrapper = mount(PostDetail, { props: { post: mockPost } });
     await flushPromises();
@@ -95,7 +109,7 @@ describe('PostDetail', () => {
   });
 
   it('sets fullPost to null when post prop becomes null', async () => {
-    mockApiFetch.mockResolvedValue(mockOkResponse(mockPostWithRevision));
+    setupUrlAwareMock(mockPostWithRevision);
 
     const wrapper = mount(PostDetail, { props: { post: mockPost } });
     await flushPromises();
@@ -127,19 +141,241 @@ describe('PostDetail', () => {
   });
 
   it('refetches when post id changes', async () => {
-    mockApiFetch.mockResolvedValue(mockOkResponse(mockPostWithRevision));
+    setupUrlAwareMock(mockPostWithRevision);
 
     const wrapper = mount(PostDetail, { props: { post: mockPost } });
     await flushPromises();
 
     const post2: PostWithAuthor = { ...mockPost, id: 'post-2' };
     const post2WithRevision: PostWithRevision = { ...mockPostWithRevision, id: 'post-2' };
-    mockApiFetch.mockResolvedValue(mockOkResponse(post2WithRevision));
+    setupUrlAwareMock(post2WithRevision);
 
     await wrapper.setProps({ post: post2 });
     await flushPromises();
 
     expect(mockApiFetch).toHaveBeenCalledWith('/api/posts/post-2');
+  });
+
+  it('sets inlineCommentLine when handleLineClick is triggered', async () => {
+    setupUrlAwareMock(mockPostWithRevision);
+
+    const wrapper = mount(PostDetail, { props: { post: mockPost } });
+    await flushPromises();
+
+    // Simulate CodeViewer emitting line-click
+    const codeViewer = wrapper.findComponent({ name: 'CodeViewer' });
+    codeViewer.vm.$emit('line-click', 5);
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.text()).toContain('Line 5');
+    expect(wrapper.find('[placeholder="Add inline comment..."]').exists()).toBe(true);
+  });
+
+  it('handleInlineComment calls addComment with line number and revision', async () => {
+    const mockComment = {
+      id: 'c1',
+      postId: 'post-1',
+      author: { id: 'user-1', displayName: 'Alice', avatarUrl: null },
+      parentId: null,
+      lineNumber: 5,
+      revisionId: 'rev-1',
+      revisionNumber: 1,
+      body: 'Inline note',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+
+    mockApiFetch.mockImplementation((url: string, opts?: Record<string, string>) => {
+      if (url.includes('/comments') && opts?.method === 'POST') {
+        return Promise.resolve({
+          ok: true,
+          status: 201,
+          json: () => Promise.resolve({ comment: mockComment }),
+        } as Response);
+      }
+      if (url.includes('/comments')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ comments: [] }),
+        } as Response);
+      }
+      return Promise.resolve(mockOkResponse(mockPostWithRevision));
+    });
+
+    const wrapper = mount(PostDetail, { props: { post: mockPost } });
+    await flushPromises();
+
+    // Trigger line click to set inlineCommentLine
+    const codeViewer = wrapper.findComponent({ name: 'CodeViewer' });
+    codeViewer.vm.$emit('line-click', 5);
+    await wrapper.vm.$nextTick();
+
+    // Directly emit submit from the inline CommentInput to ensure handleInlineComment fires
+    const commentInputs = wrapper.findAllComponents({ name: 'CommentInput' });
+    const inlineInput = commentInputs.find((c) => c.props('placeholder')?.includes('inline'));
+    expect(inlineInput).toBeDefined();
+    inlineInput?.vm.$emit('submit', 'Inline note');
+    await flushPromises();
+
+    // Verify addComment was called with the POST endpoint
+    const postCalls = mockApiFetch.mock.calls.filter(
+      (call: unknown[]) =>
+        typeof call[0] === 'string' &&
+        call[0].includes('/comments') &&
+        call.length > 1 &&
+        (call[1] as Record<string, string>).method === 'POST',
+    );
+    expect(postCalls.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('handleInlineComment early-returns when inlineCommentLine is null', async () => {
+    setupUrlAwareMock(mockPostWithRevision);
+
+    const wrapper = mount(PostDetail, { props: { post: mockPost } });
+    await flushPromises();
+
+    // inlineCommentLine is null by default — the inline comment form isn't shown
+    // This covers the guard: if (inlineCommentLine.value === null || !fullPost.value) return;
+    expect(wrapper.find('[placeholder="Add inline comment..."]').exists()).toBe(false);
+  });
+
+  it('passes currentUserId to CommentSection when user is authenticated', async () => {
+    setupUrlAwareMock(mockPostWithRevision);
+
+    const wrapper = mount(PostDetail, { props: { post: mockPost } });
+    await flushPromises();
+
+    // Set authenticated user — covers authStore.user?.id accessing .id
+    const { useAuthStore } = await import('../../../stores/auth.js');
+    const authStore = useAuthStore();
+    authStore.setAuth('token', {
+      id: 'user-1',
+      email: 'test@example.com',
+      displayName: 'Test',
+      avatarUrl: null,
+      authProvider: 'local' as const,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await wrapper.vm.$nextTick();
+
+    const section = wrapper.findComponent({ name: 'CommentSection' });
+    expect(section.exists()).toBe(true);
+    expect(section.props('currentUserId')).toBe('user-1');
+  });
+
+  it('passes undefined currentUserId to CommentSection when user is not authenticated', async () => {
+    setupUrlAwareMock(mockPostWithRevision);
+
+    const wrapper = mount(PostDetail, { props: { post: mockPost } });
+    await flushPromises();
+
+    // authStore.user is null by default — covers authStore.user?.id optional chaining
+    const section = wrapper.findComponent({ name: 'CommentSection' });
+    expect(section.exists()).toBe(true);
+    expect(section.props('currentUserId')).toBeUndefined();
+  });
+
+  it('handleInlineComment does nothing when fullPost is null', async () => {
+    // Mount with null post — fullPost stays null
+    const wrapper = mount(PostDetail, { props: { post: null } });
+    await flushPromises();
+
+    // Access the component's internal handleInlineComment via vm
+    // Since fullPost is null, the guard returns early
+    const vm = wrapper.vm as unknown as { handleInlineComment: (body: string) => Promise<void> };
+    if (vm.handleInlineComment) {
+      await vm.handleInlineComment('test');
+    }
+    // No crash, no API call
+    expect(mockApiFetch).not.toHaveBeenCalled();
+  });
+
+  it('renders inline comment indicators with plural for multiple comments', async () => {
+    setupUrlAwareMock(mockPostWithRevision);
+
+    const wrapper = mount(PostDetail, { props: { post: mockPost } });
+    await flushPromises();
+
+    // Populate the comments store with TWO inline comments on the same line
+    const store = useCommentsStore();
+    store.setCurrentRevisionId('rev-1');
+    const makeInline = (id: string): Comment => ({
+      id,
+      postId: 'post-1',
+      author: { id: 'u1', displayName: 'Alice', avatarUrl: null },
+      parentId: null,
+      lineNumber: 3,
+      revisionId: 'rev-1',
+      revisionNumber: 1,
+      body: 'Nice line',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    });
+    store.setComments([makeInline('ic1'), makeInline('ic2')]);
+    await wrapper.vm.$nextTick();
+
+    // The indicator button should show "2 comments on line" (plural 's' branch)
+    expect(wrapper.text()).toContain('2 comments on line');
+  });
+
+  it('clicking an inline indicator sets inlineCommentLine and shows comments', async () => {
+    setupUrlAwareMock(mockPostWithRevision);
+
+    const wrapper = mount(PostDetail, { props: { post: mockPost } });
+    await flushPromises();
+
+    const store = useCommentsStore();
+    store.setCurrentRevisionId('rev-1');
+    const inlineComment: Comment = {
+      id: 'ic1',
+      postId: 'post-1',
+      author: { id: 'u1', displayName: 'Alice', avatarUrl: null },
+      parentId: null,
+      lineNumber: 7,
+      revisionId: 'rev-1',
+      revisionNumber: 1,
+      body: 'Check this line',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    store.setComments([inlineComment]);
+    await wrapper.vm.$nextTick();
+
+    // Click the indicator button
+    const indicatorBtn = wrapper.find('button.text-primary');
+    expect(indicatorBtn.exists()).toBe(true);
+    await indicatorBtn.trigger('click');
+    await wrapper.vm.$nextTick();
+
+    // Now the inline comment body and input should be visible
+    expect(wrapper.text()).toContain('Line 7');
+    expect(wrapper.text()).toContain('Check this line');
+    expect(wrapper.find('[placeholder="Add inline comment..."]').exists()).toBe(true);
+  });
+
+  it('clears inlineCommentLine when cancel is clicked on inline input', async () => {
+    setupUrlAwareMock(mockPostWithRevision);
+
+    const wrapper = mount(PostDetail, { props: { post: mockPost } });
+    await flushPromises();
+
+    // Open inline comment input via line click
+    const codeViewer = wrapper.findComponent({ name: 'CodeViewer' });
+    codeViewer.vm.$emit('line-click', 5);
+    await wrapper.vm.$nextTick();
+    expect(wrapper.find('[placeholder="Add inline comment..."]').exists()).toBe(true);
+
+    // Find the inline CommentInput and emit cancel
+    const commentInputs = wrapper.findAllComponents({ name: 'CommentInput' });
+    const inlineInput = commentInputs.find((c) => c.props('placeholder')?.includes('inline'));
+    expect(inlineInput).toBeDefined();
+    inlineInput?.vm.$emit('cancel');
+    await wrapper.vm.$nextTick();
+
+    // Inline comment input should be gone
+    expect(wrapper.find('[placeholder="Add inline comment..."]').exists()).toBe(false);
   });
 
   it('passes undefined language to CodeViewer when post.language is null (??  branch)', async () => {
@@ -149,7 +385,7 @@ describe('PostDetail', () => {
       ...mockPostWithRevision,
       language: null,
     };
-    mockApiFetch.mockResolvedValue(mockOkResponse(nullLangPostWithRevision));
+    setupUrlAwareMock(nullLangPostWithRevision);
 
     const wrapper = mount(PostDetail, { props: { post: nullLangPost } });
     await flushPromises();

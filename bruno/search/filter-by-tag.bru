@@ -1,0 +1,27 @@
+meta {
+  name: Filter by Tag
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/search?q=hooks&tag=javascript
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+  res.body.snippets: isArray
+  res.body.aiActions: isArray
+  res.body.people: isArray
+  res.body.totalResults: isNumber
+}
+
+docs {
+  Search with tag filter. No auth required.
+  Query params:
+  - q: search term (required)
+  - tag: tag name filter (optional)
+  Response: { snippets, aiActions, people, query, totalResults }
+}

@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount } from '@vue/test-utils';
+import { setActivePinia, createPinia } from 'pinia';
 import { createRouter, createMemoryHistory } from 'vue-router';
+import { useFeedStore } from '../../../stores/feed.js';
 import PostListItem from '../../../components/post/PostListItem.vue';
 import type { PostWithAuthor } from '@forge/shared';
 
@@ -130,6 +132,31 @@ describe('PostListItem', () => {
         global: { plugins: [router] },
       });
       expect(wrapper.text()).toContain('2d ago');
+    });
+  });
+
+  describe('vote count reactivity via store', () => {
+    it('updates displayed vote count when store.updatePostVote is called', async () => {
+      setActivePinia(createPinia());
+      const store = useFeedStore();
+      const reactivePost: PostWithAuthor = {
+        ...mockPost,
+        voteCount: 5,
+      };
+      store.setPosts([reactivePost]);
+
+      const router = createTestRouter();
+      const wrapper = mount(PostListItem, {
+        props: { post: store.posts[0], selected: false },
+        global: { plugins: [router] },
+      });
+
+      expect(wrapper.text()).toContain('5');
+
+      store.updatePostVote('1', 42, 1);
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.text()).toContain('42');
     });
   });
 });

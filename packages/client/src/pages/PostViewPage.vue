@@ -1,8 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import CodeViewer from '@/components/post/CodeViewer.vue';
+import PresenceIndicator from '@/components/post/PresenceIndicator.vue';
 import { usePosts } from '@/composables/usePosts';
+import { useComments } from '@/composables/useComments';
+import { useVotes } from '@/composables/useVotes';
 import { storeToRefs } from 'pinia';
 import { usePostsStore } from '@/stores/posts';
 import { useAuth } from '@/composables/useAuth';
@@ -16,6 +19,8 @@ const { user } = useAuth();
 const loading = ref(true);
 const isAuthor = ref(false);
 
+const cleanupFns: Array<() => void> = [];
+
 const latestRevision = computed(() => {
   if (!currentPost.value) return undefined;
   return currentPost.value.revisions[0];
@@ -28,6 +33,16 @@ onMounted(async () => {
     isAuthor.value = currentPost.value.authorId === user.value.id;
   }
   loading.value = false;
+
+  // Subscribe to real-time comment and vote events for this post
+  cleanupFns.push(useComments().subscribeRealtime(id));
+  cleanupFns.push(useVotes().subscribeRealtime(id));
+});
+
+onUnmounted(() => {
+  for (const cleanup of cleanupFns) {
+    cleanup();
+  }
 });
 
 async function handleDelete(): Promise<void> {
@@ -58,7 +73,10 @@ async function handleDelete(): Promise<void> {
       <template v-else-if="currentPost">
         <div class="flex items-start justify-between mb-4">
           <div>
-            <h1 class="text-2xl font-bold text-white">{{ currentPost.title }}</h1>
+            <div class="flex items-center gap-3">
+              <h1 class="text-2xl font-bold text-white">{{ currentPost.title }}</h1>
+              <PresenceIndicator :post-id="currentPost.id" />
+            </div>
             <div class="flex items-center gap-2 mt-1 text-sm text-gray-400">
               <span>{{ currentPost.contentType }}</span>
               <span v-if="currentPost.language">{{ currentPost.language }}</span>

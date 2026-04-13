@@ -9,6 +9,14 @@ export async function upsertVote(userId: string, postId: string, value: number):
   return result.rows[0] as VoteRow;
 }
 
+export async function getUserVote(userId: string, postId: string): Promise<VoteRow | null> {
+  const result = await query<VoteRow>('SELECT * FROM votes WHERE user_id = $1 AND post_id = $2', [
+    userId,
+    postId,
+  ]);
+  return result.rows[0] ?? null;
+}
+
 export async function deleteVote(userId: string, postId: string): Promise<boolean> {
   const result = await query('DELETE FROM votes WHERE user_id = $1 AND post_id = $2', [
     userId,

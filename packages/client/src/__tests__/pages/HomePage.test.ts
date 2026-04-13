@@ -85,9 +85,15 @@ describe('HomePage', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     mockApiFetch.mockReset();
-    // Feed load returns posts; post detail fetch returns empty
+    // Feed load returns posts; post detail fetch returns detail; comments returns empty
     mockApiFetch.mockImplementation((url: string) => {
       if ((url as string).includes('/api/posts?')) return makeFeedResponse();
+      if ((url as string).includes('/comments'))
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ comments: [] }),
+        } as Response);
       return makePostDetailResponse();
     });
   });

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/* global setTimeout */
+/* global setTimeout, MouseEvent, HTMLElement */
 import { ref, watch, onMounted } from 'vue';
 import { codeToHtml } from 'shiki';
 
@@ -10,6 +10,10 @@ declare const navigator: { clipboard: { writeText: (text: string) => Promise<voi
 const props = defineProps<{
   code: string;
   language?: string;
+}>();
+
+const emit = defineEmits<{
+  'line-click': [lineNumber: number];
 }>();
 
 const highlightedHtml = ref('');
@@ -32,6 +36,21 @@ async function highlight(): Promise<void> {
 onMounted(highlight);
 watch(() => [props.code, props.language], highlight);
 
+function handleLineClick(event: MouseEvent): void {
+  const target = event.target as HTMLElement;
+  const line = target.closest('.line');
+  /* v8 ignore next -- covered by "no .line ancestor" test; v8 miscounts due to Vue SFC transform */
+  if (!line) return;
+  const container = line.parentElement;
+  /* v8 ignore next -- parentElement is never null for a mounted DOM element */
+  if (!container) return;
+  const lines = Array.from(container.querySelectorAll('.line'));
+  const lineNumber = lines.indexOf(line) + 1;
+  if (lineNumber > 0) {
+    emit('line-click', lineNumber);
+  }
+}
+
 async function copyToClipboard(): Promise<void> {
   await navigator.clipboard.writeText(props.code);
   copied.value = true;
@@ -49,6 +68,6 @@ async function copyToClipboard(): Promise<void> {
     >
       {{ copied ? 'Copied!' : 'Copy' }}
     </button>
-    <div class="rounded overflow-auto text-sm" v-html="highlightedHtml" />
+    <div class="rounded overflow-auto text-sm" @click="handleLineClick" v-html="highlightedHtml" />
   </div>
 </template>

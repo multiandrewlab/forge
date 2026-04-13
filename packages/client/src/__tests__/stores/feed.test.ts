@@ -74,6 +74,24 @@ describe('useFeedStore', () => {
     expect(store.filter).toBe('mine');
   });
 
+  it('setTag updates tag', () => {
+    const store = useFeedStore();
+    store.setTag('frontend');
+    expect(store.tag).toBe('frontend');
+  });
+
+  it('setContentType updates contentType', () => {
+    const store = useFeedStore();
+    store.setContentType('snippet');
+    expect(store.contentType).toBe('snippet');
+  });
+
+  it('setSelectedPostId updates selectedPostId', () => {
+    const store = useFeedStore();
+    store.setSelectedPostId('post-1');
+    expect(store.selectedPostId).toBe('post-1');
+  });
+
   it('reset clears all state', () => {
     const store = useFeedStore();
     store.setPosts([mockPost]);
@@ -85,5 +103,91 @@ describe('useFeedStore', () => {
     expect(store.sort).toBe('recent');
     expect(store.filter).toBeNull();
     expect(store.cursor).toBeNull();
+  });
+
+  describe('userVotes', () => {
+    it('initializes as empty object', () => {
+      const store = useFeedStore();
+      expect(store.userVotes).toEqual({});
+    });
+
+    it('updatePostVote sets vote and updates post voteCount', () => {
+      const store = useFeedStore();
+      store.setPosts([mockPost]);
+      store.updatePostVote('1', 10, 1);
+      expect(store.userVotes['1']).toBe(1);
+      expect(store.posts[0].voteCount).toBe(10);
+    });
+
+    it('updatePostVote removes entry when userVote is null', () => {
+      const store = useFeedStore();
+      store.setPosts([mockPost]);
+      store.updatePostVote('1', 10, 1);
+      expect(store.userVotes['1']).toBe(1);
+      store.updatePostVote('1', 5, null);
+      expect(store.userVotes['1']).toBeUndefined();
+      expect(store.posts[0].voteCount).toBe(5);
+    });
+
+    it('updatePostVote handles non-existent postId gracefully', () => {
+      const store = useFeedStore();
+      store.setPosts([mockPost]);
+      store.updatePostVote('nonexistent', 10, 1);
+      expect(store.userVotes['nonexistent']).toBe(1);
+      // post array unchanged
+      expect(store.posts[0].voteCount).toBe(5);
+    });
+  });
+
+  describe('updateVoteCount', () => {
+    it('updates voteCount without touching userVotes', () => {
+      const store = useFeedStore();
+      store.setPosts([mockPost]);
+      store.updatePostVote('1', 5, 1);
+      store.updateVoteCount('1', 42);
+      expect(store.posts[0].voteCount).toBe(42);
+      // userVote should remain untouched
+      expect(store.userVotes['1']).toBe(1);
+    });
+
+    it('handles non-existent postId gracefully', () => {
+      const store = useFeedStore();
+      const post = { ...mockPost, voteCount: 5 };
+      store.setPosts([post]);
+      store.updateVoteCount('nonexistent', 99);
+      // existing post unchanged
+      expect(store.posts[0].voteCount).toBe(5);
+    });
+  });
+
+  describe('userBookmarks', () => {
+    it('initializes as empty object', () => {
+      const store = useFeedStore();
+      expect(store.userBookmarks).toEqual({});
+    });
+
+    it('setBookmark sets bookmarked state to true', () => {
+      const store = useFeedStore();
+      store.setBookmark('1', true);
+      expect(store.userBookmarks['1']).toBe(true);
+    });
+
+    it('setBookmark removes entry when bookmarked is false', () => {
+      const store = useFeedStore();
+      store.setBookmark('1', true);
+      expect(store.userBookmarks['1']).toBe(true);
+      store.setBookmark('1', false);
+      expect(store.userBookmarks['1']).toBeUndefined();
+    });
+  });
+
+  it('reset clears userVotes and userBookmarks', () => {
+    const store = useFeedStore();
+    store.setPosts([mockPost]);
+    store.updatePostVote('1', 10, 1);
+    store.setBookmark('1', true);
+    store.reset();
+    expect(store.userVotes).toEqual({});
+    expect(store.userBookmarks).toEqual({});
   });
 });

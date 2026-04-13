@@ -1,0 +1,26 @@
+meta {
+  name: Popular Tags
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/tags/popular?limit=10
+  body: none
+  auth: none
+}
+
+script:post-response {
+  if (res.body.tags && res.body.tags.length > 0) {
+    bru.setVar("tagId", res.body.tags[0].id);
+  }
+}
+
+docs {
+  Top tags by post count. No auth required.
+  Query params:
+  - limit: 1-50 (default: 10)
+  Response: { tags: Tag[] }
+
+  Post-response script captures first tag ID as {{tagId}}.
+}

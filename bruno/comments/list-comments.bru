@@ -1,0 +1,22 @@
+meta {
+  name: List Comments
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/posts/{{postId}}/comments
+  body: none
+  auth: none
+}
+
+docs {
+  Fetch all comments for a post, with author info and revision numbers.
+  Returns flat array — client builds the tree from parent_id.
+
+  Optional query param: ?revision=<uuid> to filter by revision.
+
+  Response: { comments: Comment[] }
+
+  Requires {{postId}} from Create Post or Get Feed.
+}

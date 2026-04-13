@@ -1,0 +1,21 @@
+meta {
+  name: Subscribe to Tag
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/tags/{{tagId}}/subscribe
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+docs {
+  Subscribe to a tag. Idempotent — returns success even if already subscribed.
+  Requires {{tagId}} — get from List Tags or Popular Tags.
+  Response: { subscribed: true, alreadySubscribed: boolean }
+}

@@ -4,6 +4,18 @@ import { useAuthStore } from '@/stores/auth';
 import type { User } from '@forge/shared';
 import { AuthProvider } from '@forge/shared';
 
+// Mock useWebSocket to return a stable clientId
+vi.mock('@/composables/useWebSocket', () => ({
+  useWebSocket: () => ({
+    clientId: 'test-ws-client-id',
+    subscribe: vi.fn(),
+    send: vi.fn(),
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+    status: { value: 'idle' },
+  }),
+}));
+
 function createMockUser(overrides: Partial<User> = {}): User {
   return {
     id: 'user-1',
@@ -284,6 +296,96 @@ describe('apiFetch', () => {
       expect(result1.status).toBe(200);
       expect(result2.status).toBe(200);
       expect(store.accessToken).toBe('new-token');
+    });
+  });
+
+  describe('x-ws-client-id header injection', () => {
+    it('should inject x-ws-client-id on POST requests', async () => {
+      const mockResponse = new Response('{}', { status: 200 });
+      mockFetch.mockResolvedValue(mockResponse);
+
+      await apiFetch('/api/posts', { method: 'POST', body: '{}' });
+
+      const [, options] = mockFetch.mock.calls[0] as [string, RequestInit];
+      const headers = new Headers(options.headers);
+      expect(headers.get('x-ws-client-id')).toBe('test-ws-client-id');
+    });
+
+    it('should inject x-ws-client-id on PATCH requests', async () => {
+      const mockResponse = new Response('{}', { status: 200 });
+      mockFetch.mockResolvedValue(mockResponse);
+
+      await apiFetch('/api/posts/1', { method: 'PATCH', body: '{}' });
+
+      const [, options] = mockFetch.mock.calls[0] as [string, RequestInit];
+      const headers = new Headers(options.headers);
+      expect(headers.get('x-ws-client-id')).toBe('test-ws-client-id');
+    });
+
+    it('should inject x-ws-client-id on PUT requests', async () => {
+      const mockResponse = new Response('{}', { status: 200 });
+      mockFetch.mockResolvedValue(mockResponse);
+
+      await apiFetch('/api/posts/1', { method: 'PUT', body: '{}' });
+
+      const [, options] = mockFetch.mock.calls[0] as [string, RequestInit];
+      const headers = new Headers(options.headers);
+      expect(headers.get('x-ws-client-id')).toBe('test-ws-client-id');
+    });
+
+    it('should inject x-ws-client-id on DELETE requests', async () => {
+      const mockResponse = new Response('{}', { status: 200 });
+      mockFetch.mockResolvedValue(mockResponse);
+
+      await apiFetch('/api/posts/1', { method: 'DELETE' });
+
+      const [, options] = mockFetch.mock.calls[0] as [string, RequestInit];
+      const headers = new Headers(options.headers);
+      expect(headers.get('x-ws-client-id')).toBe('test-ws-client-id');
+    });
+
+    it('should NOT inject x-ws-client-id on GET requests', async () => {
+      const mockResponse = new Response('{}', { status: 200 });
+      mockFetch.mockResolvedValue(mockResponse);
+
+      await apiFetch('/api/posts');
+
+      const [, options] = mockFetch.mock.calls[0] as [string, RequestInit];
+      const headers = new Headers(options.headers);
+      expect(headers.has('x-ws-client-id')).toBe(false);
+    });
+
+    it('should NOT inject x-ws-client-id on HEAD requests', async () => {
+      const mockResponse = new Response(null, { status: 200 });
+      mockFetch.mockResolvedValue(mockResponse);
+
+      await apiFetch('/api/posts', { method: 'HEAD' });
+
+      const [, options] = mockFetch.mock.calls[0] as [string, RequestInit];
+      const headers = new Headers(options.headers);
+      expect(headers.has('x-ws-client-id')).toBe(false);
+    });
+
+    it('should NOT inject x-ws-client-id on OPTIONS requests', async () => {
+      const mockResponse = new Response(null, { status: 200 });
+      mockFetch.mockResolvedValue(mockResponse);
+
+      await apiFetch('/api/posts', { method: 'OPTIONS' });
+
+      const [, options] = mockFetch.mock.calls[0] as [string, RequestInit];
+      const headers = new Headers(options.headers);
+      expect(headers.has('x-ws-client-id')).toBe(false);
+    });
+
+    it('should treat requests with no explicit method as GET (no header)', async () => {
+      const mockResponse = new Response('{}', { status: 200 });
+      mockFetch.mockResolvedValue(mockResponse);
+
+      await apiFetch('/api/posts', {});
+
+      const [, options] = mockFetch.mock.calls[0] as [string, RequestInit];
+      const headers = new Headers(options.headers);
+      expect(headers.has('x-ws-client-id')).toBe(false);
     });
   });
 });

@@ -1,0 +1,27 @@
+meta {
+  name: List Tags
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/tags?limit=20
+  body: none
+  auth: none
+}
+
+script:post-response {
+  if (res.body.tags && res.body.tags.length > 0) {
+    bru.setVar("tagId", res.body.tags[0].id);
+  }
+}
+
+docs {
+  List or search tags. No auth required.
+  Query params:
+  - q: search prefix (optional, e.g. ?q=react)
+  - limit: 1-50 (default: 20)
+  Response: { tags: Tag[] } where Tag = { id, name, postCount }
+
+  Post-response script captures first tag ID as {{tagId}}.
+}

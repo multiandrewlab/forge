@@ -1,5 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { mount, flushPromises } from '@vue/test-utils';
+import { nextTick, shallowRef } from 'vue';
+
+const fakeEditorView = {
+  state: {
+    doc: { toString: () => 'console.log("hello")' },
+    selection: { main: { head: 5 } },
+  },
+  contentDOM: document.createElement('div'),
+};
 
 // Mock child components to avoid loading CodeMirror
 vi.mock('@/components/editor/CodeEditor.vue', () => ({
@@ -8,6 +17,30 @@ vi.mock('@/components/editor/CodeEditor.vue', () => ({
     props: ['modelValue', 'language', 'readonly'],
     emits: ['update:modelValue'],
     template: '<div data-testid="code-editor-stub"></div>',
+    setup(
+      _props: Record<string, unknown>,
+      { expose }: { expose: (exposed: Record<string, unknown>) => void },
+    ) {
+      const view = shallowRef(fakeEditorView);
+      expose({ view });
+      return {};
+    },
+  },
+}));
+
+const aiRequestCompletionMock = vi.fn();
+vi.mock('@/components/editor/AiSuggestion.vue', () => ({
+  default: {
+    name: 'AiSuggestion',
+    props: ['editorView'],
+    template: '<span data-testid="ai-suggestion-stub"></span>',
+    setup(
+      _props: Record<string, unknown>,
+      { expose }: { expose: (exposed: Record<string, unknown>) => void },
+    ) {
+      expose({ requestCompletion: aiRequestCompletionMock });
+      return {};
+    },
   },
 }));
 
@@ -188,6 +221,37 @@ describe('PostEditor', () => {
       const emitted = wrapper.emitted('update:tags');
       expect(emitted).toBeTruthy();
       expect((emitted as unknown[][])[0]).toEqual([['vue', 'typescript']]);
+    });
+  });
+
+  describe('AI suggestion integration', () => {
+    it('should mount AiSuggestion when editorView is available', async () => {
+      const w = mount(PostEditor, { props: { ...defaultProps } });
+      await nextTick();
+      await flushPromises();
+
+      expect(w.find('[data-testid="ai-suggestion-stub"]').exists()).toBe(true);
+    });
+
+    it('should call AiSuggestion.requestCompletion when modelValue changes', async () => {
+      aiRequestCompletionMock.mockClear();
+      const w = mount(PostEditor, { props: { ...defaultProps } });
+      await nextTick();
+      await flushPromises();
+
+      await w.setProps({ modelValue: 'const y = 10;' });
+      await nextTick();
+      await flushPromises();
+
+      expect(aiRequestCompletionMock).toHaveBeenCalled();
+      const call = aiRequestCompletionMock.mock.calls[0][0] as {
+        before: string;
+        after: string;
+        language: string;
+      };
+      expect(call.language).toBe('javascript');
+      expect(typeof call.before).toBe('string');
+      expect(typeof call.after).toBe('string');
     });
   });
 });

@@ -1,6 +1,12 @@
 import { ref, computed } from 'vue';
 import { defineStore } from 'pinia';
-import type { PostWithAuthor, FeedSort, FeedFilter, FeedContentType } from '@forge/shared';
+import type {
+  PostWithAuthor,
+  FeedSort,
+  FeedFilter,
+  FeedContentType,
+  VoteValue,
+} from '@forge/shared';
 
 export const useFeedStore = defineStore('feed', () => {
   const posts = ref<PostWithAuthor[]>([]);
@@ -10,6 +16,8 @@ export const useFeedStore = defineStore('feed', () => {
   const tag = ref<string | null>(null);
   const filter = ref<FeedFilter | null>(null);
   const contentType = ref<FeedContentType | null>(null);
+  const userVotes = ref<Record<string, VoteValue>>({});
+  const userBookmarks = ref<Record<string, boolean>>({});
 
   const hasMore = computed(() => cursor.value !== null);
 
@@ -45,6 +53,37 @@ export const useFeedStore = defineStore('feed', () => {
     selectedPostId.value = id;
   }
 
+  function updatePostVote(postId: string, voteCount: number, userVote: VoteValue | null): void {
+    const post = posts.value.find((p) => p.id === postId);
+    if (post) {
+      post.voteCount = voteCount;
+    }
+    if (userVote === null) {
+      userVotes.value = Object.fromEntries(
+        Object.entries(userVotes.value).filter(([key]) => key !== postId),
+      );
+    } else {
+      userVotes.value[postId] = userVote;
+    }
+  }
+
+  function updateVoteCount(postId: string, voteCount: number): void {
+    const post = posts.value.find((p) => p.id === postId);
+    if (post) {
+      post.voteCount = voteCount;
+    }
+  }
+
+  function setBookmark(postId: string, bookmarked: boolean): void {
+    if (bookmarked) {
+      userBookmarks.value[postId] = true;
+    } else {
+      userBookmarks.value = Object.fromEntries(
+        Object.entries(userBookmarks.value).filter(([key]) => key !== postId),
+      );
+    }
+  }
+
   function reset(): void {
     posts.value = [];
     sort.value = 'recent';
@@ -53,6 +92,8 @@ export const useFeedStore = defineStore('feed', () => {
     tag.value = null;
     filter.value = null;
     contentType.value = null;
+    userVotes.value = {};
+    userBookmarks.value = {};
   }
 
   return {
@@ -72,6 +113,11 @@ export const useFeedStore = defineStore('feed', () => {
     setTag,
     setContentType,
     setSelectedPostId,
+    userVotes,
+    userBookmarks,
+    updatePostVote,
+    updateVoteCount,
+    setBookmark,
     reset,
   };
 });

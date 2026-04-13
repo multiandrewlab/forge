@@ -5,7 +5,7 @@ vi.mock('../../../db/connection.js', () => ({
 }));
 
 import { query } from '../../../db/connection.js';
-import { upsertVote, deleteVote } from '../../../db/queries/votes.js';
+import { upsertVote, deleteVote, getUserVote } from '../../../db/queries/votes.js';
 import type { VoteRow } from '../../../db/queries/types.js';
 
 const mockQuery = query as Mock;
@@ -54,6 +54,24 @@ describe('vote queries', () => {
       mockQuery.mockResolvedValue({ rowCount: null });
       const result = await deleteVote('u1', 'p1');
       expect(result).toBe(false);
+    });
+  });
+
+  describe('getUserVote', () => {
+    it('returns the vote row when a vote exists', async () => {
+      mockQuery.mockResolvedValue({ rows: [sampleVote], rowCount: 1 });
+      const result = await getUserVote(sampleVote.user_id, sampleVote.post_id);
+      expect(mockQuery).toHaveBeenCalledWith(
+        'SELECT * FROM votes WHERE user_id = $1 AND post_id = $2',
+        [sampleVote.user_id, sampleVote.post_id],
+      );
+      expect(result).toEqual(sampleVote);
+    });
+
+    it('returns null when no vote exists', async () => {
+      mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });
+      const result = await getUserVote('u1', 'p1');
+      expect(result).toBeNull();
     });
   });
 });

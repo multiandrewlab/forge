@@ -1,6 +1,9 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+/* global setTimeout, clearTimeout */
+import { ref, watch, computed } from 'vue';
 import { ContentType, Visibility } from '@forge/shared';
+import type { Tag } from '@forge/shared';
+import { useTags } from '@/composables/useTags.js';
 
 const props = defineProps<{
   language: string;
@@ -15,6 +18,8 @@ const emit = defineEmits<{
   'update:contentType': [value: ContentType];
   'update:tags': [value: string[]];
 }>();
+
+const { searchTags } = useTags();
 
 const languages = [
   'javascript',
@@ -41,6 +46,34 @@ const contentTypes: { label: string; value: ContentType }[] = [
 ];
 
 const tagInput = ref('');
+const rawSuggestions = ref<Tag[]>([]);
+let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+const suggestions = computed(() =>
+  rawSuggestions.value.filter((tag) => !props.tags.includes(tag.name)),
+);
+
+watch(tagInput, (value) => {
+  if (debounceTimer !== null) {
+    clearTimeout(debounceTimer);
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    rawSuggestions.value = [];
+    return;
+  }
+
+  debounceTimer = setTimeout(() => {
+    searchTags(trimmed, 10)
+      .then((results) => {
+        rawSuggestions.value = results;
+      })
+      .catch(() => {
+        rawSuggestions.value = [];
+      });
+  }, 200);
+});
 
 /* global Event */
 function onLanguageChange(event: Event): void {
@@ -62,9 +95,21 @@ function toggleVisibility(): void {
 
 function addTag(): void {
   const tag = tagInput.value.trim();
-  if (!tag || props.tags.includes(tag)) return;
+  if (!tag || props.tags.includes(tag)) {
+    tagInput.value = '';
+    rawSuggestions.value = [];
+    return;
+  }
   emit('update:tags', [...props.tags, tag]);
   tagInput.value = '';
+  rawSuggestions.value = [];
+}
+
+function selectSuggestion(tag: Tag): void {
+  if (props.tags.includes(tag.name)) return;
+  emit('update:tags', [...props.tags, tag.name]);
+  tagInput.value = '';
+  rawSuggestions.value = [];
 }
 
 function removeTag(index: number): void {
@@ -126,15 +171,32 @@ function removeTag(index: number): void {
           x
         </button>
       </span>
-      <input
-        v-if="tags.length < 10"
-        v-model="tagInput"
-        data-testid="tag-input"
-        type="text"
-        placeholder="Add tag..."
-        class="rounded border border-surface-500 bg-surface-700 px-2 py-0.5 text-xs text-gray-300 placeholder-gray-500"
-        @keydown.enter.prevent="addTag"
-      />
+      <div v-if="tags.length < 10" class="relative">
+        <input
+          v-model="tagInput"
+          data-testid="tag-input"
+          type="text"
+          placeholder="Add tag..."
+          class="rounded border border-surface-500 bg-surface-700 px-2 py-0.5 text-xs text-gray-300 placeholder-gray-500"
+          @keydown.enter.prevent="addTag"
+        />
+        <div
+          v-if="suggestions.length > 0"
+          data-testid="tag-suggestions"
+          class="absolute top-full left-0 z-10 mt-1 w-48 rounded border border-surface-500 bg-surface-700 py-1 shadow-lg"
+        >
+          <button
+            v-for="suggestion in suggestions"
+            :key="suggestion.id"
+            data-testid="tag-suggestion-item"
+            class="flex w-full items-center justify-between px-3 py-1 text-xs text-gray-300 hover:bg-surface-600"
+            @click="selectSuggestion(suggestion)"
+          >
+            <span>{{ suggestion.name }}</span>
+            <span class="text-gray-500">{{ suggestion.postCount }}</span>
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </template>

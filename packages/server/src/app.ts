@@ -8,6 +8,14 @@ import { rateLimitPlugin } from './plugins/rate-limit.js';
 import { healthRoutes } from './routes/health.js';
 import { authRoutes } from './routes/auth.js';
 import { postRoutes } from './routes/posts.js';
+import { voteRoutes } from './routes/votes.js';
+import { bookmarkRoutes } from './routes/bookmarks.js';
+import { tagRoutes } from './routes/tags.js';
+import { commentRoutes } from './routes/comments.js';
+import { searchRoutes } from './routes/search.js';
+import { aiRoutes } from './routes/ai.js';
+import { langchainPlugin } from './plugins/langchain/index.js';
+import { websocketPlugin } from './plugins/websocket/index.js';
 
 export async function buildApp() {
   const app = Fastify({
@@ -45,9 +53,17 @@ export async function buildApp() {
 
   await app.register(rateLimitPlugin);
   await app.register(authPlugin);
+  await app.register(langchainPlugin);
+  await app.register(websocketPlugin);
   await app.register(healthRoutes);
   await app.register(authRoutes, { prefix: '/api/auth' });
   await app.register(postRoutes, { prefix: '/api/posts' });
+  await app.register(searchRoutes, { prefix: '/api' });
+  await app.register(voteRoutes, { prefix: '/api/posts' });
+  await app.register(bookmarkRoutes, { prefix: '/api' });
+  await app.register(tagRoutes, { prefix: '/api/tags' });
+  await app.register(commentRoutes, { prefix: '/api/posts' });
+  await app.register(aiRoutes, { prefix: '/api/ai' });
 
   return app;
 }
