@@ -12,6 +12,7 @@ import { voteRoutes } from './routes/votes.js';
 import { bookmarkRoutes } from './routes/bookmarks.js';
 import { tagRoutes } from './routes/tags.js';
 import { commentRoutes } from './routes/comments.js';
+import { websocketPlugin } from './plugins/websocket/index.js';
 
 export async function buildApp() {
   const app = Fastify({
@@ -49,6 +50,7 @@ export async function buildApp() {
 
   await app.register(rateLimitPlugin);
   await app.register(authPlugin);
+  await app.register(websocketPlugin);
   await app.register(healthRoutes);
   await app.register(authRoutes, { prefix: '/api/auth' });
   await app.register(postRoutes, { prefix: '/api/posts' });

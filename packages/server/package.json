@@ -20,6 +20,7 @@
     "@fastify/jwt": "^10.0.0",
     "@fastify/oauth2": "^8.2.0",
     "@fastify/rate-limit": "^10.3.0",
+    "@fastify/websocket": "^11.2.0",
     "@forge/shared": "*",
     "bcryptjs": "^3.0.3",
     "fastify": "^5.0.0",
@@ -31,6 +32,7 @@
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^22.0.0",
     "@types/pg": "^8.20.0",
+    "@types/ws": "^8.18.1",
     "tsx": "^4.0.0",
     "typescript": "^5.7.0",
     "vitest": "^3.0.0"
