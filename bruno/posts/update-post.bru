@@ -5,7 +5,7 @@ meta {
 }
 
 patch {
-  url: {{baseUrl}}/api/posts/{{postId}}
+  url: {{baseUrl}}/api/posts/{{createdPostId}}
   body: json
   auth: bearer
 }
@@ -19,4 +19,8 @@ body:json {
     "title": "Updated Title",
     "visibility": "public"
   }
+}
+
+assert {
+  res.status: eq 200
 }

@@ -20,6 +20,10 @@ body:json {
   }
 }
 
+assert {
+  res.status: eq 200
+}
+
 docs {
   Edit a comment's body. Only the comment author can edit.
 

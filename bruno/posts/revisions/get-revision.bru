@@ -10,6 +10,10 @@ get {
   auth: none
 }
 
+assert {
+  res.status: eq 200
+}
+
 docs {
   Returns a single revision by its revision number. No auth required.
 }

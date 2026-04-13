@@ -5,13 +5,17 @@ meta {
 }
 
 post {
-  url: {{baseUrl}}/api/posts/{{postId}}/publish
+  url: {{baseUrl}}/api/posts/{{createdPostId}}/publish
   body: none
   auth: bearer
 }
 
 auth:bearer {
   token: {{accessToken}}
+}
+
+assert {
+  res.status: eq 200
 }
 
 docs {

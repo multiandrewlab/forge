@@ -12,15 +12,23 @@ post {
 
 body:json {
   {
-    "email": "testuser@example.com",
-    "display_name": "Test User",
+    "email": "{{registerEmail}}",
+    "display_name": "Register Test User",
     "password": "password123",
     "confirm_password": "password123"
   }
+}
+
+script:pre-request {
+  bru.setVar("registerEmail", `register-test-${Date.now()}@example.com`);
 }
 
 script:post-response {
   if (res.body.accessToken) {
     bru.setVar("accessToken", res.body.accessToken);
   }
+}
+
+assert {
+  res.status: eq 200
 }

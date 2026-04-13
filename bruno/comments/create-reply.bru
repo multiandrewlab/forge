@@ -21,6 +21,10 @@ body:json {
   }
 }
 
+assert {
+  res.status: eq 201
+}
+
 docs {
   Create a threaded reply to an existing comment.
 

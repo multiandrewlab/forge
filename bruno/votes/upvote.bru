@@ -20,6 +20,10 @@ body:json {
   }
 }
 
+assert {
+  res.status: eq 200
+}
+
 docs {
   Idempotent vote toggle.
   - If no existing vote: creates upvote

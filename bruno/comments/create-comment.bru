@@ -26,6 +26,10 @@ script:post-response {
   }
 }
 
+assert {
+  res.status: eq 201
+}
+
 docs {
   Create a general comment on a post.
 

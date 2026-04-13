@@ -1,0 +1,25 @@
+meta {
+  name: Remove Vote (No Existing Vote)
+  type: http
+  seq: 4
+}
+
+delete {
+  url: {{baseUrl}}/api/posts/{{postId}}/vote
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+assert {
+  res.status: eq 404
+}
+
+docs {
+  Error-path test: attempts to remove a vote that does not exist.
+  Runs after Remove Vote (seq 3) has already cleared any vote.
+  Expected: 404 { error: "Vote not found" }
+}

@@ -63,19 +63,39 @@ The validation phase of orchestrated execution reads `.coverage-thresholds.json`
 
 Every feature that adds or modifies API endpoints **must** include Bruno request files in `bruno/`. This is a BLOCKING requirement — the same as unit tests and coverage.
 
+See `bruno/README.md` for contributor conventions, the expected-status reference table, and troubleshooting.
+
 ### Requirements
 
 - **New endpoints**: Create `.bru` files in the appropriate `bruno/<resource>/` directory
-- **Post-response scripts**: Capture IDs (e.g., `commentId`, `revisionId`) so subsequent requests can reference them
-- **E2E verification**: After implementation, run the Bruno requests against a running server and verify all return expected status codes
-- **Run command**: `cd bruno && npx @usebruno/cli run <directory> --env local`
-- **Full collection**: `cd bruno && npx @usebruno/cli run -r --env local`
+- **Status assertion block (MANDATORY)**: Every `.bru` file MUST contain an `assert { res.status: eq <CODE> }` block. A file without an assertion block fails CI before the suite runs (lint-guard in `.github/workflows/bruno-regression.yml`). Without the assertion, a 5xx response would silently count as "passed" — the issue that motivated this gate (#28).
+- **Post-response scripts**: Capture IDs created during the run (e.g., `createdPostId`) so subsequent requests can reference them. Use `createdPostId` / `createdRevisionId` for ephemeral resources; the fixture `postId` / `revisionId` stays pinned in `environments/local.bru` to seeded UUIDs.
+- **E2E verification**: After implementation, run the full suite against a running server and verify all return expected status codes.
+- **Run command (single folder)**: `cd bruno && npx @usebruno/cli run <directory> --env local`
+- **Full collection**: `npm run bruno` (from repo root) or `cd bruno && npx @usebruno/cli run -r --env local`
+
+### Auth bootstrap
+
+The collection has an idempotent login hook at `bruno/collection.bru` (`script:pre-request`) that logs in as the seeded `testuser@example.com` on the first request of any `bruno run -r` invocation and populates `{{accessToken}}` + `{{refreshToken}}` for the rest of the run. New `.bru` files that use `auth: bearer` with `token: {{accessToken}}` get authentication automatically — no need to manually login.
+
+### Seeded fixtures (pin `.bru` env vars to these)
+
+`scripts/seed.sql` provides deterministic UUIDs. `bruno/environments/local.bru` pins:
+
+| Variable     | Fixture                                                                               |
+| ------------ | ------------------------------------------------------------------------------------- |
+| `postId`     | `c0000000-...-000000000099` — testuser-owned snippet post (public, not draft)         |
+| `revisionId` | `d0000000-...-000000000099` — testuser-authored initial revision of that post         |
+| `commentId`  | `e0000000-...-000000000099` — testuser-authored top-level comment on that post        |
+| `tagId`      | `b0000000-...-000000000001` — `typescript` tag                                        |
+| `testuser`   | `a0000000-...-000000000099` / `testuser@example.com` / `password123` (bcrypt cost-12) |
 
 ### When to run
 
 - After completing all work units for a feature (before final review)
 - The server must be running with `.env` loaded: `set -a && source .env && set +a && cd packages/server && npx tsx src/server.ts`
-- All requests in the modified directory must return success status codes (2xx)
+- All requests in the modified directory must return their asserted status codes
+- The `bruno-regression` CI workflow runs this automatically on every PR — failures block merge
 
 ### Existing collection structure
 
@@ -85,9 +105,14 @@ bruno/
 ├── bookmarks/     # 2 requests
 ├── comments/      # 7 requests
 ├── health/        # 1 request
-├── posts/         # 7 requests + revisions/ (3)
+├── posts/         # 6 requests + revisions/ (3)
+├── search/        # 6 requests
 ├── tags/          # 5 requests
-└── votes/         # 3 requests
+├── votes/         # 4 requests (3 happy-path + 1 error-path)
+├── collection.bru      # collection-root auth bootstrap
+└── environments/
+    ├── local.bru
+    └── ci.bru
 ```
 
 ## Quality Gates
