@@ -10,6 +10,10 @@ get {
   auth: none
 }
 
+assert {
+  res.status: eq 200
+}
+
 docs {
   Fetch comments filtered to a specific revision (plus general comments with no revision).
 

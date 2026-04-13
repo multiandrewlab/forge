@@ -27,3 +27,7 @@ script:post-response {
     bru.setVar("revisionId", res.body.revision.id);
   }
 }
+
+assert {
+  res.status: eq 201
+}

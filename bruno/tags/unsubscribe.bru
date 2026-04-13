@@ -14,6 +14,10 @@ auth:bearer {
   token: {{accessToken}}
 }
 
+assert {
+  res.status: eq 204
+}
+
 docs {
   Unsubscribe from a tag. Returns 404 if not subscribed.
   Response: { subscribed: false }

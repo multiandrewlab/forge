@@ -10,8 +10,12 @@ get {
   auth: none
 }
 
+assert {
+  res.status: eq 501
+}
+
 docs {
   This endpoint is called by Google during the OAuth flow.
   It is not meant to be called directly — included for reference.
-  Returns 501 if Google OAuth is not configured.
+  Returns 501 if Google OAuth is not configured (stub mode).
 }

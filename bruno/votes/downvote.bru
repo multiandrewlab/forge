@@ -20,6 +20,10 @@ body:json {
   }
 }
 
+assert {
+  res.status: eq 200
+}
+
 docs {
   Same toggle logic as upvote but with value: -1.
   Response: { voteCount: number, userVote: 1 | -1 | null }

@@ -22,6 +22,10 @@ body:json {
   }
 }
 
+assert {
+  res.status: eq 201
+}
+
 docs {
   Create an inline comment anchored to a specific line and revision.
 

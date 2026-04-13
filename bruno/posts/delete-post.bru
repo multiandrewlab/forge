@@ -14,6 +14,10 @@ auth:bearer {
   token: {{accessToken}}
 }
 
+assert {
+  res.status: eq 204
+}
+
 docs {
   Soft-deletes the post (sets deletedAt timestamp).
   Only the post author can delete.
