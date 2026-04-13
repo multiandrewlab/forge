@@ -42,12 +42,25 @@ vi.mock('../../lib/api.js', () => ({
   apiFetch: (...args: unknown[]) => mockApiFetch(...args) as unknown,
 }));
 
+const mockSubscribe = vi.fn();
+vi.mock('../../composables/useWebSocket.js', () => ({
+  useWebSocket: () => ({
+    subscribe: mockSubscribe,
+    send: vi.fn(),
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+    clientId: 'test-client-id',
+    status: { value: 'idle' },
+  }),
+}));
+
 import { useComments } from '../../composables/useComments.js';
 
 describe('useComments', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     mockApiFetch.mockReset();
+    mockSubscribe.mockReset();
   });
 
   describe('fetchComments', () => {
@@ -453,6 +466,79 @@ describe('useComments', () => {
       mockApiFetch.mockResolvedValueOnce(mockResponse({}));
       await deleteComment('p1', 'c1');
       expect(error.value).toBeNull();
+    });
+  });
+
+  describe('subscribeRealtime', () => {
+    it('should subscribe to the post channel', () => {
+      const mockCleanup = vi.fn();
+      mockSubscribe.mockReturnValue(mockCleanup);
+
+      const { subscribeRealtime } = useComments();
+      const cleanup = subscribeRealtime('p1');
+
+      expect(mockSubscribe).toHaveBeenCalledWith('post:p1', expect.any(Function));
+      expect(cleanup).toBe(mockCleanup);
+    });
+
+    it('should handle comment:new by adding to store', () => {
+      const store = useCommentsStore();
+      mockSubscribe.mockImplementation((_channel: string, handler: (event: unknown) => void) => {
+        handler({ type: 'comment:new', channel: 'post:p1', data: mockComment });
+        return vi.fn();
+      });
+
+      const { subscribeRealtime } = useComments();
+      subscribeRealtime('p1');
+
+      expect(store.comments).toEqual([mockComment]);
+    });
+
+    it('should handle comment:updated by updating store', () => {
+      const store = useCommentsStore();
+      store.setComments([mockComment]);
+
+      const updated: Comment = { ...mockComment, body: 'Updated via WS' };
+      mockSubscribe.mockImplementation((_channel: string, handler: (event: unknown) => void) => {
+        handler({ type: 'comment:updated', channel: 'post:p1', data: updated });
+        return vi.fn();
+      });
+
+      const { subscribeRealtime } = useComments();
+      subscribeRealtime('p1');
+
+      expect(store.comments[0].body).toBe('Updated via WS');
+    });
+
+    it('should handle comment:deleted by removing from store', () => {
+      const store = useCommentsStore();
+      store.setComments([mockComment]);
+
+      mockSubscribe.mockImplementation((_channel: string, handler: (event: unknown) => void) => {
+        handler({ type: 'comment:deleted', channel: 'post:p1', data: { id: 'c1' } });
+        return vi.fn();
+      });
+
+      const { subscribeRealtime } = useComments();
+      subscribeRealtime('p1');
+
+      expect(store.comments).toEqual([]);
+    });
+
+    it('should ignore non-comment event types', () => {
+      const store = useCommentsStore();
+      store.setComments([mockComment]);
+
+      mockSubscribe.mockImplementation((_channel: string, handler: (event: unknown) => void) => {
+        handler({ type: 'presence:update', channel: 'post:p1', data: { users: [] } });
+        return vi.fn();
+      });
+
+      const { subscribeRealtime } = useComments();
+      subscribeRealtime('p1');
+
+      // Store should be unchanged
+      expect(store.comments).toEqual([mockComment]);
     });
   });
 });

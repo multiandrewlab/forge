@@ -11,6 +11,7 @@ import {
 } from '../db/queries/comments.js';
 import { toComment } from '../services/comments.js';
 import type { CommentWithAuthorRow } from '../db/queries/types.js';
+import { getExcludeWs } from '../plugins/websocket/broadcast.js';
 
 export async function commentRoutes(app: FastifyInstance): Promise<void> {
   // GET /:id/comments — public, no auth required
@@ -59,18 +60,23 @@ export async function commentRoutes(app: FastifyInstance): Promise<void> {
     const rows = await findCommentsByPostIdWithAuthor(id);
     const created = rows.find((r) => r.id === raw.id);
 
-    if (created) {
-      return reply.status(201).send({ comment: toComment(created) });
-    }
+    const commentData = created
+      ? toComment(created)
+      : toComment({
+          ...raw,
+          author_display_name: null,
+          author_avatar_url: null,
+          revision_number: null,
+        } satisfies CommentWithAuthorRow);
 
-    // Fallback: construct a minimal CommentWithAuthorRow from the raw insert
-    const fallback: CommentWithAuthorRow = {
-      ...raw,
-      author_display_name: null,
-      author_avatar_url: null,
-      revision_number: null,
-    };
-    return reply.status(201).send({ comment: toComment(fallback) });
+    const excludeWs = getExcludeWs(app, request);
+    app.websocket.channels.broadcast(
+      `post:${id}`,
+      { type: 'comment:new', channel: `post:${id}`, data: commentData },
+      excludeWs,
+    );
+
+    return reply.status(201).send({ comment: commentData });
   });
 
   // PATCH /:id/comments/:cid — authenticated, ownership check
@@ -104,19 +110,24 @@ export async function commentRoutes(app: FastifyInstance): Promise<void> {
     const rows = await findCommentsByPostIdWithAuthor(id);
     const updated = rows.find((r) => r.id === cid);
 
-    if (updated) {
-      return reply.send({ comment: toComment(updated) });
-    }
+    const commentData = updated
+      ? toComment(updated)
+      : toComment({
+          ...existing,
+          body: parsed.data.body,
+          author_display_name: null,
+          author_avatar_url: null,
+          revision_number: null,
+        } satisfies CommentWithAuthorRow);
 
-    // Fallback: use existing row with updated body
-    const fallback: CommentWithAuthorRow = {
-      ...existing,
-      body: parsed.data.body,
-      author_display_name: null,
-      author_avatar_url: null,
-      revision_number: null,
-    };
-    return reply.send({ comment: toComment(fallback) });
+    const excludeWs = getExcludeWs(app, request);
+    app.websocket.channels.broadcast(
+      `post:${id}`,
+      { type: 'comment:updated', channel: `post:${id}`, data: commentData },
+      excludeWs,
+    );
+
+    return reply.send({ comment: commentData });
   });
 
   // DELETE /:id/comments/:cid — authenticated, ownership check
@@ -138,6 +149,13 @@ export async function commentRoutes(app: FastifyInstance): Promise<void> {
     }
 
     await deleteComment(cid);
+
+    const excludeWs = getExcludeWs(app, request);
+    app.websocket.channels.broadcast(
+      `post:${id}`,
+      { type: 'comment:deleted', channel: `post:${id}`, data: { id: cid } },
+      excludeWs,
+    );
 
     return reply.status(204).send();
   });

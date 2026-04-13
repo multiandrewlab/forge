@@ -48,10 +48,12 @@ const sampleVote: VoteRow = {
 describe('vote routes', () => {
   let app: FastifyInstance;
   let token: string;
+  let broadcastSpy: ReturnType<typeof vi.spyOn>;
 
   beforeAll(async () => {
     app = await buildApp();
     token = app.jwt.sign({ id: userId, email: 'test@example.com', displayName: 'Test User' });
+    broadcastSpy = vi.spyOn(app.websocket.channels, 'broadcast');
   });
 
   afterAll(async () => {
@@ -89,6 +91,13 @@ describe('vote routes', () => {
       const body = response.json();
       expect(body.voteCount).toBe(1);
       expect(body.userVote).toBe(1);
+
+      // Verify broadcast was called
+      expect(broadcastSpy).toHaveBeenCalledWith(
+        `post:${postId}`,
+        { type: 'vote:updated', channel: `post:${postId}`, data: { voteCount: 1 } },
+        undefined,
+      );
     });
 
     it('toggles off same vote and returns 200 with userVote=null', async () => {
@@ -115,6 +124,13 @@ describe('vote routes', () => {
       const body = response.json();
       expect(body.voteCount).toBe(-1);
       expect(body.userVote).toBeNull();
+
+      // Verify broadcast was called
+      expect(broadcastSpy).toHaveBeenCalledWith(
+        `post:${postId}`,
+        { type: 'vote:updated', channel: `post:${postId}`, data: { voteCount: -1 } },
+        undefined,
+      );
     });
 
     it('changes vote direction and returns 200 with new userVote', async () => {
@@ -145,6 +161,43 @@ describe('vote routes', () => {
       const body = response.json();
       expect(body.voteCount).toBe(2);
       expect(body.userVote).toBe(1);
+    });
+
+    it('broadcasts with excludeWs when x-ws-client-id header is present', async () => {
+      const clientId = 'ws-vote-client-1';
+      const fakeSocket = { readyState: 1, send: () => {} };
+      app.websocket.connections.addConnection(userId, fakeSocket, clientId);
+
+      // findPostById — post exists
+      mockQuery.mockResolvedValueOnce({ rows: [samplePostRow], rowCount: 1 });
+      // getUserVote — no existing vote
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+      // upsertVote — insert new vote
+      mockQuery.mockResolvedValueOnce({ rows: [sampleVote], rowCount: 1 });
+      // findPostById — re-read for updated vote_count
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ ...samplePostRow, vote_count: 1 }],
+        rowCount: 1,
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/posts/${postId}/vote`,
+        headers: {
+          authorization: `Bearer ${token}`,
+          'x-ws-client-id': clientId,
+        },
+        payload: { value: 1 },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(broadcastSpy).toHaveBeenCalledWith(
+        `post:${postId}`,
+        expect.objectContaining({ type: 'vote:updated' }),
+        fakeSocket,
+      );
+
+      app.websocket.connections.removeConnection(userId, fakeSocket, clientId);
     });
 
     it('returns 404 when post not found', async () => {
@@ -260,6 +313,13 @@ describe('vote routes', () => {
       const body = response.json();
       expect(body.voteCount).toBe(-1);
       expect(body.userVote).toBeNull();
+
+      // Verify broadcast was called
+      expect(broadcastSpy).toHaveBeenCalledWith(
+        `post:${postId}`,
+        { type: 'vote:updated', channel: `post:${postId}`, data: { voteCount: -1 } },
+        undefined,
+      );
     });
 
     it('falls back to original vote_count when post re-read returns null (race condition)', async () => {

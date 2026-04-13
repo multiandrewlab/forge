@@ -139,6 +139,27 @@ describe('useFeedStore', () => {
     });
   });
 
+  describe('updateVoteCount', () => {
+    it('updates voteCount without touching userVotes', () => {
+      const store = useFeedStore();
+      store.setPosts([mockPost]);
+      store.updatePostVote('1', 5, 1);
+      store.updateVoteCount('1', 42);
+      expect(store.posts[0].voteCount).toBe(42);
+      // userVote should remain untouched
+      expect(store.userVotes['1']).toBe(1);
+    });
+
+    it('handles non-existent postId gracefully', () => {
+      const store = useFeedStore();
+      const post = { ...mockPost, voteCount: 5 };
+      store.setPosts([post]);
+      store.updateVoteCount('nonexistent', 99);
+      // existing post unchanged
+      expect(store.posts[0].voteCount).toBe(5);
+    });
+  });
+
   describe('userBookmarks', () => {
     it('initializes as empty object', () => {
       const store = useFeedStore();

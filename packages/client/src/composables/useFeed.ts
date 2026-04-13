@@ -2,7 +2,15 @@ import { ref, computed } from 'vue';
 import { storeToRefs } from 'pinia';
 import { apiFetch } from '../lib/api.js';
 import { useFeedStore } from '../stores/feed.js';
-import type { FeedSort, FeedFilter, FeedContentType, FeedResponse } from '@forge/shared';
+import { useWebSocket } from './useWebSocket.js';
+import type {
+  FeedSort,
+  FeedFilter,
+  FeedContentType,
+  FeedResponse,
+  PostWithAuthor,
+  ServerMessage,
+} from '@forge/shared';
 
 export function useFeed() {
   const store = useFeedStore();
@@ -99,6 +107,35 @@ export function useFeed() {
     store.setSelectedPostId(id);
   }
 
+  function subscribeRealtime(): () => void {
+    const { subscribe } = useWebSocket();
+
+    return subscribe('feed', (event: ServerMessage) => {
+      switch (event.type) {
+        case 'post:new':
+          // Prepend new post to the feed list.
+          // The store has `setPosts` and `appendPosts` but no `prependPost`,
+          // so we construct the new array directly via setPosts.
+          store.setPosts([event.data as PostWithAuthor, ...store.posts]);
+          break;
+        case 'post:updated': {
+          // Update the post in-place if it exists in the current feed list.
+          const updated = event.data as PostWithAuthor;
+          const idx = store.posts.findIndex((p) => p.id === updated.id);
+          if (idx !== -1) {
+            const copy = [...store.posts];
+            copy[idx] = updated;
+            store.setPosts(copy);
+          }
+          break;
+        }
+        default:
+          // Ignore non-feed events on this channel
+          break;
+      }
+    });
+  }
+
   return {
     posts,
     sort,
@@ -118,5 +155,6 @@ export function useFeed() {
     setTag,
     setContentType,
     selectPost,
+    subscribeRealtime,
   };
 }

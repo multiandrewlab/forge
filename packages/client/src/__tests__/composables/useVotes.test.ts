@@ -36,12 +36,25 @@ vi.mock('../../lib/api.js', () => ({
   apiFetch: (...args: unknown[]) => mockApiFetch(...args) as unknown,
 }));
 
+const mockSubscribe = vi.fn();
+vi.mock('../../composables/useWebSocket.js', () => ({
+  useWebSocket: () => ({
+    subscribe: mockSubscribe,
+    send: vi.fn(),
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+    clientId: 'test-client-id',
+    status: { value: 'idle' },
+  }),
+}));
+
 import { useVotes } from '../../composables/useVotes.js';
 
 describe('useVotes', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     mockApiFetch.mockReset();
+    mockSubscribe.mockReset();
   });
 
   describe('vote', () => {
@@ -242,6 +255,55 @@ describe('useVotes', () => {
       mockApiFetch.mockResolvedValueOnce(mockResponse(voteResponse));
       await removeVote('1');
       expect(error.value).toBeNull();
+    });
+  });
+
+  describe('subscribeRealtime', () => {
+    it('should subscribe to the post channel', () => {
+      const mockCleanup = vi.fn();
+      mockSubscribe.mockReturnValue(mockCleanup);
+
+      const { subscribeRealtime } = useVotes();
+      const cleanup = subscribeRealtime('1');
+
+      expect(mockSubscribe).toHaveBeenCalledWith('post:1', expect.any(Function));
+      expect(cleanup).toBe(mockCleanup);
+    });
+
+    it('should handle vote:updated by updating voteCount without touching userVote', () => {
+      const store = useFeedStore();
+      store.setPosts([mockPost]);
+      // Set a user vote first — it should remain untouched
+      store.updatePostVote('1', 5, 1);
+
+      mockSubscribe.mockImplementation((_channel: string, handler: (event: unknown) => void) => {
+        handler({ type: 'vote:updated', channel: 'post:1', data: { voteCount: 42 } });
+        return vi.fn();
+      });
+
+      const { subscribeRealtime } = useVotes();
+      subscribeRealtime('1');
+
+      expect(store.posts[0].voteCount).toBe(42);
+      // userVote should be preserved
+      expect(store.userVotes['1']).toBe(1);
+    });
+
+    it('should ignore non-vote event types', () => {
+      const store = useFeedStore();
+      const freshPost = { ...mockPost, voteCount: 5 };
+      store.setPosts([freshPost]);
+
+      mockSubscribe.mockImplementation((_channel: string, handler: (event: unknown) => void) => {
+        handler({ type: 'comment:new', channel: 'post:1', data: { id: 'c1' } });
+        return vi.fn();
+      });
+
+      const { subscribeRealtime } = useVotes();
+      subscribeRealtime('1');
+
+      // voteCount should be unchanged
+      expect(store.posts[0].voteCount).toBe(5);
     });
   });
 });

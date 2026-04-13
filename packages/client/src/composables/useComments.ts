@@ -1,7 +1,8 @@
 import { ref } from 'vue';
 import { apiFetch } from '../lib/api.js';
 import { useCommentsStore } from '../stores/comments.js';
-import type { Comment } from '@forge/shared';
+import { useWebSocket } from './useWebSocket.js';
+import type { Comment, ServerMessage } from '@forge/shared';
 
 async function parseErrorMessage(response: Response, fallback: string): Promise<string> {
   try {
@@ -105,6 +106,27 @@ export function useComments() {
     }
   }
 
+  function subscribeRealtime(postId: string): () => void {
+    const { subscribe } = useWebSocket();
+
+    return subscribe(`post:${postId}`, (event: ServerMessage) => {
+      switch (event.type) {
+        case 'comment:new':
+          store.addComment(event.data as Comment);
+          break;
+        case 'comment:updated':
+          store.updateComment((event.data as Comment).id, event.data as Comment);
+          break;
+        case 'comment:deleted':
+          store.removeComment((event.data as { id: string }).id);
+          break;
+        default:
+          // Ignore non-comment events on this channel (e.g. presence:update, vote:updated)
+          break;
+      }
+    });
+  }
+
   return {
     error,
     loading,
@@ -112,5 +134,6 @@ export function useComments() {
     addComment,
     editComment,
     deleteComment,
+    subscribeRealtime,
   };
 }

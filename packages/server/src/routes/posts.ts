@@ -16,9 +16,10 @@ import {
   createRevisionAtomic,
 } from '../db/queries/revisions.js';
 import { toPost, toRevision, toPostWithRevision } from '../services/posts.js';
-import { findFeedPosts } from '../db/queries/feed.js';
+import { findFeedPosts, findFeedPostById } from '../db/queries/feed.js';
 import { toPostWithAuthor } from '../services/feed.js';
 import { findTagByName, createTag, addPostTag } from '../db/queries/tags.js';
+import { getExcludeWs } from '../plugins/websocket/broadcast.js';
 
 const feedQuerySchema = z.object({
   sort: z.enum(['trending', 'recent', 'top', 'personalized']).default('recent'),
@@ -67,6 +68,17 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
         }
         await addPostTag(postRow.id, tag.id);
       }
+    }
+
+    // Broadcast post:new on the feed channel
+    const feedRow = await findFeedPostById(postRow.id);
+    if (feedRow) {
+      const excludeWs = getExcludeWs(app, request);
+      app.websocket.channels.broadcast(
+        'feed',
+        { type: 'post:new', channel: 'feed', data: toPostWithAuthor(feedRow) },
+        excludeWs,
+      );
     }
 
     return reply.status(201).send({
@@ -148,6 +160,17 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(404).send({ error: 'Post not found' });
     }
 
+    // Broadcast post:updated on the feed channel
+    const feedRow = await findFeedPostById(id);
+    if (feedRow) {
+      const excludeWs = getExcludeWs(app, request);
+      app.websocket.channels.broadcast(
+        'feed',
+        { type: 'post:updated', channel: 'feed', data: toPostWithAuthor(feedRow) },
+        excludeWs,
+      );
+    }
+
     return reply.send({ post: toPost(updatedRow) });
   });
 
@@ -165,6 +188,8 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
     }
 
     await softDeletePost(id);
+    // Soft-delete does NOT broadcast on the feed channel — clients invalidate
+    // via cache expiration or a separate feed-refresh mechanism.
     return reply.status(204).send();
   });
 
@@ -184,6 +209,17 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
     const publishedRow = await publishPost(id);
     if (!publishedRow) {
       return reply.status(404).send({ error: 'Post not found' });
+    }
+
+    // Broadcast post:updated on the feed channel (draft → published transition)
+    const feedRow = await findFeedPostById(id);
+    if (feedRow) {
+      const excludeWs = getExcludeWs(app, request);
+      app.websocket.channels.broadcast(
+        'feed',
+        { type: 'post:updated', channel: 'feed', data: toPostWithAuthor(feedRow) },
+        excludeWs,
+      );
     }
 
     return reply.send({ post: toPost(publishedRow) });
@@ -216,7 +252,26 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
       message: parsed.data.message ?? null,
     });
 
-    return reply.status(201).send({ revision: toRevision(revisionRow) });
+    const revisionData = toRevision(revisionRow);
+
+    const excludeWs = getExcludeWs(app, request);
+    app.websocket.channels.broadcast(
+      `post:${id}`,
+      { type: 'revision:new', channel: `post:${id}`, data: revisionData },
+      excludeWs,
+    );
+
+    // Also broadcast post:updated on the feed channel (latest revision changed)
+    const feedRow = await findFeedPostById(id);
+    if (feedRow) {
+      app.websocket.channels.broadcast(
+        'feed',
+        { type: 'post:updated', channel: 'feed', data: toPostWithAuthor(feedRow) },
+        excludeWs,
+      );
+    }
+
+    return reply.status(201).send({ revision: revisionData });
   });
 
   // GET /:id/revisions — list revisions

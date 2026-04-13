@@ -67,6 +67,13 @@ export const useFeedStore = defineStore('feed', () => {
     }
   }
 
+  function updateVoteCount(postId: string, voteCount: number): void {
+    const post = posts.value.find((p) => p.id === postId);
+    if (post) {
+      post.voteCount = voteCount;
+    }
+  }
+
   function setBookmark(postId: string, bookmarked: boolean): void {
     if (bookmarked) {
       userBookmarks.value[postId] = true;
@@ -109,6 +116,7 @@ export const useFeedStore = defineStore('feed', () => {
     userVotes,
     userBookmarks,
     updatePostVote,
+    updateVoteCount,
     setBookmark,
     reset,
   };
