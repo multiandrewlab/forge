@@ -13,3 +13,6 @@ export { createCommentSchema, updateCommentSchema } from './comment.js';
 export type { CreateCommentInput, UpdateCommentInput } from './comment.js';
 
 export * from './ai.js';
+
+export { playgroundRunSchema } from './playground.js';
+export type { PlaygroundRunInput } from './playground.js';
