@@ -15,6 +15,10 @@ const { variables, isRunning, error, output, fetchVariables, run, stop } = usePl
 const title = ref('Playground');
 const variableValues = reactive<Record<string, string>>({});
 
+function getVarValue(name: string): string {
+  return variableValues[name] ?? '';
+}
+
 onMounted(async () => {
   const res = await apiFetch(`/api/posts/${postId}`);
   if (res.ok) {
@@ -31,6 +35,8 @@ watch(variables, (vars) => {
     }
   }
 });
+
+defineExpose({ getVarValue });
 
 function handleRun(): void {
   run(postId, { ...variableValues });
@@ -49,7 +55,7 @@ function handleRun(): void {
         <PromptVariableInput
           v-for="v in variables"
           :key="v.id"
-          :model-value="variableValues[v.name] ?? ''"
+          :model-value="getVarValue(v.name)"
           :variable="v"
           @update:model-value="variableValues[v.name] = $event"
         />

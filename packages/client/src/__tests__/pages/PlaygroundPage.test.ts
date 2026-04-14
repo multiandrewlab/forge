@@ -316,4 +316,14 @@ describe('PlaygroundPage', () => {
       expect(wrapper.find('[data-testid="output-text"]').text()).toBe('Hello, streaming world!');
     });
   });
+
+  describe('getVarValue fallback', () => {
+    it('returns empty string for unknown variable name', async () => {
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      const vm = wrapper.vm as unknown as { getVarValue: (name: string) => string };
+      expect(vm.getVarValue('nonexistent')).toBe('');
+    });
+  });
 });
