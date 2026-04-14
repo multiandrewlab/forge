@@ -1,4 +1,4 @@
-import type { SearchSnippet, AiAction, UserSummary } from '@forge/shared';
+import type { SearchSnippet, AiAction, UserSummary, AiSearchFilters } from '@forge/shared';
 import type { ContentType } from '@forge/shared';
 import type { SearchPostRow, SearchUserRow } from '../db/queries/search.js';
 
@@ -37,12 +37,46 @@ export function toUserSummary(row: SearchUserRow): UserSummary {
 }
 
 /**
- * Build stub AI action suggestions for a search query.
+ * Build AI action suggestions for a search query.
+ * When filters are provided, generates context-aware actions with description/contentType/language params.
+ * Without filters, returns stub actions (unchanged behavior).
  * Returns empty array if query is too short (< 2 chars).
  */
-export function buildAiActions(q: string): AiAction[] {
+export function buildAiActions(q: string, filters?: AiSearchFilters): AiAction[] {
   if (q.length < 2) {
     return [];
+  }
+
+  if (filters !== undefined) {
+    const actions: AiAction[] = [];
+
+    if (filters.language) {
+      actions.push({
+        label: `Generate a ${filters.language} ${filters.textQuery} implementation`,
+        action: 'generate',
+        params: {
+          description: filters.textQuery,
+          contentType: 'snippet',
+          language: filters.language,
+        },
+      });
+    }
+
+    if (filters.contentType === 'prompt') {
+      actions.push({
+        label: `Generate a prompt for ${filters.textQuery}`,
+        action: 'generate',
+        params: { description: filters.textQuery, contentType: 'prompt' },
+      });
+    }
+
+    actions.push({
+      label: `Generate content about ${filters.textQuery}`,
+      action: 'generate',
+      params: { description: filters.textQuery, contentType: 'document' },
+    });
+
+    return actions;
   }
 
   return [

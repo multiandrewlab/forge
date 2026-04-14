@@ -70,6 +70,47 @@ describe('langchainPlugin', () => {
     await app.close();
   });
 
+  it('decorates app with aiAcquire function', async () => {
+    const app = buildFake();
+    await app.register(fakeAuthPlugin);
+    await app.register(langchainPlugin);
+    await app.ready();
+    expect(typeof (app as unknown as { aiAcquire: unknown }).aiAcquire).toBe('function');
+    await app.close();
+  });
+
+  it('aiAcquire returns a slot with release function for a user id', async () => {
+    const app = buildFake();
+    await app.register(fakeAuthPlugin);
+    await app.register(langchainPlugin);
+    await app.ready();
+    const aiAcquire = (
+      app as unknown as { aiAcquire: (userId: string) => { release: () => void } | null }
+    ).aiAcquire;
+    const slot = aiAcquire('user-abc');
+    expect(slot).not.toBeNull();
+    const acquired = slot as { release: () => void };
+    expect(typeof acquired.release).toBe('function');
+    acquired.release();
+    await app.close();
+  });
+
+  it('aiAcquire returns null when a slot is already held for the same user', async () => {
+    const app = buildFake();
+    await app.register(fakeAuthPlugin);
+    await app.register(langchainPlugin);
+    await app.ready();
+    const aiAcquire = (
+      app as unknown as { aiAcquire: (userId: string) => { release: () => void } | null }
+    ).aiAcquire;
+    const slot1 = aiAcquire('user-xyz');
+    expect(slot1).not.toBeNull();
+    const slot2 = aiAcquire('user-xyz');
+    expect(slot2).toBeNull();
+    (slot1 as { release: () => void }).release();
+    await app.close();
+  });
+
   it('aiRateLimit attaches a slot on first call and rejects second concurrent', async () => {
     const app = buildFake();
     await app.register(fakeAuthPlugin);
