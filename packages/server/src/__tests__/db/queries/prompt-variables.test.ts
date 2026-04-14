@@ -8,6 +8,8 @@ import { query } from '../../../db/connection.js';
 import {
   findPromptVariablesByPostId,
   createPromptVariable,
+  upsertPromptVariable,
+  deleteStalePromptVariables,
 } from '../../../db/queries/prompt-variables.js';
 import type { PromptVariableRow } from '../../../db/queries/types.js';
 
@@ -54,6 +56,41 @@ describe('prompt variable queries', () => {
         [sampleVariable.post_id, 'component_name', 'e.g., UserProfile', 0, 'MyComponent'],
       );
       expect(result).toEqual(sampleVariable);
+    });
+  });
+
+  describe('upsertPromptVariable', () => {
+    it('inserts or updates a variable using ON CONFLICT and returns the row', async () => {
+      mockQuery.mockResolvedValue({ rows: [sampleVariable], rowCount: 1 });
+      const result = await upsertPromptVariable({
+        postId: sampleVariable.post_id,
+        name: 'component_name',
+        sortOrder: 0,
+      });
+      expect(mockQuery).toHaveBeenCalledWith(
+        `INSERT INTO prompt_variables (post_id, name, sort_order) VALUES ($1, $2, $3) ON CONFLICT (post_id, name) DO UPDATE SET sort_order = EXCLUDED.sort_order RETURNING *`,
+        [sampleVariable.post_id, 'component_name', 0],
+      );
+      expect(result).toEqual(sampleVariable);
+    });
+  });
+
+  describe('deleteStalePromptVariables', () => {
+    it('deletes variables whose names are not in keepNames', async () => {
+      mockQuery.mockResolvedValue({ rows: [], rowCount: 1 });
+      await deleteStalePromptVariables(sampleVariable.post_id, ['component_name', 'language']);
+      expect(mockQuery).toHaveBeenCalledWith(
+        `DELETE FROM prompt_variables WHERE post_id = $1 AND name != ALL($2)`,
+        [sampleVariable.post_id, ['component_name', 'language']],
+      );
+    });
+
+    it('deletes ALL variables for the post when keepNames is empty', async () => {
+      mockQuery.mockResolvedValue({ rows: [], rowCount: 2 });
+      await deleteStalePromptVariables(sampleVariable.post_id, []);
+      expect(mockQuery).toHaveBeenCalledWith(`DELETE FROM prompt_variables WHERE post_id = $1`, [
+        sampleVariable.post_id,
+      ]);
     });
   });
 });

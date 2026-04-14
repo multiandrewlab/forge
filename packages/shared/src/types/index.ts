@@ -97,3 +97,5 @@ export type {
   SearchResponse,
 } from './search.js';
 export { searchQuerySchema, aiSearchFiltersSchema } from './search.js';
+export type { PromptVariable } from './prompt.js';
+export { extractVariables, assemblePrompt } from './prompt.js';
