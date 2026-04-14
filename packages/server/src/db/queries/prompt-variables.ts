@@ -26,3 +26,33 @@ export async function createPromptVariable(
   );
   return result.rows[0] as PromptVariableRow;
 }
+
+export interface UpsertPromptVariableInput {
+  postId: string;
+  name: string;
+  sortOrder: number;
+}
+
+export async function upsertPromptVariable(
+  input: UpsertPromptVariableInput,
+): Promise<PromptVariableRow> {
+  const result = await query<PromptVariableRow>(
+    `INSERT INTO prompt_variables (post_id, name, sort_order) VALUES ($1, $2, $3) ON CONFLICT (post_id, name) DO UPDATE SET sort_order = EXCLUDED.sort_order RETURNING *`,
+    [input.postId, input.name, input.sortOrder],
+  );
+  return result.rows[0] as PromptVariableRow;
+}
+
+export async function deleteStalePromptVariables(
+  postId: string,
+  keepNames: string[],
+): Promise<void> {
+  if (keepNames.length === 0) {
+    await query(`DELETE FROM prompt_variables WHERE post_id = $1`, [postId]);
+  } else {
+    await query(`DELETE FROM prompt_variables WHERE post_id = $1 AND name != ALL($2)`, [
+      postId,
+      keepNames,
+    ]);
+  }
+}
