@@ -95,4 +95,22 @@ describe('PromptOutput', () => {
 
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith('copy me');
   });
+
+  // --- Test 9: Copied state resets after timeout ---
+  it('resets copied state after timeout', async () => {
+    vi.useFakeTimers();
+    wrapper = mount(PromptOutput, {
+      props: { ...defaultProps, output: 'copy me' },
+    });
+
+    const copyBtn = wrapper.find('[data-testid="copy-button"]');
+    await copyBtn.trigger('click');
+    expect(wrapper.text()).toContain('Copied!');
+
+    vi.advanceTimersByTime(2000);
+    await wrapper.vm.$nextTick();
+    expect(wrapper.text()).toContain('Copy');
+
+    vi.useRealTimers();
+  });
 });

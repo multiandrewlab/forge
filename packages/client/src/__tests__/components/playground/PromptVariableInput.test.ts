@@ -147,6 +147,20 @@ describe('PromptVariableInput', () => {
     expect(emitted?.[0]).toEqual(['TypeScript']);
   });
 
+  // --- Test 10b: Emits update:modelValue on textarea change ---
+  it('emits update:modelValue on textarea change', async () => {
+    const wrapper = mount(PromptVariableInput, {
+      props: { variable: textareaVariable, modelValue: '' },
+    });
+
+    const textarea = wrapper.find('textarea');
+    await textarea.setValue('some error log');
+
+    const emitted = wrapper.emitted('update:modelValue');
+    expect(emitted).toBeTruthy();
+    expect(emitted?.[0]).toEqual(['some error log']);
+  });
+
   // --- Test 11: Displays the modelValue prop as input value ---
   it('displays the modelValue prop as the input value', () => {
     const wrapper = mount(PromptVariableInput, {

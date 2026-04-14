@@ -46,7 +46,7 @@ describe('GET /api/posts/:id/variables', () => {
 
   beforeEach(async () => {
     app = await buildApp();
-    await app.register(playgroundRoutes, { prefix: '/api' });
+
     await app.ready();
     authToken = app.jwt.sign({
       id: TEST_USER_ID,
@@ -147,7 +147,7 @@ describe('POST /api/playground/run', () => {
 
   beforeEach(async () => {
     app = await buildApp();
-    await app.register(playgroundRoutes, { prefix: '/api' });
+
     await app.ready();
     authToken = app.jwt.sign({
       id: TEST_USER_ID,
