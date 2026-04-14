@@ -49,8 +49,9 @@ function handleRun(): void {
         <PromptVariableInput
           v-for="v in variables"
           :key="v.id"
-          v-model="variableValues[v.name]"
+          :model-value="variableValues[v.name] ?? ''"
           :variable="v"
+          @update:model-value="variableValues[v.name] = $event"
         />
       </div>
       <div class="w-1/2 p-6">
