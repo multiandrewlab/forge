@@ -13,8 +13,30 @@ export const searchQuerySchema = z.object({
       return val;
     }, z.boolean())
     .optional(),
+  ai: z
+    .preprocess((val) => {
+      if (typeof val === 'string') {
+        return val === 'true';
+      }
+      return val;
+    }, z.boolean())
+    .optional(),
   limit: z.coerce.number().int().min(1).max(50).default(20),
 });
+
+export const aiSearchFiltersSchema = z.object({
+  tags: z.array(z.string()),
+  language: z.string().nullable(),
+  contentType: z.string().nullable(),
+  textQuery: z.string(),
+});
+
+export interface AiSearchFilters {
+  tags: string[];
+  language: string | null;
+  contentType: string | null;
+  textQuery: string;
+}
 
 export type SearchQuery = z.infer<typeof searchQuerySchema>;
 

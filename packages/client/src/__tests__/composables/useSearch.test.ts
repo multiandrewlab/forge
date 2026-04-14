@@ -37,18 +37,20 @@ describe('useSearch', () => {
     vi.useRealTimers();
   });
 
-  it('returns query, results, isLoading, search, and clearResults', () => {
+  it('returns query, results, isLoading, search, clearResults, aiEnabled, and toggleAi', () => {
     const composable = useSearch();
     expect(composable).toHaveProperty('query');
     expect(composable).toHaveProperty('results');
     expect(composable).toHaveProperty('isLoading');
     expect(composable).toHaveProperty('search');
     expect(composable).toHaveProperty('clearResults');
+    expect(composable).toHaveProperty('aiEnabled');
+    expect(composable).toHaveProperty('toggleAi');
   });
 
   it('exposes store refs via storeToRefs', () => {
     const store = useSearchStore();
-    const { query, results, isLoading } = useSearch();
+    const { query, results, isLoading, aiEnabled } = useSearch();
 
     store.setQuery('hello');
     expect(query.value).toBe('hello');
@@ -58,6 +60,9 @@ describe('useSearch', () => {
 
     store.setResults(FAKE_SEARCH_RESPONSE);
     expect(results.value).toEqual(FAKE_SEARCH_RESPONSE);
+
+    store.toggleAi();
+    expect(aiEnabled.value).toBe(true);
   });
 
   describe('search (empty / whitespace)', () => {
@@ -98,6 +103,29 @@ describe('useSearch', () => {
 
       expect(mockApiFetch).toHaveBeenCalledTimes(1);
       expect(mockApiFetch).toHaveBeenCalledWith('/api/search?q=vue');
+    });
+
+    it('includes &ai=true in URL when aiEnabled is true', async () => {
+      mockApiFetch.mockResolvedValue(mockResponse(FAKE_SEARCH_RESPONSE));
+      const store = useSearchStore();
+      store.toggleAi();
+
+      const { search } = useSearch();
+      search('vue');
+      await vi.advanceTimersByTimeAsync(300);
+
+      expect(mockApiFetch).toHaveBeenCalledWith('/api/search?q=vue&ai=true');
+    });
+
+    it('does not include ai param in URL when aiEnabled is false', async () => {
+      mockApiFetch.mockResolvedValue(mockResponse(FAKE_SEARCH_RESPONSE));
+
+      const { search } = useSearch();
+      search('vue');
+      await vi.advanceTimersByTimeAsync(300);
+
+      const url = mockApiFetch.mock.calls[0][0] as string;
+      expect(url).not.toContain('ai=');
     });
 
     it('does not call fetch before 300ms', () => {

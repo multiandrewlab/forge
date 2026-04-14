@@ -10,6 +10,7 @@ import { useSearchStore } from '../../../stores/search';
 // ── Mock useSearch ────────────────────────────────────────────────────
 const mockSearch = vi.fn();
 const mockClearResults = vi.fn();
+const mockToggleAi = vi.fn();
 
 vi.mock('../../../composables/useSearch.js', () => ({
   useSearch: () => ({
@@ -18,6 +19,8 @@ vi.mock('../../../composables/useSearch.js', () => ({
     isLoading: ref(false),
     search: mockSearch,
     clearResults: mockClearResults,
+    aiEnabled: ref(false),
+    toggleAi: mockToggleAi,
   }),
 }));
 
@@ -82,6 +85,7 @@ function createTestRouter(): Router {
     routes: [
       { path: '/', component: { template: '<div />' } },
       { path: '/posts/:id', name: 'post-view', component: { template: '<div />' } },
+      { path: '/posts/new', name: 'post-new', component: { template: '<div />' } },
       { path: '/search', component: { template: '<div />' } },
     ],
   });
@@ -106,6 +110,7 @@ describe('TheSearchModal', () => {
     store = useSearchStore();
     mockSearch.mockClear();
     mockClearResults.mockClear();
+    mockToggleAi.mockClear();
   });
 
   afterEach(() => {
@@ -298,30 +303,130 @@ describe('TheSearchModal', () => {
     wrapper.unmount();
   });
 
-  // ── Test 20: Enter on aiAction → console.info; no navigation; modal closes ──
-  it('Enter on aiAction logs and closes without navigation', async () => {
+  // ── Test 20: Enter on aiAction → navigates to /posts/new with query params ──
+  it('Enter on aiAction navigates to /posts/new with query params and closes', async () => {
+    const actionWithParams: AiAction = {
+      label: 'Generate snippet',
+      action: 'generate',
+      params: { description: 'fizzbuzz', contentType: 'snippet', language: 'python' },
+    };
+
     const wrapper = mountModal(router);
     store.open();
-    // Only aiAction, so index 0 is aiAction
-    store.setResults(makeResults([], [aiAction], []));
+    store.setResults(makeResults([], [actionWithParams], []));
     await nextTick();
     await nextTick();
 
     const input = wrapper.find('input');
-    await input.setValue('react');
+    await input.setValue('fizzbuzz');
 
     const pushSpy = vi.spyOn(router, 'push');
-    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
 
     const dialog = wrapper.find('[role="dialog"]');
     await dialog.trigger('keydown', { key: 'Enter' });
     await nextTick();
 
-    expect(infoSpy).toHaveBeenCalledWith('[search] aiAction selected', aiAction);
-    expect(pushSpy).not.toHaveBeenCalled();
+    expect(pushSpy).toHaveBeenCalledWith({
+      path: '/posts/new',
+      query: { description: 'fizzbuzz', contentType: 'snippet', language: 'python' },
+    });
     expect(store.isOpen).toBe(false);
 
-    infoSpy.mockRestore();
+    wrapper.unmount();
+  });
+
+  it('Enter on aiAction with empty params navigates to /posts/new with empty query', async () => {
+    const emptyParamAction: AiAction = {
+      label: 'Summarize this',
+      action: 'summarize',
+      params: {},
+    };
+
+    const wrapper = mountModal(router);
+    store.open();
+    store.setResults(makeResults([], [emptyParamAction], []));
+    await nextTick();
+    await nextTick();
+
+    const input = wrapper.find('input');
+    await input.setValue('summarize');
+
+    const pushSpy = vi.spyOn(router, 'push');
+
+    const dialog = wrapper.find('[role="dialog"]');
+    await dialog.trigger('keydown', { key: 'Enter' });
+    await nextTick();
+
+    expect(pushSpy).toHaveBeenCalledWith({
+      path: '/posts/new',
+      query: {},
+    });
+    expect(store.isOpen).toBe(false);
+
+    wrapper.unmount();
+  });
+
+  // ── AI toggle button ──
+  it('renders Ask AI toggle button', async () => {
+    const wrapper = mountModal(router);
+    store.open();
+    await nextTick();
+    await nextTick();
+
+    expect(wrapper.find('[data-testid="ai-toggle"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="ai-toggle"]').text()).toBe('Ask AI');
+
+    wrapper.unmount();
+  });
+
+  it('clicking Ask AI toggle calls toggleAi', async () => {
+    const wrapper = mountModal(router);
+    store.open();
+    await nextTick();
+    await nextTick();
+
+    const toggleBtn = wrapper.find('[data-testid="ai-toggle"]');
+    await toggleBtn.trigger('click');
+    await nextTick();
+
+    expect(mockToggleAi).toHaveBeenCalledTimes(1);
+
+    wrapper.unmount();
+  });
+
+  it('clicking Ask AI toggle re-runs search when input is non-empty', async () => {
+    const wrapper = mountModal(router);
+    store.open();
+    await nextTick();
+    await nextTick();
+
+    const input = wrapper.find('input');
+    await input.setValue('react');
+    mockSearch.mockClear();
+
+    const toggleBtn = wrapper.find('[data-testid="ai-toggle"]');
+    await toggleBtn.trigger('click');
+    await nextTick();
+
+    expect(mockSearch).toHaveBeenCalledWith('react');
+
+    wrapper.unmount();
+  });
+
+  it('clicking Ask AI toggle does not re-run search when input is empty', async () => {
+    const wrapper = mountModal(router);
+    store.open();
+    await nextTick();
+    await nextTick();
+
+    mockSearch.mockClear();
+
+    const toggleBtn = wrapper.find('[data-testid="ai-toggle"]');
+    await toggleBtn.trigger('click');
+    await nextTick();
+
+    expect(mockSearch).not.toHaveBeenCalled();
+
     wrapper.unmount();
   });
 

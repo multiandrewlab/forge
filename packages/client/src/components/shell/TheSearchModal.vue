@@ -23,6 +23,18 @@
           @input="onInputChange"
         />
         <button
+          data-testid="ai-toggle"
+          :class="[
+            'shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors',
+            aiEnabled
+              ? 'bg-primary text-white'
+              : 'bg-gray-100 text-gray-500 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700',
+          ]"
+          @click="handleAiToggle"
+        >
+          Ask AI
+        </button>
+        <button
           data-testid="search-close-btn"
           class="shrink-0 rounded p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
           aria-label="Close search"
@@ -126,7 +138,7 @@
 </template>
 
 <script setup lang="ts">
-/* global document, HTMLElement, HTMLInputElement, Element, KeyboardEvent, console */
+/* global document, HTMLElement, HTMLInputElement, Element, KeyboardEvent */
 import { ref, computed, watch, nextTick } from 'vue';
 import { useRouter } from 'vue-router';
 import { useSearchStore } from '@/stores/search';
@@ -136,7 +148,7 @@ import type { SearchSnippet, UserSummary, AiAction } from '@forge/shared';
 
 const router = useRouter();
 const searchStore = useSearchStore();
-const { search } = useSearch();
+const { search, aiEnabled, toggleAi } = useSearch();
 
 const inputRef = ref<HTMLInputElement | null>(null);
 const inputValue = ref('');
@@ -178,6 +190,15 @@ function onInputChange(): void {
 
 function handleClose(): void {
   searchStore.close();
+}
+
+// ── AI toggle handler ─────────────────────────────────────────────────
+
+function handleAiToggle(): void {
+  toggleAi();
+  if (inputValue.value.trim() !== '') {
+    search(inputValue.value);
+  }
 }
 
 // ── Recent query click ────────────────────────────────────────────────
@@ -238,10 +259,15 @@ function handleSelect(globalIndex: number): void {
     searchStore.close();
     router.push({ path: '/search', query: { q: person.displayName } });
   } else {
-    // aiAction
+    // aiAction — navigate to editor with pre-filled params
     const action = resolved.data as AiAction;
     searchStore.close();
-    console.info('[search] aiAction selected', action);
+    const params = action.params;
+    const query: Record<string, string> = {};
+    if (params.description) query.description = params.description;
+    if (params.contentType) query.contentType = params.contentType;
+    if (params.language) query.language = params.language;
+    router.push({ path: '/posts/new', query });
   }
 }
 

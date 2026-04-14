@@ -9,6 +9,7 @@ declare module 'fastify' {
     aiProvider: () => BaseChatModel;
     aiRateLimit: preHandlerHookHandler;
     aiGate: preHandlerHookHandler[];
+    aiAcquire: (userId: string) => AiSlot | null;
   }
   interface FastifyRequest {
     aiSlot?: AiSlot;
@@ -44,6 +45,7 @@ async function langchainPluginImpl(app: FastifyInstance): Promise<void> {
 
   app.decorate('aiRateLimit', aiRateLimit);
   app.decorate('aiGate', [app.authenticate, aiRateLimit]);
+  app.decorate('aiAcquire', (userId: string) => limiter.acquire(userId));
 
   // Safety net: release slot at the end of the request lifecycle
   app.addHook('onResponse', async (request) => {

@@ -16,6 +16,16 @@ vi.mock('../../db/queries/search.js', () => ({
   searchUsers: vi.fn(),
 }));
 
+vi.mock('../../plugins/langchain/provider.js', () => ({
+  createChatModel: vi.fn().mockReturnValue({} as never),
+}));
+
+const mockRunSearchChain = vi.fn();
+vi.mock('../../plugins/langchain/chains/search.js', () => ({
+  createSearchChain: vi.fn(() => ({})),
+  runSearchChain: (...args: unknown[]) => mockRunSearchChain(...args),
+}));
+
 import { buildApp } from '../../app.js';
 import {
   searchPostsByTsvector,
@@ -24,6 +34,7 @@ import {
 } from '../../db/queries/search.js';
 import type { SearchPostRow, SearchUserRow } from '../../db/queries/search.js';
 import type { FastifyInstance } from 'fastify';
+import type { AiSearchFilters } from '@forge/shared';
 
 const mockSearchPostsByTsvector = searchPostsByTsvector as Mock;
 const mockSearchPostsByTrigram = searchPostsByTrigram as Mock;
@@ -67,6 +78,7 @@ describe('search routes', () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
+    mockRunSearchChain.mockReset();
   });
 
   describe('GET /api/search', () => {
@@ -306,6 +318,207 @@ describe('search routes', () => {
       expect(JSON.stringify(body)).not.toContain('password');
       expect(JSON.stringify(body)).not.toContain('FATAL');
       expect(body.error).toBe('internal_error');
+    });
+
+    describe('ai=true path', () => {
+      let authToken: string;
+
+      beforeAll(() => {
+        // Sign a real JWT using the same secret buildApp() uses
+        authToken = app.jwt.sign({ id: 'u1', email: 'u1@example.com', displayName: 'U1' });
+      });
+
+      it('runs AI chain when authenticated and slot acquired, overrides searchOptions with filters', async () => {
+        const filters: AiSearchFilters = {
+          tags: ['typescript'],
+          language: 'typescript',
+          contentType: 'snippet',
+          textQuery: 'binary search',
+        };
+        mockRunSearchChain.mockResolvedValueOnce(filters);
+        mockSearchPostsByTsvector.mockResolvedValueOnce(
+          Array.from({ length: 5 }, (_, i) => makePostRow({ id: `id-${i}` })),
+        );
+        mockSearchUsers.mockResolvedValueOnce([]);
+
+        const res = await app.inject({
+          method: 'GET',
+          url: '/api/search',
+          query: { q: 'typescript binary search', ai: 'true' },
+          headers: { authorization: `Bearer ${authToken}` },
+        });
+
+        expect(res.statusCode).toBe(200);
+        expect(mockRunSearchChain).toHaveBeenCalledOnce();
+        // Search should be called with the textQuery from filters
+        expect(mockSearchPostsByTsvector).toHaveBeenCalledWith(
+          'binary search',
+          expect.objectContaining({ contentType: 'snippet' }),
+        );
+      });
+
+      it('falls back to plain search when not authenticated (no Authorization header)', async () => {
+        mockSearchPostsByTsvector.mockResolvedValueOnce(
+          Array.from({ length: 5 }, (_, i) => makePostRow({ id: `id-${i}` })),
+        );
+        mockSearchUsers.mockResolvedValueOnce([]);
+
+        const res = await app.inject({
+          method: 'GET',
+          url: '/api/search',
+          query: { q: 'react hooks', ai: 'true' },
+        });
+
+        expect(res.statusCode).toBe(200);
+        // Chain should NOT have been called — fell back immediately
+        expect(mockRunSearchChain).not.toHaveBeenCalled();
+        // Plain search uses original query
+        expect(mockSearchPostsByTsvector).toHaveBeenCalledWith('react hooks', expect.any(Object));
+      });
+
+      it('falls back to plain search when chain returns null (chain failure)', async () => {
+        mockRunSearchChain.mockResolvedValueOnce(null);
+        mockSearchPostsByTsvector.mockResolvedValueOnce(
+          Array.from({ length: 5 }, (_, i) => makePostRow({ id: `id-${i}` })),
+        );
+        mockSearchUsers.mockResolvedValueOnce([]);
+
+        const res = await app.inject({
+          method: 'GET',
+          url: '/api/search',
+          query: { q: 'react', ai: 'true' },
+          headers: { authorization: `Bearer ${authToken}` },
+        });
+
+        expect(res.statusCode).toBe(200);
+        expect(mockRunSearchChain).toHaveBeenCalledOnce();
+        // Falls back: uses original query, not filters.textQuery
+        expect(mockSearchPostsByTsvector).toHaveBeenCalledWith('react', expect.any(Object));
+      });
+
+      it('falls back to plain search when slot cannot be acquired (rate limit)', async () => {
+        // Hold a slot for u1 so aiAcquire returns null for the same user
+        const typedApp = app as unknown as {
+          aiAcquire: (userId: string) => { release: () => void } | null;
+        };
+        const heldSlot = typedApp.aiAcquire('u1');
+        expect(heldSlot).not.toBeNull();
+
+        mockSearchPostsByTsvector.mockResolvedValueOnce(
+          Array.from({ length: 5 }, (_, i) => makePostRow({ id: `id-${i}` })),
+        );
+        mockSearchUsers.mockResolvedValueOnce([]);
+
+        try {
+          const res = await app.inject({
+            method: 'GET',
+            url: '/api/search',
+            query: { q: 'react', ai: 'true' },
+            headers: { authorization: `Bearer ${authToken}` },
+          });
+
+          expect(res.statusCode).toBe(200);
+          expect(mockRunSearchChain).not.toHaveBeenCalled();
+          expect(mockSearchPostsByTsvector).toHaveBeenCalledWith('react', expect.any(Object));
+        } finally {
+          (heldSlot as { release: () => void }).release();
+        }
+      });
+
+      it('falls back to plain search when chain throws', async () => {
+        mockRunSearchChain.mockRejectedValueOnce(new Error('chain exploded'));
+        mockSearchPostsByTsvector.mockResolvedValueOnce(
+          Array.from({ length: 5 }, (_, i) => makePostRow({ id: `id-${i}` })),
+        );
+        mockSearchUsers.mockResolvedValueOnce([]);
+
+        const res = await app.inject({
+          method: 'GET',
+          url: '/api/search',
+          query: { q: 'react', ai: 'true' },
+          headers: { authorization: `Bearer ${authToken}` },
+        });
+
+        expect(res.statusCode).toBe(200);
+        expect(mockRunSearchChain).toHaveBeenCalledOnce();
+        expect(mockSearchPostsByTsvector).toHaveBeenCalledWith('react', expect.any(Object));
+      });
+
+      it('handles null contentType and empty tags in filters (covers ?? branches)', async () => {
+        const filters: AiSearchFilters = {
+          tags: [],
+          language: null,
+          contentType: null,
+          textQuery: 'hooks',
+        };
+        mockRunSearchChain.mockResolvedValueOnce(filters);
+        mockSearchPostsByTsvector.mockResolvedValueOnce(
+          Array.from({ length: 5 }, (_, i) => makePostRow({ id: `id-${i}` })),
+        );
+        mockSearchUsers.mockResolvedValueOnce([]);
+
+        const res = await app.inject({
+          method: 'GET',
+          url: '/api/search',
+          query: { q: 'react hooks', ai: 'true' },
+          headers: { authorization: `Bearer ${authToken}` },
+        });
+
+        expect(res.statusCode).toBe(200);
+        // contentType and tag should be undefined (null ?? undefined)
+        expect(mockSearchPostsByTsvector).toHaveBeenCalledWith(
+          'hooks',
+          expect.objectContaining({ contentType: undefined, tag: undefined }),
+        );
+      });
+
+      it('passes filters to buildAiActions when AI chain succeeds', async () => {
+        const filters: AiSearchFilters = {
+          tags: [],
+          language: 'python',
+          contentType: 'snippet',
+          textQuery: 'quicksort',
+        };
+        mockRunSearchChain.mockResolvedValueOnce(filters);
+        mockSearchPostsByTsvector.mockResolvedValueOnce(
+          Array.from({ length: 5 }, (_, i) => makePostRow({ id: `id-${i}` })),
+        );
+        mockSearchUsers.mockResolvedValueOnce([]);
+
+        const res = await app.inject({
+          method: 'GET',
+          url: '/api/search',
+          query: { q: 'python quicksort', ai: 'true' },
+          headers: { authorization: `Bearer ${authToken}` },
+        });
+
+        expect(res.statusCode).toBe(200);
+        const body = res.json();
+        // AI actions should use filters-based generation (language-specific)
+        expect(body.aiActions.some((a: { label: string }) => a.label.includes('python'))).toBe(
+          true,
+        );
+      });
+
+      it('uses plain buildAiActions (no filters) when AI path falls back', async () => {
+        mockRunSearchChain.mockResolvedValueOnce(null);
+        mockSearchPostsByTsvector.mockResolvedValueOnce(
+          Array.from({ length: 5 }, (_, i) => makePostRow({ id: `id-${i}` })),
+        );
+        mockSearchUsers.mockResolvedValueOnce([]);
+
+        const res = await app.inject({
+          method: 'GET',
+          url: '/api/search',
+          query: { q: 'react', ai: 'true' },
+          headers: { authorization: `Bearer ${authToken}` },
+        });
+
+        expect(res.statusCode).toBe(200);
+        const body = res.json();
+        // Falls back to stub actions with topic key
+        expect(body.aiActions[0].params['topic']).toBe('react');
+      });
     });
   });
 });

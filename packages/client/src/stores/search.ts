@@ -35,6 +35,7 @@ export const useSearchStore = defineStore('search', () => {
   const isOpen = ref(false);
   const recentQueries = ref<string[]>(loadRecentQueries());
   const activeIndex = ref(0);
+  const aiEnabled = ref(false);
 
   function setQuery(q: string): void {
     query.value = q;
@@ -81,6 +82,10 @@ export const useSearchStore = defineStore('search', () => {
     activeIndex.value = i;
   }
 
+  function toggleAi(): void {
+    aiEnabled.value = !aiEnabled.value;
+  }
+
   return {
     query,
     results,
@@ -88,6 +93,7 @@ export const useSearchStore = defineStore('search', () => {
     isOpen,
     recentQueries,
     activeIndex,
+    aiEnabled,
     setQuery,
     setResults,
     setLoading,
@@ -96,5 +102,6 @@ export const useSearchStore = defineStore('search', () => {
     pushRecent,
     clearResults,
     setActiveIndex,
+    toggleAi,
   };
 });
