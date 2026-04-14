@@ -1,0 +1,34 @@
+meta {
+  name: AI Search
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/api/search?q=python+csv+parsing&ai=true
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.snippets: isArray
+  res.body.aiActions: isArray
+  res.body.people: isArray
+  res.body.totalResults: isNumber
+  res.body.query: isString
+}
+
+docs {
+  AI-powered search for "python csv parsing" with ai=true flag.
+  Requires authentication (bearer token from collection bootstrap).
+  The server interprets the query via LangChain search chain into
+  structured filters, then uses them for a more targeted DB query.
+  Falls back to plain search if the AI chain fails.
+
+  Response: { snippets, aiActions, people, query, totalResults }
+}
