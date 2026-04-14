@@ -1,0 +1,35 @@
+meta {
+  name: Get Prompt Variables
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/posts/c0000000-0000-0000-0000-000000000004/variables
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("returns variables array", function() {
+    const body = res.getBody();
+    expect(body.variables).to.be.an('array');
+    expect(body.variables.length).to.be.greaterThan(0);
+  });
+
+  test("each variable has required fields", function() {
+    const v = res.getBody().variables[0];
+    expect(v).to.have.property('id');
+    expect(v).to.have.property('postId');
+    expect(v).to.have.property('name');
+    expect(v).to.have.property('sortOrder');
+  });
+}

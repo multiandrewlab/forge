@@ -1,0 +1,32 @@
+meta {
+  name: Run Prompt - Invalid Body
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/playground/run
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "variables": {}
+  }
+}
+
+assert {
+  res.status: eq 400
+}
+
+tests {
+  test("returns validation error", function() {
+    const body = res.getBody();
+    expect(body).to.have.property('error');
+  });
+}
