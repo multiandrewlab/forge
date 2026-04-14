@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
   searchQuerySchema,
+  aiSearchFiltersSchema,
   type SearchSnippet,
   type AiAction,
+  type AiSearchFilters,
   type UserSummary,
   type SearchResponse,
   type SearchQuery,
@@ -248,5 +250,101 @@ describe('SearchQuery type', () => {
       expect(query.type).toBe('prompt');
       expect(query.limit).toBe(5);
     }
+  });
+});
+
+describe('searchQuerySchema — ai field', () => {
+  it('accepts ai: true (boolean)', () => {
+    const result = searchQuerySchema.safeParse({ q: 'test', ai: true });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.ai).toBe(true);
+    }
+  });
+
+  it('coerces ai from string "true" to boolean true', () => {
+    const result = searchQuerySchema.safeParse({ q: 'test', ai: 'true' });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.ai).toBe(true);
+    }
+  });
+
+  it('accepts ai: false (boolean)', () => {
+    const result = searchQuerySchema.safeParse({ q: 'test', ai: false });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.ai).toBe(false);
+    }
+  });
+
+  it('leaves ai undefined when omitted', () => {
+    const result = searchQuerySchema.safeParse({ q: 'test' });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.ai).toBeUndefined();
+    }
+  });
+});
+
+describe('aiSearchFiltersSchema', () => {
+  it('accepts a valid payload with all fields', () => {
+    const input: AiSearchFilters = {
+      tags: ['typescript', 'react'],
+      language: 'typescript',
+      contentType: 'snippet',
+      textQuery: 'react hooks',
+    };
+    const result = aiSearchFiltersSchema.safeParse(input);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.tags).toEqual(['typescript', 'react']);
+      expect(result.data.language).toBe('typescript');
+      expect(result.data.contentType).toBe('snippet');
+      expect(result.data.textQuery).toBe('react hooks');
+    }
+  });
+
+  it('accepts null language and contentType', () => {
+    const input = {
+      tags: [],
+      language: null,
+      contentType: null,
+      textQuery: '',
+    };
+    const result = aiSearchFiltersSchema.safeParse(input);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.language).toBeNull();
+      expect(result.data.contentType).toBeNull();
+    }
+  });
+
+  it('rejects missing tags field', () => {
+    const result = aiSearchFiltersSchema.safeParse({
+      language: null,
+      contentType: null,
+      textQuery: 'test',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects missing textQuery field', () => {
+    const result = aiSearchFiltersSchema.safeParse({
+      tags: [],
+      language: null,
+      contentType: null,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects non-string entries in tags array', () => {
+    const result = aiSearchFiltersSchema.safeParse({
+      tags: [123],
+      language: null,
+      contentType: null,
+      textQuery: 'test',
+    });
+    expect(result.success).toBe(false);
   });
 });

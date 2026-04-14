@@ -92,7 +92,8 @@ export type {
   SearchQuery,
   SearchSnippet,
   AiAction,
+  AiSearchFilters,
   UserSummary,
   SearchResponse,
 } from './search.js';
-export { searchQuerySchema } from './search.js';
+export { searchQuerySchema, aiSearchFiltersSchema } from './search.js';
