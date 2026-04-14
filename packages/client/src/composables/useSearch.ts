@@ -6,13 +6,14 @@ import type { SearchResponse } from '@forge/shared';
 
 export function useSearch() {
   const store = useSearchStore();
-  const { query, results, isLoading } = storeToRefs(store);
+  const { query, results, isLoading, aiEnabled } = storeToRefs(store);
 
   async function runSearch(q: string): Promise<void> {
     const trimmed = q.trim();
     store.setLoading(true);
     try {
-      const response = await apiFetch(`/api/search?q=${encodeURIComponent(trimmed)}`);
+      const url = `/api/search?q=${encodeURIComponent(trimmed)}${store.aiEnabled ? '&ai=true' : ''}`;
+      const response = await apiFetch(url);
 
       if (!response.ok) {
         store.setResults(null);
@@ -52,6 +53,8 @@ export function useSearch() {
     query,
     results,
     isLoading,
+    aiEnabled,
+    toggleAi: store.toggleAi,
     search,
     clearResults,
   };

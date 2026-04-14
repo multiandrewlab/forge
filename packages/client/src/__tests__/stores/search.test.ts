@@ -32,6 +32,7 @@ describe('useSearchStore', () => {
       expect(store.isOpen).toBe(false);
       expect(store.recentQueries).toEqual([]);
       expect(store.activeIndex).toBe(0);
+      expect(store.aiEnabled).toBe(false);
     });
 
     it('should load recentQueries from localStorage', () => {
@@ -155,6 +156,15 @@ describe('useSearchStore', () => {
       store.open();
       expect(store.activeIndex).toBe(0);
     });
+
+    it('should not reset aiEnabled', () => {
+      const store = useSearchStore();
+      store.toggleAi();
+      expect(store.aiEnabled).toBe(true);
+
+      store.open();
+      expect(store.aiEnabled).toBe(true);
+    });
   });
 
   describe('close', () => {
@@ -177,6 +187,35 @@ describe('useSearchStore', () => {
       expect(store.query).toBe('');
       expect(store.results).toBeNull();
       expect(store.activeIndex).toBe(0);
+    });
+
+    it('should NOT reset aiEnabled', () => {
+      const store = useSearchStore();
+      store.toggleAi();
+      expect(store.aiEnabled).toBe(true);
+
+      store.open();
+      store.close();
+      expect(store.aiEnabled).toBe(true);
+    });
+  });
+
+  describe('toggleAi', () => {
+    it('should flip aiEnabled from false to true', () => {
+      const store = useSearchStore();
+      expect(store.aiEnabled).toBe(false);
+
+      store.toggleAi();
+      expect(store.aiEnabled).toBe(true);
+    });
+
+    it('should flip aiEnabled from true to false', () => {
+      const store = useSearchStore();
+      store.toggleAi();
+      expect(store.aiEnabled).toBe(true);
+
+      store.toggleAi();
+      expect(store.aiEnabled).toBe(false);
     });
   });
 

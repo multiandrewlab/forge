@@ -85,8 +85,12 @@ describe('PostNewPage', () => {
     mockError.value = null;
   });
 
-  async function mountPage() {
-    router.push('/posts/new');
+  async function mountPage(query: Record<string, string> = {}) {
+    const path =
+      Object.keys(query).length > 0
+        ? `/posts/new?${new URLSearchParams(query).toString()}`
+        : '/posts/new';
+    await router.push(path);
     await router.isReady();
     return mount(PostNewPage, {
       global: { plugins: [pinia, router] },
@@ -116,6 +120,51 @@ describe('PostNewPage', () => {
       mockError.value = 'Something went wrong';
       const wrapper = await mountPage();
       expect(wrapper.text()).toContain('Something went wrong');
+    });
+
+    it('should pre-fill title from route.query.description', async () => {
+      const wrapper = await mountPage({ description: 'fizzbuzz in python' });
+      const editor = wrapper.findComponent({ name: 'PostEditor' });
+      expect(editor.props('title')).toBe('fizzbuzz in python');
+    });
+
+    it('should pre-fill contentType from route.query.contentType', async () => {
+      const wrapper = await mountPage({ contentType: 'link' });
+      const editor = wrapper.findComponent({ name: 'PostEditor' });
+      expect(editor.props('contentType')).toBe('link');
+    });
+
+    it('should pre-fill language from route.query.language and set manualLanguage', async () => {
+      mockDetectLanguage.mockReturnValue(null);
+      const wrapper = await mountPage({ language: 'python' });
+      const editor = wrapper.findComponent({ name: 'PostEditor' });
+      expect(editor.props('language')).toBe('python');
+
+      // manualLanguage should be set — verify that content change does NOT overwrite language
+      await editor.vm.$emit('update:modelValue', 'def foo(): pass');
+      await flushPromises();
+      // detectLanguage won't be called when manualLanguage is true
+      expect(editor.props('language')).toBe('python');
+    });
+
+    it('should pre-fill all params together', async () => {
+      const wrapper = await mountPage({
+        description: 'fizzbuzz',
+        contentType: 'snippet',
+        language: 'typescript',
+      });
+      const editor = wrapper.findComponent({ name: 'PostEditor' });
+      expect(editor.props('title')).toBe('fizzbuzz');
+      expect(editor.props('contentType')).toBe('snippet');
+      expect(editor.props('language')).toBe('typescript');
+    });
+
+    it('should not pre-fill when query params are absent', async () => {
+      const wrapper = await mountPage();
+      const editor = wrapper.findComponent({ name: 'PostEditor' });
+      expect(editor.props('title')).toBe('');
+      expect(editor.props('contentType')).toBe('snippet');
+      expect(editor.props('language')).toBe('');
     });
   });
 

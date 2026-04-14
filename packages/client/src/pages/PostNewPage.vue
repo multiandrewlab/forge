@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRouter, useRoute } from 'vue-router';
 import PostEditor from '@/components/editor/PostEditor.vue';
 import { usePosts } from '@/composables/usePosts';
 import { detectLanguage } from '@/lib/detectLanguage';
@@ -8,6 +8,7 @@ import type { ContentType, Visibility } from '@forge/shared';
 import type { SaveStatus } from '@/stores/posts';
 
 const router = useRouter();
+const route = useRoute();
 const { createPost, saveRevision, error } = usePosts();
 
 const title = ref('');
@@ -18,6 +19,18 @@ const visibility = ref<Visibility>('public');
 const contentType = ref<ContentType>('snippet');
 const tags = ref<string[]>([]);
 const saveStatus = ref<SaveStatus>('saved');
+
+// Pre-fill from AI Action query params
+if (typeof route.query.description === 'string' && route.query.description) {
+  title.value = route.query.description;
+}
+if (typeof route.query.contentType === 'string' && route.query.contentType) {
+  contentType.value = route.query.contentType as ContentType;
+}
+if (typeof route.query.language === 'string' && route.query.language) {
+  language.value = route.query.language;
+  manualLanguage.value = true;
+}
 
 // Auto-detect language from content when not manually set
 watch(content, (newContent) => {
