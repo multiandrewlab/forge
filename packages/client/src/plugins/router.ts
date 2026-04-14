@@ -54,6 +54,11 @@ const router = createRouter({
           component: () => import('@/pages/PostHistoryPage.vue'),
         },
         {
+          path: 'playground/:id',
+          name: 'playground',
+          component: () => import('@/pages/PlaygroundPage.vue'),
+        },
+        {
           path: 'search',
           name: 'search',
           component: () => import('@/pages/SearchPage.vue'),

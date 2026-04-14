@@ -73,6 +73,11 @@ describe('Router', () => {
       expect(route.name).toBe('post-history');
     });
 
+    it('should have a playground route at "/playground/:id"', () => {
+      const route = router.resolve('/playground/abc');
+      expect(route.name).toBe('playground');
+    });
+
     it('should have a login route at "/login"', () => {
       const route = router.resolve('/login');
       expect(route.name).toBe('login');
@@ -166,6 +171,16 @@ describe('Router', () => {
       await router.isReady();
 
       expect(router.currentRoute.value.name).toBe('post-history');
+    });
+
+    it('should navigate to playground route when authenticated', async () => {
+      const store = useAuthStore();
+      store.setAuth('token', createMockUser());
+
+      await router.push('/playground/abc');
+      await router.isReady();
+
+      expect(router.currentRoute.value.name).toBe('playground');
     });
 
     it('should lazy-load PostNewPage component when navigating to post-new', async () => {
