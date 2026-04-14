@@ -61,6 +61,14 @@ vi.mock('@/components/editor/DraftStatus.vue', () => ({
   },
 }));
 
+vi.mock('@/components/editor/AiGeneratePanel.vue', () => ({
+  default: {
+    name: 'AiGeneratePanel',
+    props: ['editorView', 'contentType', 'language'],
+    template: '<div data-testid="ai-generate-toggle" />',
+  },
+}));
+
 import PostEditor from '@/components/editor/PostEditor.vue';
 
 describe('PostEditor', () => {
@@ -221,6 +229,94 @@ describe('PostEditor', () => {
       const emitted = wrapper.emitted('update:tags');
       expect(emitted).toBeTruthy();
       expect((emitted as unknown[][])[0]).toEqual([['vue', 'typescript']]);
+    });
+  });
+
+  describe('AiGeneratePanel integration', () => {
+    it('should render AiGeneratePanel when contentType is snippet', async () => {
+      const w = mount(PostEditor, { props: { ...defaultProps, contentType: 'snippet' as const } });
+      await nextTick();
+      await flushPromises();
+
+      expect(w.find('[data-testid="ai-generate-toggle"]').exists()).toBe(true);
+    });
+
+    it('should render AiGeneratePanel when contentType is prompt', async () => {
+      const w = mount(PostEditor, { props: { ...defaultProps, contentType: 'prompt' as const } });
+      await nextTick();
+      await flushPromises();
+
+      expect(w.find('[data-testid="ai-generate-toggle"]').exists()).toBe(true);
+    });
+
+    it('should render AiGeneratePanel when contentType is document', async () => {
+      const w = mount(PostEditor, {
+        props: { ...defaultProps, contentType: 'document' as const },
+      });
+      await nextTick();
+      await flushPromises();
+
+      expect(w.find('[data-testid="ai-generate-toggle"]').exists()).toBe(true);
+    });
+
+    it('should NOT render AiGeneratePanel when contentType is link', async () => {
+      const w = mount(PostEditor, { props: { ...defaultProps, contentType: 'link' as const } });
+      await nextTick();
+      await flushPromises();
+
+      expect(w.find('[data-testid="ai-generate-toggle"]').exists()).toBe(false);
+    });
+
+    it('should NOT render AiGeneratePanel when editorView is null', async () => {
+      // Mount with a CodeEditor stub that exposes a null view
+      const w = mount(PostEditor, {
+        props: { ...defaultProps, contentType: 'snippet' as const },
+        global: {
+          stubs: {
+            CodeEditor: {
+              name: 'CodeEditor',
+              props: ['modelValue', 'language', 'readonly'],
+              emits: ['update:modelValue'],
+              template: '<div data-testid="code-editor-stub"></div>',
+              setup(
+                _props: Record<string, unknown>,
+                { expose }: { expose: (exposed: Record<string, unknown>) => void },
+              ) {
+                const view = shallowRef(null);
+                expose({ view });
+                return {};
+              },
+            },
+          },
+        },
+      });
+      await nextTick();
+      await flushPromises();
+
+      expect(w.find('[data-testid="ai-generate-toggle"]').exists()).toBe(false);
+    });
+
+    it('should pass correct props to AiGeneratePanel', async () => {
+      const w = mount(PostEditor, { props: { ...defaultProps, contentType: 'snippet' as const } });
+      await nextTick();
+      await flushPromises();
+
+      const panel = w.findComponent({ name: 'AiGeneratePanel' });
+      expect(panel.exists()).toBe(true);
+      expect(panel.props('contentType')).toBe('snippet');
+      expect(panel.props('language')).toBe('javascript');
+    });
+
+    it('should still render title input, toolbar, CodeEditor, and publish button alongside AiGeneratePanel', async () => {
+      const w = mount(PostEditor, { props: { ...defaultProps, contentType: 'snippet' as const } });
+      await nextTick();
+      await flushPromises();
+
+      expect(w.find('[data-testid="title-input"]').exists()).toBe(true);
+      expect(w.find('[data-testid="editor-toolbar-stub"]').exists()).toBe(true);
+      expect(w.find('[data-testid="code-editor-stub"]').exists()).toBe(true);
+      expect(w.find('[data-testid="publish-button"]').exists()).toBe(true);
+      expect(w.find('[data-testid="ai-generate-toggle"]').exists()).toBe(true);
     });
   });
 

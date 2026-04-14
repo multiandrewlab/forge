@@ -1,12 +1,16 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
-import type { ContentType, Visibility, AiCompleteRequest } from '@forge/shared';
+import type { ContentType, Visibility, AiCompleteRequest, AiGenerateRequest } from '@forge/shared';
 import type { EditorView } from '@codemirror/view';
 import type { SaveStatus } from '@/stores/posts';
 import CodeEditor from '@/components/editor/CodeEditor.vue';
 import EditorToolbar from '@/components/editor/EditorToolbar.vue';
 import DraftStatus from '@/components/editor/DraftStatus.vue';
 import AiSuggestion from '@/components/editor/AiSuggestion.vue';
+import AiGeneratePanel from '@/components/editor/AiGeneratePanel.vue';
+
+/** Narrow content-type enum accepted by AiGeneratePanel (excludes 'link'). */
+type AiGenerateContentType = AiGenerateRequest['contentType'];
 
 const props = defineProps<{
   modelValue: string;
@@ -50,6 +54,14 @@ function onTitleInput(event: Event): void {
   const target = event.target as unknown as { value: string };
   emit('update:title', target.value);
 }
+
+// AI generation is only meaningful for snippet | prompt | document — not 'link' (a URL is not generatable content).
+const AI_GENERATE_CONTENT_TYPES: ReadonlySet<string> = new Set<AiGenerateContentType>([
+  'snippet',
+  'prompt',
+  'document',
+]);
+const isAiGenerateContentType = computed(() => AI_GENERATE_CONTENT_TYPES.has(props.contentType));
 </script>
 
 <template>
@@ -86,7 +98,7 @@ function onTitleInput(event: Event): void {
       />
     </div>
 
-    <div class="flex-1">
+    <div class="flex-1 relative">
       <CodeEditor
         ref="editorRef"
         :model-value="modelValue"
@@ -94,6 +106,13 @@ function onTitleInput(event: Event): void {
         @update:model-value="(val) => emit('update:modelValue', val)"
       />
       <AiSuggestion v-if="editorView" ref="aiRef" :editor-view="editorView as EditorView" />
+      <AiGeneratePanel
+        v-if="editorView && isAiGenerateContentType"
+        :editor-view="editorView as EditorView"
+        :content-type="contentType as AiGenerateContentType"
+        :language="language"
+        class="absolute bottom-4 right-4"
+      />
     </div>
   </div>
 </template>
