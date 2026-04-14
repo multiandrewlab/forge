@@ -14,6 +14,7 @@ import { tagRoutes } from './routes/tags.js';
 import { commentRoutes } from './routes/comments.js';
 import { searchRoutes } from './routes/search.js';
 import { aiRoutes } from './routes/ai.js';
+import { playgroundRoutes } from './routes/playground.js';
 import { websocketPlugin } from './plugins/websocket/index.js';
 import { langchainPlugin } from './plugins/langchain/index.js';
 
@@ -64,6 +65,7 @@ export async function buildApp() {
   await app.register(tagRoutes, { prefix: '/api/tags' });
   await app.register(commentRoutes, { prefix: '/api/posts' });
   await app.register(aiRoutes, { prefix: '/api/ai' });
+  await app.register(playgroundRoutes, { prefix: '/api' });
 
   return app;
 }
