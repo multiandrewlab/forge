@@ -1,5 +1,9 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { buildApp } from '../app.js';
+
+vi.mock('../db/queries/post-files.js', () => ({
+  cleanupStagedFiles: vi.fn().mockResolvedValue(0),
+}));
 
 describe('buildApp', () => {
   let app: Awaited<ReturnType<typeof buildApp>> | undefined;
@@ -39,5 +43,49 @@ describe('buildApp', () => {
     expect(app.websocket.connections).toBeDefined();
     expect(app.websocket.channels).toBeDefined();
     expect(app.websocket.presence).toBeDefined();
+  });
+
+  describe('onReady staged file cleanup', () => {
+    it('calls cleanupStagedFiles on ready', async () => {
+      const { cleanupStagedFiles } = await import('../db/queries/post-files.js');
+
+      app = await buildApp();
+      await app.ready();
+
+      expect(cleanupStagedFiles).toHaveBeenCalled();
+    });
+
+    it('logs info when orphaned files are cleaned', async () => {
+      const { cleanupStagedFiles } = await import('../db/queries/post-files.js');
+      vi.mocked(cleanupStagedFiles).mockResolvedValue(5);
+
+      app = await buildApp();
+      // Spy on the logger before ready triggers the hook
+      const infoSpy = vi.spyOn(app.log, 'info');
+      await app.ready();
+
+      expect(cleanupStagedFiles).toHaveBeenCalled();
+      expect(infoSpy).toHaveBeenCalledWith(
+        { count: 5 },
+        'Cleaned up orphaned staged files',
+      );
+    });
+
+    it('does not fail server startup if cleanup errors', async () => {
+      const { cleanupStagedFiles } = await import('../db/queries/post-files.js');
+      vi.mocked(cleanupStagedFiles).mockRejectedValue(new Error('DB down'));
+
+      app = await buildApp();
+      // Spy on the logger before ready triggers the hook
+      const warnSpy = vi.spyOn(app.log, 'warn');
+      await app.ready();
+
+      // Server should still be ready despite cleanup failure
+      expect(app).toBeDefined();
+      expect(warnSpy).toHaveBeenCalledWith(
+        { err: expect.any(Error) },
+        'Failed to clean up staged files',
+      );
+    });
   });
 });

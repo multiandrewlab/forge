@@ -20,6 +20,7 @@ import { playgroundRoutes } from './routes/playground.js';
 import { fileRoutes } from './routes/files.js';
 import { websocketPlugin } from './plugins/websocket/index.js';
 import { langchainPlugin } from './plugins/langchain/index.js';
+import { cleanupStagedFiles } from './db/queries/post-files.js';
 
 export async function buildApp() {
   const app = Fastify({
@@ -87,6 +88,17 @@ export async function buildApp() {
   await app.register(aiRoutes, { prefix: '/api/ai' });
   await app.register(playgroundRoutes, { prefix: '/api' });
   await app.register(fileRoutes, { prefix: '/api/posts' });
+
+  app.addHook('onReady', async () => {
+    try {
+      const cleaned = await cleanupStagedFiles();
+      if (cleaned > 0) {
+        app.log.info({ count: cleaned }, 'Cleaned up orphaned staged files');
+      }
+    } catch (err) {
+      app.log.warn({ err }, 'Failed to clean up staged files');
+    }
+  });
 
   return app;
 }
