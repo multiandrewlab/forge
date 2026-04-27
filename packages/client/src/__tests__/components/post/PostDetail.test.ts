@@ -31,10 +31,19 @@ vi.mock('vue-router', () => ({
   }),
 }));
 
+vi.mock('marked', () => ({
+  marked: { parse: vi.fn().mockReturnValue('<p>md</p>') },
+}));
+
+vi.mock('dompurify', () => ({
+  default: { sanitize: vi.fn((html: string) => html) },
+}));
+
 import { apiFetch } from '../../../lib/api.js';
 import PostDetail from '../../../components/post/PostDetail.vue';
 import { useCommentsStore } from '../../../stores/comments.js';
-import type { PostWithAuthor, PostWithRevision, Comment } from '@forge/shared';
+import { useFilesStore } from '../../../stores/files.js';
+import type { PostWithAuthor, PostWithRevision, Comment, PostFile } from '@forge/shared';
 
 const mockApiFetch = apiFetch as ReturnType<typeof vi.fn>;
 
@@ -74,6 +83,49 @@ const mockPostWithRevision: PostWithRevision = {
   ],
 };
 
+const mockFiles: PostFile[] = [
+  {
+    id: 'file-1',
+    postId: 'post-1',
+    revisionId: 'rev-1',
+    filename: 'index.ts',
+    mimeType: 'text/typescript',
+    fileSize: 256,
+    sortOrder: 0,
+    createdAt: new Date('2025-01-01'),
+  },
+  {
+    id: 'file-2',
+    postId: 'post-1',
+    revisionId: 'rev-1',
+    filename: 'utils.ts',
+    mimeType: 'text/typescript',
+    fileSize: 128,
+    sortOrder: 1,
+    createdAt: new Date('2025-01-01'),
+  },
+];
+
+function setupUrlAwareMockWithFiles(postData: unknown, files: PostFile[]): void {
+  mockApiFetch.mockImplementation((url: string) => {
+    if (url.includes('/comments')) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ comments: [] }),
+      } as Response);
+    }
+    if (url.includes('/files')) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ files }),
+      } as Response);
+    }
+    return Promise.resolve(mockOkResponse(postData));
+  });
+}
+
 function mockOkResponse(data: unknown): Response {
   return {
     ok: true,
@@ -97,6 +149,13 @@ function setupUrlAwareMock(postData: unknown): void {
         ok: true,
         status: 200,
         json: () => Promise.resolve({ comments: [] }),
+      } as Response);
+    }
+    if (url.includes('/files')) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ files: [] }),
       } as Response);
     }
     return Promise.resolve(mockOkResponse(postData));
@@ -218,6 +277,13 @@ describe('PostDetail', () => {
           ok: true,
           status: 200,
           json: () => Promise.resolve({ comments: [] }),
+        } as Response);
+      }
+      if (url.includes('/files')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({ files: [] }),
         } as Response);
       }
       return Promise.resolve(mockOkResponse(mockPostWithRevision));
@@ -458,5 +524,157 @@ describe('PostDetail', () => {
 
     expect(mockForkPost).not.toHaveBeenCalled();
     expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  describe('multi-file layout', () => {
+    it('renders FileSidebar and FilePreview when post has files', async () => {
+      setupUrlAwareMockWithFiles(mockPostWithRevision, mockFiles);
+
+      const wrapper = mount(PostDetail, { props: { post: mockPost } });
+      await flushPromises();
+
+      const sidebar = wrapper.findComponent({ name: 'FileSidebar' });
+      expect(sidebar.exists()).toBe(true);
+      expect(sidebar.props('files')).toEqual(mockFiles);
+      expect(sidebar.props('editable')).toBe(false);
+
+      const preview = wrapper.findComponent({ name: 'FilePreview' });
+      expect(preview.exists()).toBe(true);
+    });
+
+    it('does not render CodeViewer when post has files', async () => {
+      setupUrlAwareMockWithFiles(mockPostWithRevision, mockFiles);
+
+      const wrapper = mount(PostDetail, { props: { post: mockPost } });
+      await flushPromises();
+
+      const codeViewer = wrapper.findComponent({ name: 'CodeViewer' });
+      expect(codeViewer.exists()).toBe(false);
+    });
+
+    it('renders classic CodeViewer layout when post has no files', async () => {
+      setupUrlAwareMockWithFiles(mockPostWithRevision, []);
+
+      const wrapper = mount(PostDetail, { props: { post: mockPost } });
+      await flushPromises();
+
+      const codeViewer = wrapper.findComponent({ name: 'CodeViewer' });
+      expect(codeViewer.exists()).toBe(true);
+
+      const sidebar = wrapper.findComponent({ name: 'FileSidebar' });
+      expect(sidebar.exists()).toBe(false);
+    });
+
+    it('fetches files using the revision id after loading the post', async () => {
+      setupUrlAwareMockWithFiles(mockPostWithRevision, mockFiles);
+
+      mount(PostDetail, { props: { post: mockPost } });
+      await flushPromises();
+
+      const filesCalls = mockApiFetch.mock.calls.filter(
+        (call: unknown[]) =>
+          typeof call[0] === 'string' && call[0].includes('/files?revisionId='),
+      );
+      expect(filesCalls.length).toBe(1);
+      expect(filesCalls[0][0]).toBe('/api/posts/post-1/files?revisionId=rev-1');
+    });
+
+    it('clicking a file in the sidebar updates the active file', async () => {
+      setupUrlAwareMockWithFiles(mockPostWithRevision, mockFiles);
+
+      const wrapper = mount(PostDetail, { props: { post: mockPost } });
+      await flushPromises();
+
+      const filesStore = useFilesStore();
+      // The first file should be auto-selected by the store
+      expect(filesStore.activeFileId).toBe('file-1');
+
+      // Simulate selecting the second file via FileSidebar emit
+      const sidebar = wrapper.findComponent({ name: 'FileSidebar' });
+      sidebar.vm.$emit('select', 'file-2');
+      await wrapper.vm.$nextTick();
+
+      expect(filesStore.activeFileId).toBe('file-2');
+    });
+
+    it('passes the active file to FilePreview', async () => {
+      setupUrlAwareMockWithFiles(mockPostWithRevision, mockFiles);
+
+      const wrapper = mount(PostDetail, { props: { post: mockPost } });
+      await flushPromises();
+
+      const preview = wrapper.findComponent({ name: 'FilePreview' });
+      expect(preview.props('file')).toEqual(mockFiles[0]);
+      expect(preview.props('postId')).toBe('post-1');
+    });
+
+    it('does not render FilePreview when activeFileId does not match any file (activeFile null branch)', async () => {
+      setupUrlAwareMockWithFiles(mockPostWithRevision, mockFiles);
+
+      const wrapper = mount(PostDetail, { props: { post: mockPost } });
+      await flushPromises();
+
+      // Sidebar should be visible (files exist)
+      const sidebar = wrapper.findComponent({ name: 'FileSidebar' });
+      expect(sidebar.exists()).toBe(true);
+
+      // Set activeFileId to a non-existent file id — exercises `files.value.find(...)` returning undefined → null
+      const fStore = useFilesStore();
+      fStore.activeFileId = 'nonexistent-file-id';
+      await wrapper.vm.$nextTick();
+
+      // FilePreview should NOT be rendered because activeFile is null (v-if="activeFile" is false)
+      const preview = wrapper.findComponent({ name: 'FilePreview' });
+      expect(preview.exists()).toBe(false);
+    });
+
+    it('falls back to empty array when filesByRevision has no entry for revision id (?? [] branch)', async () => {
+      // Return a post with a revision, but the files fetch returns no data for that revision key
+      mockApiFetch.mockImplementation((url: string) => {
+        if (url.includes('/comments')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve({ comments: [] }),
+          } as Response);
+        }
+        if (url.includes('/files')) {
+          // Return ok but don't populate the store's filesByRevision for rev-1
+          return Promise.resolve({
+            ok: false,
+            status: 500,
+            json: () => Promise.resolve({ error: 'fail' }),
+          } as Response);
+        }
+        return Promise.resolve(mockOkResponse(mockPostWithRevision));
+      });
+
+      const wrapper = mount(PostDetail, { props: { post: mockPost } });
+      await flushPromises();
+
+      // Since fetchFiles got a non-ok response, filesByRevision['rev-1'] is never set
+      // The component code does: files.value = filesStore.filesByRevision[rev.id] ?? []
+      // This hits the ?? [] fallback, and files.length === 0, so CodeViewer renders instead
+      const codeViewer = wrapper.findComponent({ name: 'CodeViewer' });
+      expect(codeViewer.exists()).toBe(true);
+
+      const sidebarComp = wrapper.findComponent({ name: 'FileSidebar' });
+      expect(sidebarComp.exists()).toBe(false);
+    });
+
+    it('resets files store when post changes to null', async () => {
+      setupUrlAwareMockWithFiles(mockPostWithRevision, mockFiles);
+
+      const wrapper = mount(PostDetail, { props: { post: mockPost } });
+      await flushPromises();
+
+      const filesStore = useFilesStore();
+      expect(filesStore.activeFileId).toBe('file-1');
+
+      await wrapper.setProps({ post: null });
+      await flushPromises();
+
+      expect(filesStore.activeFileId).toBeNull();
+    });
   });
 });

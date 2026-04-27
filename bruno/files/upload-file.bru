@@ -1,0 +1,75 @@
+meta {
+  name: Upload File
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/health
+  body: none
+  auth: none
+}
+
+script:pre-request {
+  const axios = require("axios");
+  const baseUrl = bru.getEnvVar("baseUrl");
+  const postId = bru.getEnvVar("postId");
+  const token = bru.getVar("accessToken");
+
+  const boundary = "----BrunoTestBoundary";
+  const fileContent = 'console.log("hello from test fixture");';
+  const body =
+    "--" + boundary + "\r\n" +
+    'Content-Disposition: form-data; name="file"; filename="test.txt"\r\n' +
+    "Content-Type: text/plain\r\n" +
+    "\r\n" +
+    fileContent +
+    "\r\n--" + boundary + "--\r\n";
+
+  try {
+    const res = await axios.post(
+      baseUrl + "/api/posts/" + postId + "/files",
+      body,
+      {
+        headers: {
+          "content-type": "multipart/form-data; boundary=" + boundary,
+          "authorization": "Bearer " + token
+        }
+      }
+    );
+    bru.setVar("_uploadStatus", String(res.status));
+    bru.setVar("_uploadBody", JSON.stringify(res.data));
+    if (res.data && res.data.file) {
+      bru.setVar("createdFileId", res.data.file.id);
+    }
+  } catch (err) {
+    const st = err.response ? String(err.response.status) : "0";
+    const bd = err.response ? JSON.stringify(err.response.data) : String(err.message);
+    bru.setVar("_uploadStatus", st);
+    bru.setVar("_uploadBody", bd);
+  }
+}
+
+tests {
+  test("upload returns 201", () => {
+    const status = parseInt(bru.getVar("_uploadStatus"));
+    expect(status).to.equal(201);
+  });
+  test("response contains file with correct fields", () => {
+    const body = JSON.parse(bru.getVar("_uploadBody"));
+    expect(body.file).to.have.property("id");
+    expect(body.file).to.have.property("filename", "test.txt");
+    expect(body.file).to.have.property("mimeType", "text/plain");
+  });
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Upload a small text file to a post's staging area via axios workaround.
+  Bruno CLI sends multipart-form as application/x-www-form-urlencoded,
+  so the actual upload is done in script:pre-request.
+  Captures {{createdFileId}} for downstream requests.
+}

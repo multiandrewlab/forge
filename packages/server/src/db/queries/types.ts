@@ -53,12 +53,13 @@ export type PostRevisionWithAuthorRow = PostRevisionRow & {
 export interface PostFileRow {
   id: string;
   post_id: string;
-  revision_id: string;
+  revision_id: string | null;
   filename: string;
   content: string | null;
   storage_key: string | null;
   mime_type: string | null;
   sort_order: number;
+  file_size: number | null;
   created_at: Date;
 }
 

@@ -1,0 +1,28 @@
+meta {
+  name: Delete Staged File
+  type: http
+  seq: 10
+}
+
+delete {
+  url: {{baseUrl}}/api/posts/{{postId}}/files/{{createdFileId}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+assert {
+  res.status: eq 204
+}
+
+docs {
+  Delete a staged file from a post.
+  Uses {{createdFileId}} captured from the Upload File request (seq 1).
+  Only the post owner can delete staged files.
+
+  Response: 204 No Content
+  Errors: 403 (not owner), 404 (not found)
+}

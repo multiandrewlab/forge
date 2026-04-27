@@ -1,7 +1,11 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi, type Mock } from 'vitest';
 
+const mockClientQuery = vi.fn();
+const mockClient = { query: mockClientQuery };
+
 vi.mock('../../db/connection.js', () => ({
   query: vi.fn(),
+  withTransaction: vi.fn(async (fn: (client: { query: ReturnType<typeof vi.fn> }) => Promise<unknown>) => fn(mockClient)),
 }));
 
 // Disable rate limiting in route tests
@@ -34,7 +38,8 @@ vi.mock('@forge/shared', async (importOriginal) => {
   };
 });
 
-import { query } from '../../db/connection.js';
+import { query, withTransaction } from '../../db/connection.js';
+const mockWithTransaction = withTransaction as Mock;
 import { buildApp } from '../../app.js';
 import { createPostSchema } from '@forge/shared';
 import { findFeedPostById } from '../../db/queries/feed.js';
@@ -45,6 +50,7 @@ import type {
   PostRevisionRow,
   PostRevisionWithAuthorRow,
   PostWithRevisionRow,
+  PostFileRow,
   TagRow,
 } from '../../db/queries/types.js';
 
@@ -109,8 +115,21 @@ describe('post routes', () => {
   let otherToken: string;
   let broadcastSpy: ReturnType<typeof vi.spyOn>;
 
+  const mockStorage = {
+    upload: vi.fn(),
+    copy: vi.fn(),
+    getSignedUrl: vi.fn(),
+    delete: vi.fn(),
+    exists: vi.fn(),
+  };
+
   beforeAll(async () => {
     app = await buildApp();
+    // Decorate app with mock storage for file-aware revision tests
+    if (!app.hasDecorator('storage')) {
+      app.decorate('storage', mockStorage);
+    }
+    await app.ready();
     token = app.jwt.sign({ id: userId, email: 'test@example.com', displayName: 'Test User' });
     otherToken = app.jwt.sign({
       id: otherUserId,
@@ -126,6 +145,11 @@ describe('post routes', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockClientQuery.mockReset();
+    // Restore default withTransaction behavior (execute callback with mockClient)
+    mockWithTransaction.mockImplementation(
+      async (fn: (client: { query: ReturnType<typeof vi.fn> }) => Promise<unknown>) => fn(mockClient),
+    );
   });
 
   // ─── POST /api/posts ───────────────────────────────────────────────
@@ -902,6 +926,211 @@ describe('post routes', () => {
 
       app.websocket.connections.removeConnection(userId, fakeSocket, clientId);
     });
+
+    // ─── File-aware revision creation path (withTransaction) ───────
+    it('creates a revision with stagedFileIds and broadcasts feed (file-aware path)', async () => {
+      const stagedFileId = 'ff000000-0000-0000-0000-000000000001';
+      const newRevId = '880e8400-e29b-41d4-a716-446655440000';
+
+      // findPostById for ownership check
+      mockQuery.mockResolvedValueOnce({ rows: [samplePostRow], rowCount: 1 });
+
+      const newRevision: PostRevisionRow = {
+        ...sampleRevisionRow,
+        id: newRevId,
+        revision_number: 2,
+        content: 'console.log("with files");',
+        message: 'File revision',
+      };
+
+      const stagedFile: PostFileRow = {
+        id: stagedFileId,
+        post_id: postId,
+        revision_id: null,
+        filename: 'main.ts',
+        content: 'console.log("hello")',
+        storage_key: 'staging/abc123',
+        mime_type: 'text/typescript',
+        sort_order: 0,
+        file_size: 42,
+        created_at: new Date('2026-01-01'),
+      };
+
+      // Inside withTransaction callback — client.query calls:
+      // 1. INSERT revision
+      mockClientQuery.mockResolvedValueOnce({ rows: [newRevision], rowCount: 1 });
+      // 2. SELECT staged file
+      mockClientQuery.mockResolvedValueOnce({ rows: [stagedFile], rowCount: 1 });
+      // 3. UPDATE staged file (set revision_id)
+      mockClientQuery.mockResolvedValueOnce({ rows: [], rowCount: 1 });
+      // 4. SELECT previous revision (none)
+      mockClientQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+      // storage.copy for the staging key
+      mockStorage.copy.mockResolvedValueOnce(undefined);
+      // storage.delete for post-transaction cleanup
+      mockStorage.delete.mockResolvedValueOnce(undefined);
+
+      // findFeedPostById for feed broadcast
+      mockFindFeedPostById.mockResolvedValueOnce(sampleFeedRow);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/posts/${postId}/revisions`,
+        headers: { authorization: `Bearer ${token}` },
+        payload: {
+          content: 'console.log("with files");',
+          message: 'File revision',
+          stagedFileIds: [stagedFileId],
+        },
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(response.json().revision.revisionNumber).toBe(2);
+
+      // Verify post:updated broadcast on feed channel (covers lines 488-493)
+      expect(broadcastSpy).toHaveBeenCalledWith(
+        'feed',
+        expect.objectContaining({ type: 'post:updated', channel: 'feed' }),
+        undefined,
+      );
+    });
+
+    it('skips feed broadcast in file-aware path when findFeedPostById returns null', async () => {
+      const stagedFileId = 'ff000000-0000-0000-0000-000000000002';
+      const newRevId = '880e8400-e29b-41d4-a716-446655440001';
+
+      // findPostById for ownership check
+      mockQuery.mockResolvedValueOnce({ rows: [samplePostRow], rowCount: 1 });
+
+      const newRevision: PostRevisionRow = {
+        ...sampleRevisionRow,
+        id: newRevId,
+        revision_number: 2,
+        content: 'console.log("no feed");',
+        message: null,
+      };
+
+      const stagedFile: PostFileRow = {
+        id: stagedFileId,
+        post_id: postId,
+        revision_id: null,
+        filename: 'index.ts',
+        content: 'const x = 1;',
+        storage_key: null,
+        mime_type: 'text/typescript',
+        sort_order: 0,
+        file_size: 12,
+        created_at: new Date('2026-01-01'),
+      };
+
+      // Inside withTransaction callback:
+      mockClientQuery.mockResolvedValueOnce({ rows: [newRevision], rowCount: 1 });
+      mockClientQuery.mockResolvedValueOnce({ rows: [stagedFile], rowCount: 1 });
+      mockClientQuery.mockResolvedValueOnce({ rows: [], rowCount: 1 });
+      mockClientQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+      // No feed row — null
+      mockFindFeedPostById.mockResolvedValueOnce(null);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/posts/${postId}/revisions`,
+        headers: { authorization: `Bearer ${token}` },
+        payload: {
+          content: 'console.log("no feed");',
+          stagedFileIds: [stagedFileId],
+        },
+      });
+
+      expect(response.statusCode).toBe(201);
+      // Feed broadcast should NOT have been called
+      const feedCalls = broadcastSpy.mock.calls.filter(
+        (call: unknown[]) => call[0] === 'feed',
+      );
+      expect(feedCalls).toHaveLength(0);
+    });
+
+    it('returns 400 when staged file is not found in transaction', async () => {
+      const badFileId = 'ff000000-0000-0000-0000-000000000099';
+
+      // findPostById for ownership check
+      mockQuery.mockResolvedValueOnce({ rows: [samplePostRow], rowCount: 1 });
+
+      const newRevision: PostRevisionRow = {
+        ...sampleRevisionRow,
+        id: '880e8400-e29b-41d4-a716-446655440099',
+        revision_number: 2,
+        content: 'bad file',
+        message: null,
+      };
+
+      // Inside withTransaction:
+      // 1. INSERT revision
+      mockClientQuery.mockResolvedValueOnce({ rows: [newRevision], rowCount: 1 });
+      // 2. SELECT staged file — NOT FOUND
+      mockClientQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+      // Make withTransaction propagate the error thrown by the callback
+      mockWithTransaction.mockImplementationOnce(
+        async (fn: (client: { query: ReturnType<typeof vi.fn> }) => Promise<unknown>) => fn(mockClient),
+      );
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/posts/${postId}/revisions`,
+        headers: { authorization: `Bearer ${token}` },
+        payload: {
+          content: 'bad file',
+          stagedFileIds: [badFileId],
+        },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toContain('Staged file not found');
+    });
+
+    it('re-throws non-staged-file errors from transaction (lines 465-466)', async () => {
+      // findPostById for ownership check
+      mockQuery.mockResolvedValueOnce({ rows: [samplePostRow], rowCount: 1 });
+
+      // Make withTransaction throw a generic error (not "Staged file not found")
+      mockWithTransaction.mockRejectedValueOnce(new Error('DB connection lost'));
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/posts/${postId}/revisions`,
+        headers: { authorization: `Bearer ${token}` },
+        payload: {
+          content: 'will fail',
+          stagedFileIds: ['ff000000-0000-0000-0000-000000000001'],
+        },
+      });
+
+      // Non-staged-file errors are re-thrown and result in a 500
+      expect(response.statusCode).toBe(500);
+    });
+
+    it('uses fallback message when transaction throws a non-Error value (line 461 ternary)', async () => {
+      // findPostById for ownership check
+      mockQuery.mockResolvedValueOnce({ rows: [samplePostRow], rowCount: 1 });
+
+      // Throw a non-Error value — exercises the `: 'Transaction failed'` branch
+      mockWithTransaction.mockRejectedValueOnce('some string error');
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/posts/${postId}/revisions`,
+        headers: { authorization: `Bearer ${token}` },
+        payload: {
+          content: 'will fail',
+          stagedFileIds: ['ff000000-0000-0000-0000-000000000001'],
+        },
+      });
+
+      // The non-Error is re-thrown (message 'Transaction failed' doesn't start with 'Staged file not found')
+      expect(response.statusCode).toBe(500);
+    });
   });
 
   // ─── GET /api/posts/:id/revisions ──────────────────────────────────
@@ -1209,6 +1438,10 @@ describe('post routes', () => {
       mockQuery.mockResolvedValueOnce({ rows: [forkedPostRow], rowCount: 1 });
       // createRevision (initial revision for fork)
       mockQuery.mockResolvedValueOnce({ rows: [sampleRevisionRow], rowCount: 1 });
+      // findRevisionsByPostId (file carry-forward: get source revisions)
+      mockQuery.mockResolvedValueOnce({ rows: [{ id: 'rev-1', post_id: sourcePostRow.id, revision_number: 1 }], rowCount: 1 });
+      // findFilesByRevisionId (file carry-forward: no files on source)
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
       // findTagsByPostId (copy tags)
       mockQuery.mockResolvedValueOnce({ rows: [{ tag_id: 'tag-1' }], rowCount: 1 });
       // addPostTag
@@ -1309,6 +1542,10 @@ describe('post routes', () => {
       };
       mockQuery.mockResolvedValueOnce({ rows: [forkedPostRow], rowCount: 1 });
       mockQuery.mockResolvedValueOnce({ rows: [sampleRevisionRow], rowCount: 1 });
+      // findRevisionsByPostId (file carry-forward: get source revisions)
+      mockQuery.mockResolvedValueOnce({ rows: [{ id: 'rev-1', post_id: sourcePostRow.id, revision_number: 1 }], rowCount: 1 });
+      // findFilesByRevisionId (file carry-forward: no files)
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
       // Two tags
       mockQuery.mockResolvedValueOnce({
         rows: [{ tag_id: 'tag-1' }, { tag_id: 'tag-2' }],
@@ -1363,6 +1600,10 @@ describe('post routes', () => {
       };
       mockQuery.mockResolvedValueOnce({ rows: [forkedPostRow], rowCount: 1 });
       mockQuery.mockResolvedValueOnce({ rows: [sampleRevisionRow], rowCount: 1 });
+      // findRevisionsByPostId (file carry-forward: get source revisions)
+      mockQuery.mockResolvedValueOnce({ rows: [{ id: 'rev-1', post_id: sourcePostRow.id, revision_number: 1 }], rowCount: 1 });
+      // findFilesByRevisionId (file carry-forward: no files)
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
       // No tags
       mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
       mockFindFeedPostById.mockResolvedValueOnce({ ...sampleFeedRow, fork_count: 0 });
@@ -1415,6 +1656,10 @@ describe('post routes', () => {
       };
       mockQuery.mockResolvedValueOnce({ rows: [forkedPostRow], rowCount: 1 });
       mockQuery.mockResolvedValueOnce({ rows: [sampleRevisionRow], rowCount: 1 });
+      // findRevisionsByPostId (file carry-forward: get source revisions)
+      mockQuery.mockResolvedValueOnce({ rows: [{ id: 'rev-1', post_id: chainSourcePost.id, revision_number: 1 }], rowCount: 1 });
+      // findFilesByRevisionId (file carry-forward: no files)
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
       mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
       mockFindFeedPostById.mockResolvedValueOnce({
         ...sampleFeedRow,
@@ -1454,6 +1699,10 @@ describe('post routes', () => {
       };
       mockQuery.mockResolvedValueOnce({ rows: [forkedPostRow], rowCount: 1 });
       mockQuery.mockResolvedValueOnce({ rows: [sampleRevisionRow], rowCount: 1 });
+      // findRevisionsByPostId (file carry-forward: get source revisions)
+      mockQuery.mockResolvedValueOnce({ rows: [{ id: 'rev-1', post_id: sourcePostRow.id, revision_number: 1 }], rowCount: 1 });
+      // findFilesByRevisionId (file carry-forward: no files)
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
       mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
       mockFindFeedPostById.mockResolvedValueOnce({ ...sampleFeedRow, fork_count: 0 });
 

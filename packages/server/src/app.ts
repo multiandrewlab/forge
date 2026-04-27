@@ -2,9 +2,11 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import cookie from '@fastify/cookie';
 import jwt from '@fastify/jwt';
+import multipart from '@fastify/multipart';
 import oauthPlugin from '@fastify/oauth2';
 import { authPlugin } from './plugins/auth.js';
 import { rateLimitPlugin } from './plugins/rate-limit.js';
+import { storagePlugin } from './plugins/storage.js';
 import { healthRoutes } from './routes/health.js';
 import { authRoutes } from './routes/auth.js';
 import { postRoutes } from './routes/posts.js';
@@ -15,8 +17,10 @@ import { commentRoutes } from './routes/comments.js';
 import { searchRoutes } from './routes/search.js';
 import { aiRoutes } from './routes/ai.js';
 import { playgroundRoutes } from './routes/playground.js';
+import { fileRoutes } from './routes/files.js';
 import { websocketPlugin } from './plugins/websocket/index.js';
 import { langchainPlugin } from './plugins/langchain/index.js';
+import { cleanupStagedFiles } from './db/queries/post-files.js';
 
 export async function buildApp() {
   const app = Fastify({
@@ -53,6 +57,23 @@ export async function buildApp() {
   }
 
   await app.register(rateLimitPlugin);
+  await app.register(multipart, {
+    limits: { fileSize: 10_485_760 },
+    throwFileSizeLimit: false,
+  });
+
+  // Register object storage when MinIO credentials are configured.
+  // In test environments the storage plugin is typically mocked.
+  if (process.env.MINIO_ACCESS_KEY) {
+    await app.register(storagePlugin, {
+      endpoint: process.env.MINIO_ENDPOINT ?? 'localhost',
+      port: process.env.MINIO_PORT ?? '9000',
+      accessKey: process.env.MINIO_ACCESS_KEY,
+      secretKey: process.env.MINIO_SECRET_KEY ?? '',
+      bucket: process.env.MINIO_BUCKET,
+    });
+  }
+
   await app.register(authPlugin);
   await app.register(langchainPlugin);
   await app.register(websocketPlugin);
@@ -66,6 +87,18 @@ export async function buildApp() {
   await app.register(commentRoutes, { prefix: '/api/posts' });
   await app.register(aiRoutes, { prefix: '/api/ai' });
   await app.register(playgroundRoutes, { prefix: '/api' });
+  await app.register(fileRoutes, { prefix: '/api/posts' });
+
+  app.addHook('onReady', async () => {
+    try {
+      const cleaned = await cleanupStagedFiles();
+      if (cleaned > 0) {
+        app.log.info({ count: cleaned }, 'Cleaned up orphaned staged files');
+      }
+    } catch (err) {
+      app.log.warn({ err }, 'Failed to clean up staged files');
+    }
+  });
 
   return app;
 }

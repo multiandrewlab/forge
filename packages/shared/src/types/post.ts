@@ -1,4 +1,5 @@
 import type { Post } from './index.js';
+import type { PostFile } from './file.js';
 
 export interface PostRevision {
   id: string;
@@ -14,4 +15,5 @@ export interface PostRevision {
 
 export interface PostWithRevision extends Post {
   revisions: PostRevision[];
+  files?: PostFile[];
 }

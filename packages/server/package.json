@@ -16,9 +16,12 @@
     "seed": "psql $DATABASE_URL -f ../../scripts/seed.sql"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1037.0",
+    "@aws-sdk/s3-request-presigner": "^3.1037.0",
     "@fastify/cookie": "^11.0.0",
     "@fastify/cors": "^11.0.0",
     "@fastify/jwt": "^10.0.0",
+    "@fastify/multipart": "^10.0.0",
     "@fastify/oauth2": "^8.2.0",
     "@fastify/rate-limit": "^10.3.0",
     "@fastify/websocket": "^11.2.0",
@@ -29,6 +32,7 @@
     "@langchain/openai": "^0.3.17",
     "bcryptjs": "^3.0.3",
     "fastify": "^5.0.0",
+    "file-type": "^22.0.1",
     "node-pg-migrate": "^8.0.4",
     "pg": "^8.20.0",
     "zod": "^3.24.0"

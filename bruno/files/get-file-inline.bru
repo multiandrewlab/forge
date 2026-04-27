@@ -1,0 +1,25 @@
+meta {
+  name: Get File (Inline Content)
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/posts/{{postId}}/files/{{createdFileId}}
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Retrieve an inline-stored file by ID.
+  Uses {{createdFileId}} captured from the Upload File request (seq 1).
+  Files under 64 KB are stored inline and returned directly with
+  their Content-Type header set to the file's MIME type.
+
+  Response: 200 with file content in the body
+  Headers: Content-Type, Content-Disposition, X-Content-Type-Options
+}

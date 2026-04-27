@@ -370,6 +370,101 @@ describe('createRevisionSchema', () => {
       expect(data.message).toBe('Initial');
     }
   });
+
+  // -- stagedFileIds --
+  it('should accept optional stagedFileIds as array of UUIDs', () => {
+    const result = createRevisionSchema.safeParse({
+      content: 'content',
+      stagedFileIds: [
+        '550e8400-e29b-41d4-a716-446655440000',
+        '6ba7b810-9dad-11d1-80b4-00c04fd430c8',
+      ],
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.stagedFileIds).toHaveLength(2);
+    }
+  });
+
+  it('should accept empty stagedFileIds array', () => {
+    const result = createRevisionSchema.safeParse({
+      content: 'content',
+      stagedFileIds: [],
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.stagedFileIds).toHaveLength(0);
+    }
+  });
+
+  it('should accept omitted stagedFileIds (optional)', () => {
+    const result = createRevisionSchema.safeParse({ content: 'content' });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.stagedFileIds).toBeUndefined();
+    }
+  });
+
+  it('should reject stagedFileIds with non-UUID strings', () => {
+    const result = createRevisionSchema.safeParse({
+      content: 'content',
+      stagedFileIds: ['not-a-uuid'],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  // -- removeFileIds --
+  it('should accept optional removeFileIds as array of UUIDs', () => {
+    const result = createRevisionSchema.safeParse({
+      content: 'content',
+      removeFileIds: ['550e8400-e29b-41d4-a716-446655440000'],
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.removeFileIds).toHaveLength(1);
+    }
+  });
+
+  it('should accept empty removeFileIds array', () => {
+    const result = createRevisionSchema.safeParse({
+      content: 'content',
+      removeFileIds: [],
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.removeFileIds).toHaveLength(0);
+    }
+  });
+
+  it('should accept omitted removeFileIds (optional)', () => {
+    const result = createRevisionSchema.safeParse({ content: 'content' });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.removeFileIds).toBeUndefined();
+    }
+  });
+
+  it('should reject removeFileIds with non-UUID strings', () => {
+    const result = createRevisionSchema.safeParse({
+      content: 'content',
+      removeFileIds: ['invalid'],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('should accept both stagedFileIds and removeFileIds together', () => {
+    const result = createRevisionSchema.safeParse({
+      content: 'content',
+      message: 'Swapped files',
+      stagedFileIds: ['550e8400-e29b-41d4-a716-446655440000'],
+      removeFileIds: ['6ba7b810-9dad-11d1-80b4-00c04fd430c8'],
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.stagedFileIds).toHaveLength(1);
+      expect(result.data.removeFileIds).toHaveLength(1);
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------

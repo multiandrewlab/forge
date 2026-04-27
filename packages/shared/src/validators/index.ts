@@ -16,3 +16,15 @@ export * from './ai.js';
 
 export { playgroundRunSchema } from './playground.js';
 export type { PlaygroundRunInput } from './playground.js';
+
+export {
+  ALLOWED_MIME_PREFIXES,
+  ALLOWED_MIME_EXACT,
+  MAX_FILE_SIZE,
+  INLINE_THRESHOLD,
+  isAllowedMimeType,
+  stageFileSchema,
+  removeFileSchema,
+  fileMetadataSchema,
+} from './file.js';
+export type { StageFileInput, RemoveFileInput, FileMetadataInput } from './file.js';
