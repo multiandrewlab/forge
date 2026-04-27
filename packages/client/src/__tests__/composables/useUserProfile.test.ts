@@ -205,6 +205,19 @@ describe('useUserProfile', () => {
       expect(error.value).toBe('Server error');
     });
 
+    it('falls back to generic error when loadMore response has no error field', async () => {
+      mockApiFetch.mockResolvedValue(mockResponse(FAKE_PROFILE_WITH_CURSOR));
+
+      const { fetchProfile, loadMore, error } = useUserProfile();
+      await fetchProfile('u1');
+
+      mockApiFetch.mockResolvedValue(mockResponse({}, false));
+
+      await loadMore();
+
+      expect(error.value).toBe('Failed to load more posts');
+    });
+
     it('sets error on network failure during loadMore', async () => {
       mockApiFetch.mockResolvedValue(mockResponse(FAKE_PROFILE_WITH_CURSOR));
 

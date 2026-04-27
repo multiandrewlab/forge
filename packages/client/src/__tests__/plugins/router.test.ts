@@ -203,6 +203,21 @@ describe('Router', () => {
       expect(router.currentRoute.value.name).toBe('post-view');
     });
 
+    it('should have a user-profile route at "/user/:id"', () => {
+      const route = router.resolve('/user/abc');
+      expect(route.name).toBe('user-profile');
+    });
+
+    it('should navigate to user-profile route when authenticated', async () => {
+      const store = useAuthStore();
+      store.setAuth('token', createMockUser());
+
+      await router.push('/user/abc');
+      await router.isReady();
+
+      expect(router.currentRoute.value.name).toBe('user-profile');
+    });
+
     it('should lazy-load PostEditPage component when navigating to post-edit', async () => {
       const store = useAuthStore();
       store.setAuth('token', createMockUser());

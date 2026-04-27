@@ -289,6 +289,74 @@ describe('UserProfilePage.vue', () => {
     expect(wrapper.find('[data-testid="load-more"]').exists()).toBe(false);
   });
 
+  // ── Branch coverage: post with null language ──
+  it('renders post without language span when language is null', async () => {
+    mockProfile.value = {
+      ...FAKE_PROFILE,
+      posts: [{ ...FAKE_PROFILE.posts[0], language: null, tags: [] }],
+    };
+
+    const wrapper = mount(UserProfilePage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    const postLink = wrapper.find('[data-testid="post-link"]');
+    // With null language and empty tags, "typescript" should not appear
+    expect(postLink.text()).not.toContain('typescript');
+  });
+
+  // ── Branch coverage: timeAgo branches (minutes, hours, days) ──
+  it('displays "just now" for very recent posts', async () => {
+    const justNow = new Date().toISOString();
+    mockProfile.value = {
+      ...FAKE_PROFILE,
+      posts: [{ ...FAKE_PROFILE.posts[0], createdAt: justNow }],
+    };
+
+    const wrapper = mount(UserProfilePage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('just now');
+  });
+
+  it('displays relative time in minutes for recent posts', async () => {
+    const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    mockProfile.value = {
+      ...FAKE_PROFILE,
+      posts: [{ ...FAKE_PROFILE.posts[0], createdAt: fiveMinAgo }],
+    };
+
+    const wrapper = mount(UserProfilePage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('5m ago');
+  });
+
+  it('displays relative time in hours for older posts', async () => {
+    const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
+    mockProfile.value = {
+      ...FAKE_PROFILE,
+      posts: [{ ...FAKE_PROFILE.posts[0], createdAt: threeHoursAgo }],
+    };
+
+    const wrapper = mount(UserProfilePage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('3h ago');
+  });
+
+  it('displays relative time in days for old posts', async () => {
+    const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+    mockProfile.value = {
+      ...FAKE_PROFILE,
+      posts: [{ ...FAKE_PROFILE.posts[0], createdAt: twoDaysAgo }],
+    };
+
+    const wrapper = mount(UserProfilePage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('2d ago');
+  });
+
   // ── Content not shown during loading ──
   it('does not show profile content when loading', async () => {
     mockLoading.value = true;
