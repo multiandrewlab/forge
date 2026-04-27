@@ -8,6 +8,13 @@ import type { PostWithAuthor } from '@forge/shared';
 const mockVote = vi.fn();
 const mockRemoveVote = vi.fn();
 const mockToggleBookmark = vi.fn();
+const mockPush = vi.fn();
+
+vi.mock('vue-router', () => ({
+  useRouter: () => ({
+    push: mockPush,
+  }),
+}));
 
 vi.mock('../../../composables/useVotes.js', () => ({
   useVotes: () => ({
@@ -52,6 +59,7 @@ describe('PostActions', () => {
     mockVote.mockReset();
     mockRemoveVote.mockReset();
     mockToggleBookmark.mockReset();
+    mockPush.mockReset();
   });
 
   it('renders 5 buttons', () => {
@@ -203,20 +211,32 @@ describe('PostActions', () => {
   });
 
   describe('history button', () => {
-    it('is disabled', () => {
+    it('is not disabled', () => {
       const wrapper = mount(PostActions, {
         props: { post: mockPost },
       });
       const historyBtn = wrapper.find('[aria-label="History"]');
-      expect(historyBtn.attributes('disabled')).toBeDefined();
+      expect(historyBtn.attributes('disabled')).toBeUndefined();
     });
 
-    it('has text-gray-500 class', () => {
+    it('has text-gray-400 class', () => {
       const wrapper = mount(PostActions, {
         props: { post: mockPost },
       });
       const historyBtn = wrapper.find('[aria-label="History"]');
-      expect(historyBtn.classes()).toContain('text-gray-500');
+      expect(historyBtn.classes()).toContain('text-gray-400');
+    });
+
+    it('navigates to post-history route on click', async () => {
+      const wrapper = mount(PostActions, {
+        props: { post: mockPost },
+      });
+      const historyBtn = wrapper.find('[aria-label="History"]');
+      await historyBtn.trigger('click');
+      expect(mockPush).toHaveBeenCalledWith({
+        name: 'post-history',
+        params: { id: '1' },
+      });
     });
   });
 });

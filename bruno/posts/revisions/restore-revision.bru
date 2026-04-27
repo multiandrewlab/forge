@@ -1,0 +1,26 @@
+meta {
+  name: Restore Revision
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/posts/{{postId}}/revisions/1/restore
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+assert {
+  res.status: eq 201
+}
+
+script:post-response {
+  if (res.status === 201) {
+    const body = res.getBody();
+    bru.setVar("restoredRevisionNumber", body.revision.revisionNumber);
+  }
+}

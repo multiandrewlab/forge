@@ -1,9 +1,23 @@
 import { query } from '../connection.js';
-import type { PostRevisionRow } from './types.js';
+import type { PostRevisionRow, PostRevisionWithAuthorRow } from './types.js';
 
 export async function findRevisionsByPostId(postId: string): Promise<PostRevisionRow[]> {
   const result = await query<PostRevisionRow>(
     'SELECT * FROM post_revisions WHERE post_id = $1 ORDER BY revision_number DESC',
+    [postId],
+  );
+  return result.rows;
+}
+
+export async function findRevisionsWithAuthorByPostId(
+  postId: string,
+): Promise<PostRevisionWithAuthorRow[]> {
+  const result = await query<PostRevisionWithAuthorRow>(
+    `SELECT pr.*, u.display_name AS author_display_name, u.avatar_url AS author_avatar_url
+     FROM post_revisions pr
+     LEFT JOIN users u ON pr.author_id = u.id
+     WHERE pr.post_id = $1
+     ORDER BY pr.revision_number DESC`,
     [postId],
   );
   return result.rows;

@@ -25,6 +25,9 @@ function createMockPost(overrides: Partial<PostWithRevision> = {}): PostWithRevi
       {
         id: 'rev-1',
         postId: 'post-1',
+        authorId: 'user-1',
+        authorDisplayName: null,
+        authorAvatarUrl: null,
         content: 'console.log("hello")',
         message: null,
         revisionNumber: 1,
@@ -39,6 +42,9 @@ function createMockRevision(overrides: Partial<PostRevision> = {}): PostRevision
   return {
     id: 'rev-2',
     postId: 'post-1',
+    authorId: 'user-1',
+    authorDisplayName: 'Test User',
+    authorAvatarUrl: null,
     content: 'updated content',
     message: 'revision message',
     revisionNumber: 2,
@@ -560,57 +566,104 @@ describe('usePosts', () => {
   });
 
   describe('fetchRevisions', () => {
-    it('should GET /api/posts/:id/revisions and return the list', async () => {
-      const mockRevisions = [createMockRevision()];
-      mockApiFetch.mockResolvedValue(new Response(JSON.stringify(mockRevisions), { status: 200 }));
+    it('should GET /api/posts/:id/revisions and return the revisions array', async () => {
+      const mockRevisions = [
+        createMockRevision(),
+        createMockRevision({ id: 'rev-3', revisionNumber: 3 }),
+      ];
+      mockApiFetch.mockResolvedValue(
+        new Response(JSON.stringify({ revisions: jsonRoundTrip(mockRevisions) }), { status: 200 }),
+      );
 
       const { fetchRevisions } = usePosts();
-      const revisions = await fetchRevisions('post-1');
+      const result = await fetchRevisions('post-1');
 
+      expect(result).toEqual(jsonRoundTrip(mockRevisions));
       expect(mockApiFetch).toHaveBeenCalledWith('/api/posts/post-1/revisions');
-      expect(revisions).toEqual(jsonRoundTrip(mockRevisions));
     });
 
-    it('should return empty array and set error on failure', async () => {
+    it('should return empty array on non-ok response', async () => {
       mockApiFetch.mockResolvedValue(
         new Response(JSON.stringify({ error: 'Not found' }), { status: 404 }),
       );
 
       const { fetchRevisions, error } = usePosts();
-      const revisions = await fetchRevisions('nonexistent');
+      const result = await fetchRevisions('post-1');
 
-      expect(revisions).toEqual([]);
+      expect(result).toEqual([]);
       expect(error.value).toBe('Not found');
     });
 
-    it('should return empty array and set generic error on non-JSON failure', async () => {
-      mockApiFetch.mockResolvedValue(new Response('Server Error', { status: 500 }));
-
-      const { fetchRevisions, error } = usePosts();
-      const revisions = await fetchRevisions('post-1');
-
-      expect(revisions).toEqual([]);
-      expect(error.value).toBe('Failed to fetch revisions');
-    });
-
-    it('should return empty array and set error on network failure', async () => {
+    it('should return empty array on network failure', async () => {
       mockApiFetch.mockRejectedValue(new Error('Network error'));
 
       const { fetchRevisions, error } = usePosts();
-      const revisions = await fetchRevisions('post-1');
+      const result = await fetchRevisions('post-1');
 
-      expect(revisions).toEqual([]);
+      expect(result).toEqual([]);
       expect(error.value).toBe('Network error');
     });
 
-    it('should use fallback error for non-Error thrown values', async () => {
-      mockApiFetch.mockRejectedValue('string-error');
+    it('should use fallback message when catch receives non-Error', async () => {
+      mockApiFetch.mockRejectedValue('string-rejection');
 
       const { fetchRevisions, error } = usePosts();
-      const revisions = await fetchRevisions('post-1');
+      const result = await fetchRevisions('post-1');
 
-      expect(revisions).toEqual([]);
+      expect(result).toEqual([]);
       expect(error.value).toBe('Failed to fetch revisions');
+    });
+  });
+
+  describe('restoreRevision', () => {
+    it('should POST to /api/posts/:id/revisions/:rev/restore and return the new revision', async () => {
+      const mockRevision = createMockRevision({
+        message: 'Restored from revision 1',
+        revisionNumber: 3,
+      });
+      mockApiFetch.mockResolvedValue(
+        new Response(JSON.stringify({ revision: jsonRoundTrip(mockRevision) }), { status: 201 }),
+      );
+
+      const { restoreRevision } = usePosts();
+      const result = await restoreRevision('post-1', 1);
+
+      expect(result).toEqual(jsonRoundTrip(mockRevision));
+      expect(mockApiFetch).toHaveBeenCalledWith('/api/posts/post-1/revisions/1/restore', {
+        method: 'POST',
+      });
+    });
+
+    it('should set error on non-ok response', async () => {
+      mockApiFetch.mockResolvedValue(
+        new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403 }),
+      );
+
+      const { restoreRevision, error } = usePosts();
+      const result = await restoreRevision('post-1', 1);
+
+      expect(result).toBeNull();
+      expect(error.value).toBe('Forbidden');
+    });
+
+    it('should set error on network failure', async () => {
+      mockApiFetch.mockRejectedValue(new Error('Network error'));
+
+      const { restoreRevision, error } = usePosts();
+      const result = await restoreRevision('post-1', 1);
+
+      expect(result).toBeNull();
+      expect(error.value).toBe('Network error');
+    });
+
+    it('should use fallback message when catch receives non-Error', async () => {
+      mockApiFetch.mockRejectedValue('string-rejection');
+
+      const { restoreRevision, error } = usePosts();
+      const result = await restoreRevision('post-1', 1);
+
+      expect(result).toBeNull();
+      expect(error.value).toBe('Failed to restore revision');
     });
   });
 });

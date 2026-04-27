@@ -10,7 +10,7 @@ import {
   findPostWithLatestRevision,
 } from '../db/queries/posts.js';
 import {
-  findRevisionsByPostId,
+  findRevisionsWithAuthorByPostId,
   findRevision,
   createRevision,
   createRevisionAtomic,
@@ -283,7 +283,7 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(404).send({ error: 'Post not found' });
     }
 
-    const rows = await findRevisionsByPostId(id);
+    const rows = await findRevisionsWithAuthorByPostId(id);
     return reply.send({ revisions: rows.map(toRevision) });
   });
 
@@ -308,4 +308,59 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
 
     return reply.send({ revision: toRevision(revisionRow) });
   });
+
+  // POST /:id/revisions/:rev/restore — restore a previous revision
+  app.post(
+    '/:id/revisions/:rev/restore',
+    { preHandler: [app.authenticate] },
+    async (request, reply) => {
+      const { id, rev } = request.params as { id: string; rev: string };
+
+      const revisionNumber = Number(rev);
+      if (Number.isNaN(revisionNumber) || !Number.isInteger(revisionNumber) || revisionNumber < 1) {
+        return reply.status(400).send({ error: 'Invalid revision number' });
+      }
+
+      const existing = await findPostById(id);
+      if (!existing) {
+        return reply.status(404).send({ error: 'Post not found' });
+      }
+
+      if (existing.author_id !== request.user.id) {
+        return reply.status(403).send({ error: 'Forbidden' });
+      }
+
+      const targetRevision = await findRevision(id, revisionNumber);
+      if (!targetRevision) {
+        return reply.status(404).send({ error: 'Revision not found' });
+      }
+
+      const revisionRow = await createRevisionAtomic({
+        postId: id,
+        authorId: request.user.id,
+        content: targetRevision.content,
+        message: `Restored from revision ${revisionNumber}`,
+      });
+
+      const revisionData = toRevision(revisionRow);
+
+      const excludeWs = getExcludeWs(app, request);
+      app.websocket.channels.broadcast(
+        `post:${id}`,
+        { type: 'revision:new', channel: `post:${id}`, data: revisionData },
+        excludeWs,
+      );
+
+      const feedRow = await findFeedPostById(id);
+      if (feedRow) {
+        app.websocket.channels.broadcast(
+          'feed',
+          { type: 'post:updated', channel: 'feed', data: toPostWithAuthor(feedRow) },
+          excludeWs,
+        );
+      }
+
+      return reply.status(201).send({ revision: revisionData });
+    },
+  );
 }

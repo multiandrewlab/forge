@@ -3,6 +3,9 @@ import type { Post } from './index.js';
 export interface PostRevision {
   id: string;
   postId: string;
+  authorId: string;
+  authorDisplayName: string | null;
+  authorAvatarUrl: string | null;
   content: string;
   message: string | null;
   revisionNumber: number;

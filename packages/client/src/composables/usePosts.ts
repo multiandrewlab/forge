@@ -160,10 +160,34 @@ export function usePosts() {
         return [];
       }
 
-      return (await response.json()) as PostRevision[];
+      const data = (await response.json()) as { revisions: PostRevision[] };
+      return data.revisions;
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Failed to fetch revisions';
       return [];
+    }
+  }
+
+  async function restoreRevision(
+    postId: string,
+    revisionNumber: number,
+  ): Promise<PostRevision | null> {
+    error.value = null;
+    try {
+      const response = await apiFetch(`/api/posts/${postId}/revisions/${revisionNumber}/restore`, {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        error.value = await parseErrorMessage(response, 'Failed to restore revision');
+        return null;
+      }
+
+      const data = (await response.json()) as { revision: PostRevision };
+      return data.revision;
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : 'Failed to restore revision';
+      return null;
     }
   }
 
@@ -180,5 +204,6 @@ export function usePosts() {
     publishPost,
     saveRevision,
     fetchRevisions,
+    restoreRevision,
   };
 }

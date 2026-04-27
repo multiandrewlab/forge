@@ -56,6 +56,9 @@ const validComment = {
 const validPostRevision = {
   id: 'r1',
   postId: 'p1',
+  authorId: 'u1',
+  authorDisplayName: null,
+  authorAvatarUrl: null,
   content: '# Hello',
   message: null,
   revisionNumber: 1,
