@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { mount, RouterLinkStub } from '@vue/test-utils';
 import PostMetaHeader from '../../../components/post/PostMetaHeader.vue';
 import type { PostWithAuthor } from '@forge/shared';
 
@@ -60,6 +60,71 @@ describe('PostMetaHeader', () => {
     const draftPost = { ...mockPost, isDraft: true };
     const wrapper = mount(PostMetaHeader, { props: { post: draftPost } });
     expect(wrapper.text()).toContain('Draft');
+  });
+
+  describe('fork attribution', () => {
+    it('shows fork attribution with source title when forkedFromId and forkedFromTitle are set', () => {
+      const forkedPost = {
+        ...mockPost,
+        forkedFromId: 'source-123',
+        forkedFromTitle: 'Original Post Title',
+      };
+      const wrapper = mount(PostMetaHeader, {
+        props: { post: forkedPost },
+        global: { stubs: { RouterLink: RouterLinkStub } },
+      });
+
+      expect(wrapper.text()).toContain('Forked from');
+      expect(wrapper.text()).toContain('Original Post Title');
+      expect(wrapper.find('[data-testid="fork-attribution"]').exists()).toBe(true);
+    });
+
+    it('shows "a deleted post" when forkedFromId is set but forkedFromTitle is null', () => {
+      const forkedPost = { ...mockPost, forkedFromId: 'source-123', forkedFromTitle: null };
+      const wrapper = mount(PostMetaHeader, {
+        props: { post: forkedPost },
+        global: { stubs: { RouterLink: RouterLinkStub } },
+      });
+
+      expect(wrapper.text()).toContain('Forked from');
+      expect(wrapper.text()).toContain('a deleted post');
+    });
+
+    it('does not show fork attribution when forkedFromId is null', () => {
+      const wrapper = mount(PostMetaHeader, { props: { post: mockPost } });
+
+      expect(wrapper.find('[data-testid="fork-attribution"]').exists()).toBe(false);
+    });
+
+    it('links to source post when forkedFromTitle is set', () => {
+      const forkedPost = {
+        ...mockPost,
+        forkedFromId: 'source-123',
+        forkedFromTitle: 'Original Post Title',
+      };
+      const wrapper = mount(PostMetaHeader, {
+        props: { post: forkedPost },
+        global: { stubs: { RouterLink: RouterLinkStub } },
+      });
+
+      const link = wrapper.findComponent(RouterLinkStub);
+      expect(link.exists()).toBe(true);
+      expect(link.props('to')).toEqual({
+        name: 'post-view',
+        params: { id: 'source-123' },
+      });
+    });
+
+    it('does not render a link when forkedFromTitle is null', () => {
+      const forkedPost = { ...mockPost, forkedFromId: 'source-123', forkedFromTitle: null };
+      const wrapper = mount(PostMetaHeader, {
+        props: { post: forkedPost },
+        global: { stubs: { RouterLink: RouterLinkStub } },
+      });
+
+      const link = wrapper.findComponent(RouterLinkStub);
+      expect(link.exists()).toBe(false);
+    });
   });
 
   describe('timeAgo branches', () => {
