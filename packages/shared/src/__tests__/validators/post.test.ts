@@ -380,6 +380,9 @@ describe('Post types', () => {
     const revision: PostRevision = {
       id: 'rev-1',
       postId: 'post-1',
+      authorId: 'user-1',
+      authorDisplayName: 'Test User',
+      authorAvatarUrl: 'https://example.com/avatar.png',
       content: 'console.log("hello")',
       message: 'Initial version',
       revisionNumber: 1,
@@ -387,6 +390,9 @@ describe('Post types', () => {
     };
     expect(revision.id).toBe('rev-1');
     expect(revision.postId).toBe('post-1');
+    expect(revision.authorId).toBe('user-1');
+    expect(revision.authorDisplayName).toBe('Test User');
+    expect(revision.authorAvatarUrl).toBe('https://example.com/avatar.png');
     expect(revision.content).toBe('console.log("hello")');
     expect(revision.message).toBe('Initial version');
     expect(revision.revisionNumber).toBe(1);
@@ -397,6 +403,9 @@ describe('Post types', () => {
     const revision: PostRevision = {
       id: 'rev-1',
       postId: 'post-1',
+      authorId: 'user-1',
+      authorDisplayName: null,
+      authorAvatarUrl: null,
       content: 'content',
       message: null,
       revisionNumber: 1,
@@ -427,6 +436,9 @@ describe('Post types', () => {
         {
           id: 'rev-1',
           postId: 'post-1',
+          authorId: 'user-1',
+          authorDisplayName: 'Test User',
+          authorAvatarUrl: null,
           content: 'console.log("hello")',
           message: 'Initial',
           revisionNumber: 1,

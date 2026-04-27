@@ -10,7 +10,7 @@ import {
   findPostWithLatestRevision,
 } from '../db/queries/posts.js';
 import {
-  findRevisionsByPostId,
+  findRevisionsWithAuthorByPostId,
   findRevision,
   createRevision,
   createRevisionAtomic,
@@ -283,7 +283,7 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(404).send({ error: 'Post not found' });
     }
 
-    const rows = await findRevisionsByPostId(id);
+    const rows = await findRevisionsWithAuthorByPostId(id);
     return reply.send({ revisions: rows.map(toRevision) });
   });
 

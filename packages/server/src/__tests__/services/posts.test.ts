@@ -108,6 +108,9 @@ describe('posts service', () => {
       expect(result).toEqual({
         id: sampleRevisionRow.id,
         postId: sampleRevisionRow.post_id,
+        authorId: sampleRevisionRow.author_id,
+        authorDisplayName: null,
+        authorAvatarUrl: null,
         content: 'console.log("hello");',
         message: 'Initial version',
         revisionNumber: 1,
@@ -123,6 +126,29 @@ describe('posts service', () => {
       const result = toRevision(noMessageRow);
 
       expect(result.message).toBeNull();
+    });
+
+    it('maps author fields when present (PostRevisionWithAuthorRow)', () => {
+      const rowWithAuthor = {
+        ...sampleRevisionRow,
+        author_display_name: 'Test User',
+        author_avatar_url: 'https://example.com/avatar.png',
+      };
+      const result = toRevision(rowWithAuthor);
+
+      expect(result.authorId).toBe(sampleRevisionRow.author_id);
+      expect(result.authorDisplayName).toBe('Test User');
+      expect(result.authorAvatarUrl).toBe('https://example.com/avatar.png');
+    });
+
+    it('handles null author_id by defaulting authorId to empty string', () => {
+      const noAuthorRow: PostRevisionRow = {
+        ...sampleRevisionRow,
+        author_id: null,
+      };
+      const result = toRevision(noAuthorRow);
+
+      expect(result.authorId).toBe('');
     });
   });
 
@@ -150,6 +176,9 @@ describe('posts service', () => {
           {
             id: '880e8400-e29b-41d4-a716-446655440000',
             postId: samplePostRow.id,
+            authorId: samplePostRow.author_id,
+            authorDisplayName: null,
+            authorAvatarUrl: null,
             content: 'console.log("hello");',
             message: 'Initial version',
             revisionNumber: 1,

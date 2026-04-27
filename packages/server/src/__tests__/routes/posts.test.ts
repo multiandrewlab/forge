@@ -43,6 +43,7 @@ import type { FastifyInstance } from 'fastify';
 import type {
   PostRow,
   PostRevisionRow,
+  PostRevisionWithAuthorRow,
   PostWithRevisionRow,
   TagRow,
 } from '../../db/queries/types.js';
@@ -761,6 +762,9 @@ describe('post routes', () => {
           data: {
             id: '880e8400-e29b-41d4-a716-446655440000',
             postId,
+            authorId: userId,
+            authorDisplayName: null,
+            authorAvatarUrl: null,
             content: 'console.log("updated");',
             message: 'Updated code',
             revisionNumber: 2,
@@ -901,18 +905,25 @@ describe('post routes', () => {
   // ─── GET /api/posts/:id/revisions ──────────────────────────────────
 
   describe('GET /api/posts/:id/revisions', () => {
-    it('lists all revisions for a post', async () => {
+    it('lists all revisions for a post with author fields', async () => {
       // findPostById to check existence
       mockQuery.mockResolvedValueOnce({ rows: [samplePostRow], rowCount: 1 });
-      // findRevisionsByPostId query
-      const rev2: PostRevisionRow = {
+      // findRevisionsWithAuthorByPostId query (joined with users)
+      const rev1WithAuthor: PostRevisionWithAuthorRow = {
+        ...sampleRevisionRow,
+        author_display_name: 'Test User',
+        author_avatar_url: 'https://example.com/avatar.png',
+      };
+      const rev2WithAuthor: PostRevisionWithAuthorRow = {
         ...sampleRevisionRow,
         id: '880e8400-e29b-41d4-a716-446655440000',
         revision_number: 2,
         content: 'updated content',
         message: 'v2',
+        author_display_name: 'Test User',
+        author_avatar_url: 'https://example.com/avatar.png',
       };
-      mockQuery.mockResolvedValueOnce({ rows: [rev2, sampleRevisionRow], rowCount: 2 });
+      mockQuery.mockResolvedValueOnce({ rows: [rev2WithAuthor, rev1WithAuthor], rowCount: 2 });
 
       const response = await app.inject({
         method: 'GET',
@@ -924,6 +935,9 @@ describe('post routes', () => {
       expect(body.revisions).toHaveLength(2);
       expect(body.revisions[0].revisionNumber).toBe(2);
       expect(body.revisions[1].revisionNumber).toBe(1);
+      expect(body.revisions[0].authorId).toBe(userId);
+      expect(body.revisions[0].authorDisplayName).toBe('Test User');
+      expect(body.revisions[0].authorAvatarUrl).toBe('https://example.com/avatar.png');
     });
 
     it('returns 404 when post not found', async () => {

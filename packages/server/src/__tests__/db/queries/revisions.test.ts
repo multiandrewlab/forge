@@ -10,8 +10,9 @@ import {
   findRevision,
   createRevision,
   createRevisionAtomic,
+  findRevisionsWithAuthorByPostId,
 } from '../../../db/queries/revisions.js';
-import type { PostRevisionRow } from '../../../db/queries/types.js';
+import type { PostRevisionRow, PostRevisionWithAuthorRow } from '../../../db/queries/types.js';
 
 const mockQuery = query as Mock;
 
@@ -123,6 +124,49 @@ describe('revision queries', () => {
         [sampleRevision.post_id, sampleRevision.author_id, '# Hello World', null],
       );
       expect(result).toEqual(atomicRevision);
+    });
+  });
+
+  describe('findRevisionsWithAuthorByPostId', () => {
+    it('returns revisions with author display name and avatar', async () => {
+      const row: PostRevisionWithAuthorRow = {
+        ...sampleRevision,
+        author_display_name: 'Test User',
+        author_avatar_url: 'https://example.com/avatar.png',
+      };
+      mockQuery.mockResolvedValueOnce({ rows: [row], rowCount: 1 });
+
+      const result = await findRevisionsWithAuthorByPostId(sampleRevision.post_id);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].author_display_name).toBe('Test User');
+      expect(result[0].author_avatar_url).toBe('https://example.com/avatar.png');
+      expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining('LEFT JOIN users'), [
+        sampleRevision.post_id,
+      ]);
+    });
+
+    it('returns null author fields when author has no display name or avatar', async () => {
+      const row: PostRevisionWithAuthorRow = {
+        ...sampleRevision,
+        author_display_name: null,
+        author_avatar_url: null,
+      };
+      mockQuery.mockResolvedValueOnce({ rows: [row], rowCount: 1 });
+
+      const result = await findRevisionsWithAuthorByPostId(sampleRevision.post_id);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].author_display_name).toBeNull();
+      expect(result[0].author_avatar_url).toBeNull();
+    });
+
+    it('returns empty array when no revisions exist', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+      const result = await findRevisionsWithAuthorByPostId('nonexistent-post-id');
+
+      expect(result).toEqual([]);
     });
   });
 });

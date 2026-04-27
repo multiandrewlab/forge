@@ -27,11 +27,17 @@ export function toPost(row: PostRow): Post {
 
 /**
  * Transform a database PostRevisionRow into the public PostRevision DTO.
+ * Accepts an optional wider type with author fields (PostRevisionWithAuthorRow).
  */
-export function toRevision(row: PostRevisionRow): PostRevision {
+export function toRevision(
+  row: PostRevisionRow & { author_display_name?: string | null; author_avatar_url?: string | null },
+): PostRevision {
   return {
     id: row.id,
     postId: row.post_id,
+    authorId: row.author_id ?? '',
+    authorDisplayName: row.author_display_name ?? null,
+    authorAvatarUrl: row.author_avatar_url ?? null,
     content: row.content,
     message: row.message,
     revisionNumber: row.revision_number,
@@ -50,6 +56,10 @@ export function toPostWithRevision(row: PostWithRevisionRow): PostWithRevision {
       {
         id: row.revision_id,
         postId: row.id,
+        // row.author_id is the post author — correct here since only post authors create revisions
+        authorId: row.author_id,
+        authorDisplayName: null,
+        authorAvatarUrl: null,
         content: row.content,
         message: row.message,
         revisionNumber: row.revision_number,

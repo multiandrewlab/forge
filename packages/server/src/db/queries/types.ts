@@ -45,6 +45,11 @@ export type PostWithRevisionRow = PostRow & {
   message: string | null;
 };
 
+export type PostRevisionWithAuthorRow = PostRevisionRow & {
+  author_display_name: string | null;
+  author_avatar_url: string | null;
+};
+
 export interface PostFileRow {
   id: string;
   post_id: string;
