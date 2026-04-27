@@ -59,8 +59,12 @@
       </svg>
     </button>
 
-    <!-- History (placeholder) -->
-    <button disabled class="flex items-center gap-1 text-sm text-gray-500" aria-label="History">
+    <!-- History -->
+    <button
+      class="flex items-center gap-1 text-sm text-gray-400 hover:text-gray-200"
+      aria-label="History"
+      @click="handleHistory"
+    >
       <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path
           stroke-linecap="round"
@@ -75,12 +79,14 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
+import { useRouter } from 'vue-router';
 import { useFeedStore } from '../../stores/feed.js';
 import { useVotes } from '../../composables/useVotes.js';
 import { useBookmarks } from '../../composables/useBookmarks.js';
 import type { PostWithAuthor } from '@forge/shared';
 
 const props = defineProps<{ post: PostWithAuthor }>();
+const router = useRouter();
 const store = useFeedStore();
 const { vote, removeVote } = useVotes();
 const { toggleBookmark } = useBookmarks();
@@ -106,5 +112,9 @@ function handleDownvote(): void {
 
 function handleBookmark(): void {
   toggleBookmark(props.post.id);
+}
+
+function handleHistory(): void {
+  router.push({ name: 'post-history', params: { id: props.post.id } });
 }
 </script>
