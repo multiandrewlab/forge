@@ -1,7 +1,7 @@
 <template>
   <div v-if="post" class="flex h-full flex-col overflow-y-auto p-6">
     <PostMetaHeader :post="post" />
-    <PostActions :post="post" />
+    <PostActions :post="post" @fork="handleFork" />
     <div class="mt-4 flex-1">
       <CodeViewer
         v-if="revision"
@@ -59,9 +59,11 @@ import PostActions from './PostActions.vue';
 import CommentSection from './CommentSection.vue';
 import CommentInput from './CommentInput.vue';
 import InlineComment from './InlineComment.vue';
+import { useRouter } from 'vue-router';
 import { useComments } from '../../composables/useComments.js';
 import { useCommentsStore } from '../../stores/comments.js';
 import { useAuthStore } from '../../stores/auth.js';
+import { usePosts } from '../../composables/usePosts.js';
 
 const props = defineProps<{ post: PostWithAuthor | null }>();
 
@@ -70,9 +72,11 @@ const inlineCommentLine = ref<number | null>(null);
 
 const revision = computed(() => fullPost.value?.revisions?.[0] ?? null);
 
+const router = useRouter();
 const authStore = useAuthStore();
 const commentsStore = useCommentsStore();
 const { fetchComments, addComment } = useComments();
+const { forkPost } = usePosts();
 
 watch(
   () => props.post?.id,
@@ -115,5 +119,13 @@ async function handleInlineComment(body: string): Promise<void> {
     lineNumber: inlineCommentLine.value,
     revisionId: rev?.id,
   });
+}
+
+async function handleFork(): Promise<void> {
+  if (!props.post) return;
+  const newPostId = await forkPost(props.post.id);
+  if (newPostId) {
+    router.push(`/posts/${newPostId}/edit`);
+  }
 }
 </script>
