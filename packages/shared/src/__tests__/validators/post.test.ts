@@ -73,11 +73,20 @@ describe('createPostSchema', () => {
   });
 
   // -- contentType --
-  it('should accept all valid contentType values', () => {
-    for (const ct of ['snippet', 'prompt', 'document', 'link']) {
+  it('should accept all valid non-link contentType values', () => {
+    for (const ct of ['snippet', 'prompt', 'document']) {
       const result = createPostSchema.safeParse({ ...validInput, contentType: ct });
       expect(result.success).toBe(true);
     }
+  });
+
+  it('should accept link contentType with linkUrl', () => {
+    const result = createPostSchema.safeParse({
+      ...validInput,
+      contentType: 'link',
+      linkUrl: 'https://example.com',
+    });
+    expect(result.success).toBe(true);
   });
 
   it('should reject an invalid contentType', () => {
@@ -96,6 +105,81 @@ describe('createPostSchema', () => {
   it('should reject empty content', () => {
     const result = createPostSchema.safeParse({ ...validInput, content: '' });
     expect(result.success).toBe(false);
+  });
+
+  // -- link contentType behaviour --
+  it('should require linkUrl when contentType is link', () => {
+    const { content: _, ...noContent } = validInput;
+    void _;
+    const result = createPostSchema.safeParse({
+      ...noContent,
+      contentType: 'link',
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const messages = result.error.issues.map((i) => i.message);
+      expect(messages).toContain('linkUrl is required for link posts');
+    }
+  });
+
+  it('should accept link type without content', () => {
+    const { content: _, ...noContent } = validInput;
+    void _;
+    const result = createPostSchema.safeParse({
+      ...noContent,
+      contentType: 'link',
+      linkUrl: 'https://example.com',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('should accept link type with optional content', () => {
+    const result = createPostSchema.safeParse({
+      ...validInput,
+      contentType: 'link',
+      linkUrl: 'https://example.com',
+      content: 'Some description',
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.content).toBe('Some description');
+      expect(result.data.linkUrl).toBe('https://example.com');
+    }
+  });
+
+  it('should reject link type with invalid URL', () => {
+    const result = createPostSchema.safeParse({
+      ...validInput,
+      contentType: 'link',
+      linkUrl: 'not-a-url',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('should still require content for snippet type', () => {
+    const { content: _, ...noContent } = validInput;
+    void _;
+    const result = createPostSchema.safeParse({
+      ...noContent,
+      contentType: 'snippet',
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const messages = result.error.issues.map((i) => i.message);
+      expect(messages).toContain('content is required for non-link posts');
+    }
+  });
+
+  it('should strip linkUrl for non-link types', () => {
+    const result = createPostSchema.safeParse({
+      ...validInput,
+      contentType: 'snippet',
+      linkUrl: 'https://example.com',
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.linkUrl).toBeUndefined();
+    }
   });
 
   // -- language --
