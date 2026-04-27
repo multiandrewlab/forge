@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { createPostSchema, updatePostSchema, createRevisionSchema } from '@forge/shared';
-import { query } from '../db/connection.js';
+import { query, withTransaction } from '../db/connection.js';
 import {
   findPostById,
   createPost,
@@ -18,6 +18,8 @@ import {
   createRevisionAtomic,
 } from '../db/queries/revisions.js';
 import { toPost, toRevision, toPostWithRevision } from '../services/posts.js';
+import { permanentKey } from '../services/files.js';
+import type { PostFileRow, PostRevisionRow } from '../db/queries/types.js';
 import { findFeedPosts, findFeedPostById } from '../db/queries/feed.js';
 import { toPostWithAuthor } from '../services/feed.js';
 import { findTagByName, createTag, addPostTag } from '../db/queries/tags.js';
@@ -297,6 +299,7 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // POST /:id/revisions — create revision using createRevisionAtomic (ownership check)
+  // Optionally accepts stagedFileIds and removeFileIds to commit files with the revision.
   app.post('/:id/revisions', { preHandler: [app.authenticate] }, async (request, reply) => {
     const { id } = request.params as { id: string };
 
@@ -316,12 +319,139 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
         .send({ error: parsed.error.errors.map((e) => e.message).join(', ') });
     }
 
-    const revisionRow = await createRevisionAtomic({
-      postId: id,
-      authorId: request.user.id,
-      content: parsed.data.content,
-      message: parsed.data.message ?? null,
-    });
+    const stagedFileIds = parsed.data.stagedFileIds ?? [];
+    const removeFileIds = parsed.data.removeFileIds ?? [];
+    const hasFileOps =
+      parsed.data.stagedFileIds !== undefined || parsed.data.removeFileIds !== undefined;
+
+    // --- Backwards-compatible path: no file operations ---------
+    if (!hasFileOps) {
+      const revisionRow = await createRevisionAtomic({
+        postId: id,
+        authorId: request.user.id,
+        content: parsed.data.content,
+        message: parsed.data.message ?? null,
+      });
+
+      const revisionData = toRevision(revisionRow);
+
+      const excludeWs = getExcludeWs(app, request);
+      app.websocket.channels.broadcast(
+        `post:${id}`,
+        { type: 'revision:new', channel: `post:${id}`, data: revisionData },
+        excludeWs,
+      );
+
+      const feedRow = await findFeedPostById(id);
+      if (feedRow) {
+        app.websocket.channels.broadcast(
+          'feed',
+          { type: 'post:updated', channel: 'feed', data: toPostWithAuthor(feedRow) },
+          excludeWs,
+        );
+      }
+
+      return reply.status(201).send({ revision: revisionData });
+    }
+
+    // --- File-aware path: use withTransaction ------------------
+    // Track staging keys for post-transaction cleanup
+    const stagingKeysToDelete: string[] = [];
+
+    let revisionRow: PostRevisionRow;
+    try {
+      revisionRow = await withTransaction(async (client) => {
+        // 1. Create revision atomically
+        const revResult = await client.query<PostRevisionRow>(
+          `INSERT INTO post_revisions (post_id, author_id, content, message, revision_number)
+           SELECT $1, $2, $3, $4, COALESCE(MAX(revision_number), 0) + 1
+           FROM post_revisions WHERE post_id = $1
+           RETURNING *`,
+          [id, request.user.id, parsed.data.content, parsed.data.message ?? null],
+        );
+        const rev = revResult.rows[0] as PostRevisionRow;
+
+        // 2. Process staged files
+        for (const fileId of stagedFileIds) {
+          // Verify file belongs to this post AND is staged (revision_id IS NULL)
+          const fileResult = await client.query<PostFileRow>(
+            'SELECT * FROM post_files WHERE id = $1 AND post_id = $2 AND revision_id IS NULL',
+            [fileId, id],
+          );
+          const file = fileResult.rows[0];
+          if (!file) {
+            throw new Error(`Staged file not found: ${fileId}`);
+          }
+
+          // Compute permanent key and copy storage object if needed
+          let newStorageKey = file.storage_key;
+          if (file.storage_key) {
+            newStorageKey = permanentKey(id, rev.id, file.filename);
+            await app.storage.copy(file.storage_key, newStorageKey);
+            stagingKeysToDelete.push(file.storage_key);
+          }
+
+          // Update the staged file row: set revision_id and storage_key
+          await client.query(
+            'UPDATE post_files SET revision_id = $1, storage_key = $2 WHERE id = $3 AND post_id = $4',
+            [rev.id, newStorageKey, fileId, id],
+          );
+        }
+
+        // 3. Carry forward files from previous revision (if any)
+        const prevRevResult = await client.query<PostRevisionRow>(
+          'SELECT * FROM post_revisions WHERE post_id = $1 AND id != $2 ORDER BY revision_number DESC LIMIT 1',
+          [id, rev.id],
+        );
+        const prevRevision = prevRevResult.rows[0];
+
+        if (prevRevision) {
+          const prevFilesResult = await client.query<PostFileRow>(
+            'SELECT * FROM post_files WHERE revision_id = $1 ORDER BY sort_order ASC',
+            [prevRevision.id],
+          );
+
+          const removeSet = new Set(removeFileIds);
+          for (const prevFile of prevFilesResult.rows) {
+            // Skip files that are being removed
+            if (removeSet.has(prevFile.id)) continue;
+
+            // Carry forward: create new post_files row with new revision_id
+            await client.query(
+              `INSERT INTO post_files (post_id, revision_id, filename, content, storage_key, mime_type, sort_order, file_size)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+              [
+                prevFile.post_id,
+                rev.id,
+                prevFile.filename,
+                prevFile.content,
+                prevFile.storage_key,
+                prevFile.mime_type,
+                prevFile.sort_order,
+                prevFile.file_size,
+              ],
+            );
+          }
+        }
+
+        return rev;
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Transaction failed';
+      if (message.startsWith('Staged file not found')) {
+        return reply.status(400).send({ error: message });
+      }
+      throw err;
+    }
+
+    // 4. Post-transaction: delete staging storage objects (best-effort)
+    for (const key of stagingKeysToDelete) {
+      try {
+        await app.storage.delete(key);
+      } catch {
+        // Best-effort: log but don't fail the request
+      }
+    }
 
     const revisionData = toRevision(revisionRow);
 
@@ -332,7 +462,6 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
       excludeWs,
     );
 
-    // Also broadcast post:updated on the feed channel (latest revision changed)
     const feedRow = await findFeedPostById(id);
     if (feedRow) {
       app.websocket.channels.broadcast(
