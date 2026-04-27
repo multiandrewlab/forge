@@ -8,3 +8,4 @@ export * from './votes.js';
 export * from './bookmarks.js';
 export * from './post-files.js';
 export * from './prompt-variables.js';
+export * from './user-profiles.js';
