@@ -1,0 +1,19 @@
+meta {
+  name: Refresh Link Preview - Non-Link Post
+  type: http
+  seq: 11
+}
+
+post {
+  url: {{baseUrl}}/api/posts/{{postId}}/refresh-preview
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+assert {
+  res.status: eq 400
+}
