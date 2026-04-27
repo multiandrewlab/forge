@@ -58,8 +58,9 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
       linkPreview = await fetchLinkPreview(parsed.data.linkUrl);
     }
 
-    // For link posts, content is optional — default to linkUrl for the revision
-    const revisionContent = content || parsed.data.linkUrl || '';
+    // For link posts, content is optional — default to linkUrl for the revision.
+    // After validation: non-link posts always have content, link posts always have linkUrl.
+    const revisionContent = content || parsed.data.linkUrl as string;
 
     const postRow = await createPost({
       authorId: userId,
