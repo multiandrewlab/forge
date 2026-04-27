@@ -29,6 +29,7 @@ vi.mock('vue-router', () => ({
   useRouter: () => ({
     push: mockPush,
   }),
+  RouterLink: { template: '<a><slot /></a>', props: ['to'] },
 }));
 
 vi.mock('marked', () => ({

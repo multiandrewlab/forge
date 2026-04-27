@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { mount, flushPromises } from '@vue/test-utils';
+import { mount, flushPromises, RouterLinkStub } from '@vue/test-utils';
 import { setActivePinia, createPinia } from 'pinia';
 import type { CommentTreeNode } from '../../../stores/comments.js';
 import CommentThread from '../../../components/post/CommentThread.vue';
@@ -39,6 +39,7 @@ describe('CommentThread', () => {
     });
     const wrapper = mount(CommentThread, {
       props: { node, postId: 'p1' },
+      global: { stubs: { RouterLink: RouterLinkStub } },
     });
     expect(wrapper.text()).toContain('Test body');
     expect(wrapper.text()).toContain('Bob');
@@ -48,6 +49,7 @@ describe('CommentThread', () => {
     const node = makeNode({ author: null });
     const wrapper = mount(CommentThread, {
       props: { node, postId: 'p1' },
+      global: { stubs: { RouterLink: RouterLinkStub } },
     });
     expect(wrapper.text()).toContain('Deleted user');
   });
@@ -57,6 +59,7 @@ describe('CommentThread', () => {
     const parent = makeNode({ body: 'Parent comment', children: [child] });
     const wrapper = mount(CommentThread, {
       props: { node: parent, postId: 'p1' },
+      global: { stubs: { RouterLink: RouterLinkStub } },
     });
     expect(wrapper.text()).toContain('Parent comment');
     expect(wrapper.text()).toContain('Child reply');
@@ -66,6 +69,7 @@ describe('CommentThread', () => {
     const node = makeNode();
     const wrapper = mount(CommentThread, {
       props: { node, postId: 'p1' },
+      global: { stubs: { RouterLink: RouterLinkStub } },
     });
     expect(wrapper.find('[data-testid="reply-btn"]').exists()).toBe(true);
   });
@@ -74,6 +78,7 @@ describe('CommentThread', () => {
     const node = makeNode();
     const wrapper = mount(CommentThread, {
       props: { node, postId: 'p1' },
+      global: { stubs: { RouterLink: RouterLinkStub } },
     });
     expect(wrapper.find('textarea').exists()).toBe(false);
     await wrapper.find('[data-testid="reply-btn"]').trigger('click');
@@ -103,6 +108,7 @@ describe('CommentThread', () => {
     const node = makeNode();
     const wrapper = mount(CommentThread, {
       props: { node, postId: 'p1' },
+      global: { stubs: { RouterLink: RouterLinkStub } },
     });
 
     await wrapper.find('[data-testid="reply-btn"]').trigger('click');
@@ -123,6 +129,7 @@ describe('CommentThread', () => {
     const node = makeNode({ author: { id: 'u1', displayName: 'Alice', avatarUrl: null } });
     const wrapper = mount(CommentThread, {
       props: { node, postId: 'p1', currentUserId: 'u1' },
+      global: { stubs: { RouterLink: RouterLinkStub } },
     });
     expect(wrapper.find('[data-testid="edit-btn"]').exists()).toBe(true);
     expect(wrapper.find('[data-testid="delete-btn"]').exists()).toBe(true);
@@ -132,6 +139,7 @@ describe('CommentThread', () => {
     const node = makeNode({ author: { id: 'u1', displayName: 'Alice', avatarUrl: null } });
     const wrapper = mount(CommentThread, {
       props: { node, postId: 'p1' },
+      global: { stubs: { RouterLink: RouterLinkStub } },
     });
     expect(wrapper.find('[data-testid="edit-btn"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="delete-btn"]').exists()).toBe(false);
@@ -141,6 +149,7 @@ describe('CommentThread', () => {
     const node = makeNode({ author: { id: 'u1', displayName: 'Alice', avatarUrl: null } });
     const wrapper = mount(CommentThread, {
       props: { node, postId: 'p1', currentUserId: 'u-other' },
+      global: { stubs: { RouterLink: RouterLinkStub } },
     });
     expect(wrapper.find('[data-testid="edit-btn"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="delete-btn"]').exists()).toBe(false);
@@ -153,6 +162,7 @@ describe('CommentThread', () => {
     });
     const wrapper = mount(CommentThread, {
       props: { node, postId: 'p1', currentUserId: 'u1' },
+      global: { stubs: { RouterLink: RouterLinkStub } },
     });
     await wrapper.find('[data-testid="edit-btn"]').trigger('click');
     const textarea = wrapper.find('textarea');
@@ -186,6 +196,7 @@ describe('CommentThread', () => {
     });
     const wrapper = mount(CommentThread, {
       props: { node, postId: 'p1', currentUserId: 'u1' },
+      global: { stubs: { RouterLink: RouterLinkStub } },
     });
 
     // Enter edit mode
@@ -219,6 +230,7 @@ describe('CommentThread', () => {
     const node = makeNode({ author: { id: 'u1', displayName: 'Alice', avatarUrl: null } });
     const wrapper = mount(CommentThread, {
       props: { node, postId: 'p1', currentUserId: 'u1' },
+      global: { stubs: { RouterLink: RouterLinkStub } },
     });
 
     await wrapper.find('[data-testid="delete-btn"]').trigger('click');
@@ -233,6 +245,7 @@ describe('CommentThread', () => {
     const node = makeNode({ author: { id: 'u1', displayName: 'Alice', avatarUrl: null } });
     const wrapper = mount(CommentThread, {
       props: { node, postId: 'p1', currentUserId: 'u1' },
+      global: { stubs: { RouterLink: RouterLinkStub } },
     });
     await wrapper.find('[data-testid="edit-btn"]').trigger('click');
     expect(wrapper.find('textarea').exists()).toBe(true);
@@ -249,6 +262,7 @@ describe('CommentThread', () => {
   it('hides reply input when cancel is clicked on reply form', async () => {
     const wrapper = mount(CommentThread, {
       props: { node: makeNode(), postId: 'p1' },
+      global: { stubs: { RouterLink: RouterLinkStub } },
     });
     await wrapper.find('[data-testid="reply-btn"]').trigger('click');
     expect(wrapper.find('textarea').exists()).toBe(true);
@@ -265,6 +279,7 @@ describe('CommentThread', () => {
     const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
     const wrapper = mount(CommentThread, {
       props: { node: makeNode({ createdAt: fiveMinAgo }), postId: 'p1' },
+      global: { stubs: { RouterLink: RouterLinkStub } },
     });
     expect(wrapper.text()).toContain('5m ago');
   });
@@ -273,6 +288,7 @@ describe('CommentThread', () => {
     const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
     const wrapper = mount(CommentThread, {
       props: { node: makeNode({ createdAt: threeHoursAgo }), postId: 'p1' },
+      global: { stubs: { RouterLink: RouterLinkStub } },
     });
     expect(wrapper.text()).toContain('3h ago');
   });
@@ -281,7 +297,40 @@ describe('CommentThread', () => {
     const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
     const wrapper = mount(CommentThread, {
       props: { node: makeNode({ createdAt: twoDaysAgo }), postId: 'p1' },
+      global: { stubs: { RouterLink: RouterLinkStub } },
     });
     expect(wrapper.text()).toContain('2d ago');
+  });
+
+  describe('author profile link', () => {
+    it('wraps author name in a RouterLink to user profile when author exists', () => {
+      const node = makeNode({
+        author: { id: 'u1', displayName: 'Alice', avatarUrl: null },
+      });
+      const wrapper = mount(CommentThread, {
+        props: { node, postId: 'p1' },
+        global: { stubs: { RouterLink: RouterLinkStub } },
+      });
+
+      const link = wrapper.findComponent(RouterLinkStub);
+      expect(link.exists()).toBe(true);
+      expect(link.props('to')).toEqual({
+        name: 'user-profile',
+        params: { id: 'u1' },
+      });
+      expect(link.text()).toContain('Alice');
+    });
+
+    it('renders a plain span for deleted users (no RouterLink)', () => {
+      const node = makeNode({ author: null });
+      const wrapper = mount(CommentThread, {
+        props: { node, postId: 'p1' },
+        global: { stubs: { RouterLink: RouterLinkStub } },
+      });
+
+      const link = wrapper.findComponent(RouterLinkStub);
+      expect(link.exists()).toBe(false);
+      expect(wrapper.text()).toContain('Deleted user');
+    });
   });
 });

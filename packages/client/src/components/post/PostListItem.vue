@@ -5,12 +5,18 @@
     @click="handleClick"
   >
     <div class="mb-1 flex items-center gap-2">
-      <div
-        class="flex h-6 w-6 items-center justify-center rounded-full bg-primary/20 text-xs text-primary"
+      <RouterLink
+        :to="{ name: 'user-profile', params: { id: post.author.id } }"
+        class="flex items-center gap-2"
+        @click.stop
       >
-        {{ post.author.displayName[0]?.toUpperCase() }}
-      </div>
-      <span class="text-xs text-gray-400">{{ post.author.displayName }}</span>
+        <div
+          class="flex h-6 w-6 items-center justify-center rounded-full bg-primary/20 text-xs text-primary"
+        >
+          {{ post.author.displayName[0]?.toUpperCase() }}
+        </div>
+        <span class="text-xs text-gray-400">{{ post.author.displayName }}</span>
+      </RouterLink>
       <span class="text-xs text-gray-500">{{ timeAgo(post.createdAt) }}</span>
       <span
         v-if="post.isDraft"
@@ -65,7 +71,7 @@
 // uses lib: ["ES2022"] without "DOM", so we declare the browser globals we need.
 declare const window: { matchMedia: (query: string) => { matches: boolean } };
 
-import { useRouter } from 'vue-router';
+import { RouterLink, useRouter } from 'vue-router';
 import type { PostWithAuthor } from '@forge/shared';
 
 const props = defineProps<{ post: PostWithAuthor; selected: boolean }>();

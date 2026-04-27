@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { mount, flushPromises } from '@vue/test-utils';
+import { mount, flushPromises, RouterLinkStub } from '@vue/test-utils';
 import { setActivePinia, createPinia } from 'pinia';
 
 vi.mock('../../../lib/api.js', () => ({
@@ -51,6 +51,8 @@ const staleCommentWithRevision: Comment = {
   revisionNumber: 2,
 };
 
+const defaultGlobal = { stubs: { RouterLink: RouterLinkStub } };
+
 describe('CommentSection', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
@@ -60,6 +62,7 @@ describe('CommentSection', () => {
   it('shows "No comments yet." when there are no comments', () => {
     const wrapper = mount(CommentSection, {
       props: { postId: 'post-1' },
+      global: defaultGlobal,
     });
     expect(wrapper.text()).toContain('No comments yet.');
   });
@@ -67,6 +70,7 @@ describe('CommentSection', () => {
   it('renders the Comments heading', () => {
     const wrapper = mount(CommentSection, {
       props: { postId: 'post-1' },
+      global: defaultGlobal,
     });
     expect(wrapper.find('h3').text()).toBe('Comments');
   });
@@ -77,6 +81,7 @@ describe('CommentSection', () => {
 
     const wrapper = mount(CommentSection, {
       props: { postId: 'post-1' },
+      global: defaultGlobal,
     });
 
     expect(wrapper.text()).toContain('Great post!');
@@ -90,6 +95,7 @@ describe('CommentSection', () => {
 
     const wrapper = mount(CommentSection, {
       props: { postId: 'post-1' },
+      global: defaultGlobal,
     });
 
     expect(wrapper.text()).toContain('Previous comments');
@@ -104,6 +110,7 @@ describe('CommentSection', () => {
 
     const wrapper = mount(CommentSection, {
       props: { postId: 'post-1' },
+      global: defaultGlobal,
     });
 
     expect(wrapper.text()).toContain('Deleted user');
@@ -116,6 +123,7 @@ describe('CommentSection', () => {
 
     const wrapper = mount(CommentSection, {
       props: { postId: 'post-1' },
+      global: defaultGlobal,
     });
 
     expect(wrapper.text()).toContain('Left on revision 2');
@@ -128,6 +136,7 @@ describe('CommentSection', () => {
 
     const wrapper = mount(CommentSection, {
       props: { postId: 'post-1' },
+      global: defaultGlobal,
     });
 
     expect(wrapper.text()).not.toContain('Left on revision');
@@ -136,6 +145,7 @@ describe('CommentSection', () => {
   it('renders CommentInput for adding new comments', () => {
     const wrapper = mount(CommentSection, {
       props: { postId: 'post-1' },
+      global: defaultGlobal,
     });
 
     const textarea = wrapper.find('textarea');
@@ -159,6 +169,7 @@ describe('CommentSection', () => {
 
     const wrapper = mount(CommentSection, {
       props: { postId: 'post-1' },
+      global: defaultGlobal,
     });
 
     const textarea = wrapper.find('textarea');
@@ -179,6 +190,7 @@ describe('CommentSection', () => {
 
     const wrapper = mount(CommentSection, {
       props: { postId: 'post-1' },
+      global: defaultGlobal,
     });
 
     expect(wrapper.text()).not.toContain('Previous comments');
@@ -190,6 +202,7 @@ describe('CommentSection', () => {
 
     const wrapper = mount(CommentSection, {
       props: { postId: 'post-1', currentUserId: 'u-1' },
+      global: defaultGlobal,
     });
 
     // The edit/delete buttons should appear since the user owns the comment

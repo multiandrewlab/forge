@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { mount, RouterLinkStub } from '@vue/test-utils';
 import { setActivePinia, createPinia } from 'pinia';
 import { createRouter, createMemoryHistory } from 'vue-router';
 import { useFeedStore } from '../../../stores/feed.js';
@@ -34,6 +34,7 @@ function createTestRouter() {
     routes: [
       { path: '/', component: { template: '<div />' } },
       { path: '/posts/:id', component: { template: '<div />' } },
+      { path: '/user/:id', name: 'user-profile', component: { template: '<div />' } },
     ],
   });
 }
@@ -177,6 +178,49 @@ describe('PostListItem', () => {
         global: { plugins: [router] },
       });
       expect(wrapper.find('[data-testid="link-icon"]').exists()).toBe(false);
+    });
+  });
+
+  describe('author profile link', () => {
+    it('wraps author avatar and name in a RouterLink to user profile', () => {
+      const router = createTestRouter();
+      const wrapper = mount(PostListItem, {
+        props: { post: mockPost, selected: false },
+        global: { plugins: [router], stubs: { RouterLink: RouterLinkStub } },
+      });
+
+      const link = wrapper.findComponent(RouterLinkStub);
+      expect(link.exists()).toBe(true);
+      expect(link.props('to')).toEqual({
+        name: 'user-profile',
+        params: { id: 'u1' },
+      });
+    });
+
+    it('renders author avatar initial inside the profile link', () => {
+      const router = createTestRouter();
+      const wrapper = mount(PostListItem, {
+        props: { post: mockPost, selected: false },
+        global: { plugins: [router], stubs: { RouterLink: RouterLinkStub } },
+      });
+
+      const link = wrapper.findComponent(RouterLinkStub);
+      expect(link.text()).toContain('T');
+      expect(link.text()).toContain('Test User');
+    });
+
+    it('stops click propagation so parent click handler is not triggered', async () => {
+      const router = createTestRouter();
+      const wrapper = mount(PostListItem, {
+        props: { post: mockPost, selected: false },
+        global: { plugins: [router], stubs: { RouterLink: RouterLinkStub } },
+      });
+
+      const link = wrapper.findComponent(RouterLinkStub);
+      await link.trigger('click');
+
+      // The parent click handler should NOT fire (no select emitted, no navigation)
+      expect(wrapper.emitted('select')).toBeFalsy();
     });
   });
 
