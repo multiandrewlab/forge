@@ -47,6 +47,8 @@ fetchLinkPreview(url: string): Promise<LinkPreview | null>
 ::1/128           IPv6 loopback
 fc00::/7          IPv6 ULA
 fe80::/10         IPv6 link-local
+100.64.0.0/10     Carrier-Grade NAT (RFC 6598)
+192.0.0.0/24      IETF Protocol Assignments
 ```
 
 ### OG Tag Extraction
@@ -89,13 +91,14 @@ When `contentType === 'link'`:
 - **Auth:** Must be the post author (403 otherwise)
 - **Validation:** Post must exist and have `contentType === 'link'` (400 otherwise)
 - **Action:** Calls `fetchLinkPreview(post.linkUrl)`, updates `link_preview` column
+- **Broadcast:** Emit `post:updated` event on feed channel (consistent with existing PATCH/publish patterns)
 - **Response:** Updated post object
 
 ### Shared Validators Update
 
 **File:** `packages/shared/src/validators/post.ts`
 
-Add conditional validation: when `contentType === 'link'`, `linkUrl` is required and must be a valid URL string. `linkUrl` remains optional/null for other content types.
+Add conditional validation: when `contentType === 'link'`, `linkUrl` is required and must be a valid URL string, and `content` becomes optional (link posts don't require body content — the link itself is the content). `linkUrl` remains optional/null for other content types.
 
 ## Section 3: Frontend Components
 
