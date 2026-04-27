@@ -1,0 +1,68 @@
+meta {
+  name: Upload File (No Auth)
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/health
+  body: none
+  auth: none
+}
+
+script:pre-request {
+  const axios = require("axios");
+  const baseUrl = bru.getEnvVar("baseUrl");
+  const postId = bru.getEnvVar("postId");
+
+  const boundary = "----BrunoTestBoundary";
+  const fileContent = 'console.log("no auth test");';
+  const body =
+    "--" + boundary + "\r\n" +
+    'Content-Disposition: form-data; name="file"; filename="test.txt"\r\n' +
+    "Content-Type: text/plain\r\n" +
+    "\r\n" +
+    fileContent +
+    "\r\n--" + boundary + "--\r\n";
+
+  try {
+    const res = await axios.post(
+      baseUrl + "/api/posts/" + postId + "/files",
+      body,
+      {
+        headers: {
+          "content-type": "multipart/form-data; boundary=" + boundary
+          // No authorization header — this is the test
+        }
+      }
+    );
+    bru.setVar("_uploadStatus", String(res.status));
+    bru.setVar("_uploadBody", JSON.stringify(res.data));
+  } catch (err) {
+    const st = err.response ? String(err.response.status) : "0";
+    const bd = err.response ? JSON.stringify(err.response.data) : String(err.message);
+    bru.setVar("_uploadStatus", st);
+    bru.setVar("_uploadBody", bd);
+  }
+}
+
+tests {
+  test("upload without auth returns 401", () => {
+    const status = parseInt(bru.getVar("_uploadStatus"));
+    expect(status).to.equal(401);
+  });
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Error-path test: upload without authentication.
+  Uses axios workaround (Bruno CLI sends multipart-form as
+  application/x-www-form-urlencoded). The carrier request is GET /api/health.
+  The actual upload result is checked in the tests block via _uploadStatus.
+  No authorization header is sent to verify the endpoint rejects unauthenticated requests.
+
+  Expected upload response: 401 Unauthorized
+}

@@ -1,0 +1,27 @@
+meta {
+  name: Delete File (No Auth)
+  type: http
+  seq: 11
+}
+
+delete {
+  url: {{baseUrl}}/api/posts/{{postId}}/files/{{createdFileId}}
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 401
+}
+
+docs {
+  Error-path test: delete a file without authentication.
+  The delete endpoint requires a valid bearer token.
+
+  Expected: 401 Unauthorized
+
+  NOTE: This runs after Delete Staged File (seq 10) has already
+  deleted {{createdFileId}}. If the file no longer exists, the
+  server still returns 401 because auth check happens before the
+  file lookup.
+}

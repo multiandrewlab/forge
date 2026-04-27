@@ -1,0 +1,23 @@
+meta {
+  name: List Files (Staged)
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/posts/{{postId}}/files
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  List staged files for a post (no revisionId query parameter).
+  Returns files with revision_id IS NULL (staging area).
+  Public endpoint — no authentication required.
+
+  Response: 200 with { files: [...] }
+}

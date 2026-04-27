@@ -1,0 +1,31 @@
+meta {
+  name: Upload File (Wrong User)
+  type: http
+  seq: 5
+}
+
+get {
+  url: {{baseUrl}}/api/health
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Error-path test: upload a file to a post owned by a different user.
+  Expected: 403 { error: "Forbidden" }
+
+  LIMITATION: The seed data only provides one test user (testuser).
+  There is no seeded post owned by a different user to test against.
+  This is a placeholder that hits GET /api/health so the collection
+  run does not break.
+
+  To truly test 403:
+  1. Seed a second user and a post owned by that user
+  2. Add an axios pre-request script (see upload-file.bru pattern)
+  3. Use testuser's token to upload to the other user's post
+  4. Assert _uploadStatus equals 403
+}

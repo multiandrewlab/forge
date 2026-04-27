@@ -1,0 +1,23 @@
+meta {
+  name: List Files (By Revision)
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/api/posts/{{postId}}/files?revisionId={{revisionId}}
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  List files attached to a specific revision of a post.
+  Uses {{revisionId}} from the seeded test revision.
+  Public endpoint — no authentication required.
+
+  Response: 200 with { files: [...] }
+}
