@@ -32,6 +32,27 @@ export async function createPost(input: CreatePostInput): Promise<PostRow> {
   return result.rows[0] as PostRow;
 }
 
+export interface CreateForkedPostInput extends CreatePostInput {
+  forkedFromId: string;
+}
+
+export async function createForkedPost(input: CreateForkedPostInput): Promise<PostRow> {
+  const result = await query<PostRow>(
+    `INSERT INTO posts (author_id, title, content_type, language, visibility, is_draft, forked_from_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+    [
+      input.authorId,
+      input.title,
+      input.contentType,
+      input.language,
+      input.visibility,
+      input.isDraft,
+      input.forkedFromId,
+    ],
+  );
+  return result.rows[0] as PostRow;
+}
+
 export async function findPostWithLatestRevision(id: string): Promise<PostWithRevisionRow | null> {
   const result = await query<PostWithRevisionRow>(
     `SELECT p.*, pr.id AS revision_id, pr.content, pr.revision_number, pr.message FROM posts p INNER JOIN post_revisions pr ON pr.post_id = p.id WHERE p.id = $1 AND p.deleted_at IS NULL ORDER BY pr.revision_number DESC LIMIT 1`,

@@ -666,4 +666,52 @@ describe('usePosts', () => {
       expect(error.value).toBe('Failed to restore revision');
     });
   });
+
+  describe('forkPost', () => {
+    it('should POST to /api/posts/:id/fork and return the new post id', async () => {
+      mockApiFetch.mockResolvedValue(
+        new Response(JSON.stringify({ post: { id: 'forked-post-1' } }), { status: 201 }),
+      );
+
+      const { forkPost } = usePosts();
+      const id = await forkPost('post-1');
+
+      expect(id).toBe('forked-post-1');
+      expect(mockApiFetch).toHaveBeenCalledWith('/api/posts/post-1/fork', {
+        method: 'POST',
+      });
+    });
+
+    it('should return null and set error on 403 response', async () => {
+      mockApiFetch.mockResolvedValue(
+        new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403 }),
+      );
+
+      const { forkPost, error } = usePosts();
+      const id = await forkPost('post-1');
+
+      expect(id).toBeNull();
+      expect(error.value).toBe('Forbidden');
+    });
+
+    it('should return null and set error on network failure', async () => {
+      mockApiFetch.mockRejectedValue(new Error('Network error'));
+
+      const { forkPost, error } = usePosts();
+      const id = await forkPost('post-1');
+
+      expect(id).toBeNull();
+      expect(error.value).toBe('Network error');
+    });
+
+    it('should use fallback error for non-Error thrown values', async () => {
+      mockApiFetch.mockRejectedValue('string-error');
+
+      const { forkPost, error } = usePosts();
+      const id = await forkPost('post-1');
+
+      expect(id).toBeNull();
+      expect(error.value).toBe('Failed to fork post');
+    });
+  });
 });

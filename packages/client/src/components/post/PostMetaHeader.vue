@@ -12,6 +12,17 @@
         <div class="text-xs text-gray-500">Updated {{ timeAgo(post.updatedAt) }}</div>
       </div>
     </div>
+    <div v-if="post.forkedFromId" data-testid="fork-attribution" class="mt-1 text-xs text-gray-500">
+      Forked from
+      <RouterLink
+        v-if="post.forkedFromTitle"
+        :to="{ name: 'post-view', params: { id: post.forkedFromId } }"
+        class="text-primary hover:underline"
+      >
+        {{ post.forkedFromTitle }}
+      </RouterLink>
+      <span v-else>a deleted post</span>
+    </div>
     <div v-if="post.isDraft" class="mt-2">
       <span class="rounded bg-yellow-600/20 px-2 py-1 text-xs text-yellow-400">Draft</span>
     </div>
@@ -28,6 +39,7 @@
 </template>
 
 <script setup lang="ts">
+import { RouterLink } from 'vue-router';
 import type { PostWithAuthor } from '@forge/shared';
 
 defineProps<{ post: PostWithAuthor }>();

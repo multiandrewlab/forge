@@ -10,6 +10,8 @@ export interface PostAuthor {
 export interface PostWithAuthor extends Post {
   author: PostAuthor;
   tags: string[];
+  forkCount: number;
+  forkedFromTitle: string | null;
 }
 
 export type FeedSort = 'trending' | 'recent' | 'top' | 'personalized';

@@ -6,6 +6,8 @@ export type PostWithAuthorRow = PostRow & {
   author_display_name: string;
   author_avatar_url: string | null;
   tags: string | null;
+  fork_count: number;
+  forked_from_title: string | null;
 };
 
 export interface FindFeedPostsInput {
@@ -43,7 +45,15 @@ export async function findFeedPostById(postId: string): Promise<PostWithAuthorRo
         FROM post_tags pt
         JOIN tags t ON t.id = pt.tag_id
         WHERE pt.post_id = p.id
-      ) AS tags
+      ) AS tags,
+      (
+        SELECT COUNT(*)::int FROM posts f
+        WHERE f.forked_from_id = p.id AND f.deleted_at IS NULL
+      ) AS fork_count,
+      (
+        SELECT title FROM posts src
+        WHERE src.id = p.forked_from_id AND src.deleted_at IS NULL
+      ) AS forked_from_title
     FROM posts p
     JOIN users u ON u.id = p.author_id
     WHERE p.id = $1 AND p.deleted_at IS NULL
@@ -81,7 +91,7 @@ export async function findFeedPosts(input: FindFeedPostsInput): Promise<FindFeed
     return `$${params.length}`;
   };
 
-  // Base SELECT with author join and tags subquery
+  // Base SELECT with author join, tags, fork_count, and forked_from_title subqueries
   const selectClause = `
     SELECT
       p.*,
@@ -92,7 +102,15 @@ export async function findFeedPosts(input: FindFeedPostsInput): Promise<FindFeed
         FROM post_tags pt
         JOIN tags t ON t.id = pt.tag_id
         WHERE pt.post_id = p.id
-      ) AS tags
+      ) AS tags,
+      (
+        SELECT COUNT(*)::int FROM posts f
+        WHERE f.forked_from_id = p.id AND f.deleted_at IS NULL
+      ) AS fork_count,
+      (
+        SELECT title FROM posts src
+        WHERE src.id = p.forked_from_id AND src.deleted_at IS NULL
+      ) AS forked_from_title
     FROM posts p
     JOIN users u ON u.id = p.author_id
   `.trim();

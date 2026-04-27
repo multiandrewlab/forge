@@ -48,6 +48,8 @@ function makeFeedRow(overrides: Partial<PostWithAuthorRow> = {}): PostWithAuthor
     author_display_name: 'Test User',
     author_avatar_url: null,
     tags: null,
+    fork_count: 0,
+    forked_from_title: null,
     ...overrides,
   };
 }

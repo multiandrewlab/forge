@@ -15,5 +15,7 @@ export function toPostWithAuthor(row: PostWithAuthorRow): PostWithAuthor {
       avatarUrl: row.author_avatar_url,
     },
     tags: row.tags ? row.tags.split(',') : [],
+    forkCount: row.fork_count ?? 0,
+    forkedFromTitle: row.forked_from_title ?? null,
   };
 }

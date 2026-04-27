@@ -15,6 +15,22 @@ vi.mock('../../../lib/api.js', () => ({
   apiFetch: vi.fn(),
 }));
 
+const mockForkPost = vi.fn();
+
+vi.mock('@/composables/usePosts', () => ({
+  usePosts: () => ({
+    forkPost: mockForkPost,
+  }),
+}));
+
+const mockPush = vi.fn();
+
+vi.mock('vue-router', () => ({
+  useRouter: () => ({
+    push: mockPush,
+  }),
+}));
+
 import { apiFetch } from '../../../lib/api.js';
 import PostDetail from '../../../components/post/PostDetail.vue';
 import { useCommentsStore } from '../../../stores/comments.js';
@@ -40,6 +56,8 @@ const mockPost: PostWithAuthor = {
   updatedAt: new Date('2025-01-01'),
   author: { id: 'user-1', displayName: 'Alice', avatarUrl: null },
   tags: [],
+  forkCount: 0,
+  forkedFromTitle: null,
 };
 
 const mockPostWithRevision: PostWithRevision = {
@@ -91,6 +109,8 @@ describe('PostDetail', () => {
     mockApiFetch.mockReset();
     mockCodeToHtml.mockReset();
     mockCodeToHtml.mockResolvedValue('<pre>test</pre>');
+    mockForkPost.mockReset();
+    mockPush.mockReset();
   });
 
   it('shows placeholder when post prop is null', () => {
@@ -392,5 +412,51 @@ describe('PostDetail', () => {
 
     // Component renders without crash — CodeViewer receives undefined language
     expect(wrapper.exists()).toBe(true);
+  });
+
+  it('calls forkPost and navigates to edit when fork event received', async () => {
+    setupUrlAwareMock(mockPostWithRevision);
+    mockForkPost.mockResolvedValue('forked-post-id');
+
+    const wrapper = mount(PostDetail, { props: { post: mockPost } });
+    await flushPromises();
+
+    // Trigger fork event on PostActions
+    const postActions = wrapper.findComponent({ name: 'PostActions' });
+    postActions.vm.$emit('fork');
+    await flushPromises();
+
+    expect(mockForkPost).toHaveBeenCalledWith(mockPost.id);
+    expect(mockPush).toHaveBeenCalledWith('/posts/forked-post-id/edit');
+  });
+
+  it('does not navigate when forkPost returns null', async () => {
+    setupUrlAwareMock(mockPostWithRevision);
+    mockForkPost.mockResolvedValue(null);
+
+    const wrapper = mount(PostDetail, { props: { post: mockPost } });
+    await flushPromises();
+
+    const postActions = wrapper.findComponent({ name: 'PostActions' });
+    postActions.vm.$emit('fork');
+    await flushPromises();
+
+    expect(mockForkPost).toHaveBeenCalledWith(mockPost.id);
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it('does not call forkPost when post prop is null', async () => {
+    setupUrlAwareMock(mockPostWithRevision);
+
+    const wrapper = mount(PostDetail, { props: { post: null as unknown as typeof mockPost } });
+    await flushPromises();
+
+    // Access the handleFork function directly via the component instance
+    const vm = wrapper.vm as unknown as { handleFork: () => Promise<void> };
+    await vm.handleFork();
+    await flushPromises();
+
+    expect(mockForkPost).not.toHaveBeenCalled();
+    expect(mockPush).not.toHaveBeenCalled();
   });
 });

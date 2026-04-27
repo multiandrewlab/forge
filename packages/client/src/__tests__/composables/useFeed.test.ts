@@ -38,6 +38,8 @@ const mockPost: PostWithAuthor = {
   updatedAt: new Date(),
   author: { id: 'u1', displayName: 'Test', avatarUrl: null },
   tags: [],
+  forkCount: 0,
+  forkedFromTitle: null,
 };
 
 function mockFetchResponse(data: unknown, ok = true): Response {

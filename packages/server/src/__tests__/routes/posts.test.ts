@@ -99,6 +99,8 @@ const sampleFeedRow: PostWithAuthorRow = {
   author_display_name: 'Test User',
   author_avatar_url: null,
   tags: 'typescript',
+  fork_count: 0,
+  forked_from_title: null,
 };
 
 describe('post routes', () => {
@@ -1167,6 +1169,303 @@ describe('post routes', () => {
       expect(broadcastSpy).toHaveBeenCalledWith(
         `post:${postId}`,
         expect.objectContaining({ type: 'revision:new' }),
+        undefined,
+      );
+    });
+  });
+
+  // ─── POST /api/posts/:id/fork ────────────────────────────────────
+
+  describe('POST /api/posts/:id/fork', () => {
+    const sourcePostRow: PostRow = {
+      ...samplePostRow,
+      visibility: 'public',
+      is_draft: false,
+      author_id: otherUserId, // source post belongs to another user
+    };
+
+    it('forks a post and returns 201 with the new post', async () => {
+      // findPostById (source)
+      mockQuery.mockResolvedValueOnce({ rows: [sourcePostRow], rowCount: 1 });
+      // findPostWithLatestRevision (get latest revision content)
+      mockQuery.mockResolvedValueOnce({
+        rows: [
+          {
+            ...sourcePostRow,
+            revision_id: 'rev-1',
+            content: 'source code',
+            revision_number: 1,
+            message: 'init',
+          },
+        ],
+        rowCount: 1,
+      });
+      // createForkedPost
+      const forkedPostRow = {
+        ...samplePostRow,
+        forked_from_id: sourcePostRow.id,
+        author_id: userId,
+      };
+      mockQuery.mockResolvedValueOnce({ rows: [forkedPostRow], rowCount: 1 });
+      // createRevision (initial revision for fork)
+      mockQuery.mockResolvedValueOnce({ rows: [sampleRevisionRow], rowCount: 1 });
+      // findTagsByPostId (copy tags)
+      mockQuery.mockResolvedValueOnce({ rows: [{ tag_id: 'tag-1' }], rowCount: 1 });
+      // addPostTag
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ post_id: forkedPostRow.id, tag_id: 'tag-1' }],
+        rowCount: 1,
+      });
+      // findFeedPostById for broadcast
+      mockFindFeedPostById.mockResolvedValueOnce({ ...sampleFeedRow, fork_count: 0 });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/posts/${sourcePostRow.id}/fork`,
+        headers: { authorization: `Bearer ${token}` },
+      });
+
+      expect(response.statusCode).toBe(201);
+      const body = response.json();
+      expect(body.post.forkedFromId).toBe(sourcePostRow.id);
+      expect(body.post.authorId).toBe(userId);
+    });
+
+    it('returns 401 without auth', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/posts/${postId}/fork`,
+      });
+      expect(response.statusCode).toBe(401);
+    });
+
+    it('returns 404 when source post does not exist', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/posts/${postId}/fork`,
+        headers: { authorization: `Bearer ${token}` },
+      });
+      expect(response.statusCode).toBe(404);
+    });
+
+    it('returns 403 when trying to fork own post', async () => {
+      // samplePostRow has author_id = userId (same as token user)
+      mockQuery.mockResolvedValueOnce({ rows: [samplePostRow], rowCount: 1 });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/posts/${postId}/fork`,
+        headers: { authorization: `Bearer ${token}` },
+      });
+      expect(response.statusCode).toBe(403);
+      expect(response.json().error).toBe('Cannot fork your own post');
+    });
+
+    it('returns 403 when source post is private', async () => {
+      const privatePost = { ...sourcePostRow, visibility: 'private' };
+      mockQuery.mockResolvedValueOnce({ rows: [privatePost], rowCount: 1 });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/posts/${postId}/fork`,
+        headers: { authorization: `Bearer ${token}` },
+      });
+      expect(response.statusCode).toBe(403);
+      expect(response.json().error).toBe('Cannot fork a private post');
+    });
+
+    it('returns 403 when source post is a draft', async () => {
+      const draftPost = { ...sourcePostRow, is_draft: true };
+      mockQuery.mockResolvedValueOnce({ rows: [draftPost], rowCount: 1 });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/posts/${postId}/fork`,
+        headers: { authorization: `Bearer ${token}` },
+      });
+      expect(response.statusCode).toBe(403);
+    });
+
+    it('copies tags from source to forked post', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [sourcePostRow], rowCount: 1 });
+      mockQuery.mockResolvedValueOnce({
+        rows: [
+          {
+            ...sourcePostRow,
+            revision_id: 'rev-1',
+            content: 'code',
+            revision_number: 1,
+            message: null,
+          },
+        ],
+        rowCount: 1,
+      });
+      const forkedPostRow = {
+        ...samplePostRow,
+        forked_from_id: sourcePostRow.id,
+        author_id: userId,
+      };
+      mockQuery.mockResolvedValueOnce({ rows: [forkedPostRow], rowCount: 1 });
+      mockQuery.mockResolvedValueOnce({ rows: [sampleRevisionRow], rowCount: 1 });
+      // Two tags
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ tag_id: 'tag-1' }, { tag_id: 'tag-2' }],
+        rowCount: 2,
+      });
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ post_id: forkedPostRow.id, tag_id: 'tag-1' }],
+        rowCount: 1,
+      });
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ post_id: forkedPostRow.id, tag_id: 'tag-2' }],
+        rowCount: 1,
+      });
+      mockFindFeedPostById.mockResolvedValueOnce({ ...sampleFeedRow, fork_count: 0 });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/posts/${sourcePostRow.id}/fork`,
+        headers: { authorization: `Bearer ${token}` },
+      });
+
+      expect(response.statusCode).toBe(201);
+      // Verify addPostTag was called for both tags
+      expect(mockQuery).toHaveBeenCalledWith(
+        'INSERT INTO post_tags (post_id, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING *',
+        [forkedPostRow.id, 'tag-1'],
+      );
+      expect(mockQuery).toHaveBeenCalledWith(
+        'INSERT INTO post_tags (post_id, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING *',
+        [forkedPostRow.id, 'tag-2'],
+      );
+    });
+
+    it('works when source post has no tags', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [sourcePostRow], rowCount: 1 });
+      mockQuery.mockResolvedValueOnce({
+        rows: [
+          {
+            ...sourcePostRow,
+            revision_id: 'rev-1',
+            content: 'code',
+            revision_number: 1,
+            message: null,
+          },
+        ],
+        rowCount: 1,
+      });
+      const forkedPostRow = {
+        ...samplePostRow,
+        forked_from_id: sourcePostRow.id,
+        author_id: userId,
+      };
+      mockQuery.mockResolvedValueOnce({ rows: [forkedPostRow], rowCount: 1 });
+      mockQuery.mockResolvedValueOnce({ rows: [sampleRevisionRow], rowCount: 1 });
+      // No tags
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+      mockFindFeedPostById.mockResolvedValueOnce({ ...sampleFeedRow, fork_count: 0 });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/posts/${sourcePostRow.id}/fork`,
+        headers: { authorization: `Bearer ${token}` },
+      });
+
+      expect(response.statusCode).toBe(201);
+    });
+
+    it('returns 404 when findPostWithLatestRevision returns null', async () => {
+      // findPostById succeeds
+      mockQuery.mockResolvedValueOnce({ rows: [sourcePostRow], rowCount: 1 });
+      // findPostWithLatestRevision returns null (edge case: post exists but has no revisions)
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/posts/${postId}/fork`,
+        headers: { authorization: `Bearer ${token}` },
+      });
+
+      expect(response.statusCode).toBe(404);
+      expect(response.json().error).toBe('Post not found');
+    });
+
+    it('chain forking works — forking a fork sets forkedFromId to immediate parent', async () => {
+      // Source post is itself a fork (has forked_from_id set)
+      const chainSourcePost = { ...sourcePostRow, forked_from_id: 'grandparent-post-id' };
+      mockQuery.mockResolvedValueOnce({ rows: [chainSourcePost], rowCount: 1 });
+      mockQuery.mockResolvedValueOnce({
+        rows: [
+          {
+            ...chainSourcePost,
+            revision_id: 'rev-1',
+            content: 'code',
+            revision_number: 1,
+            message: null,
+          },
+        ],
+        rowCount: 1,
+      });
+      const forkedPostRow = {
+        ...samplePostRow,
+        forked_from_id: chainSourcePost.id,
+        author_id: userId,
+      };
+      mockQuery.mockResolvedValueOnce({ rows: [forkedPostRow], rowCount: 1 });
+      mockQuery.mockResolvedValueOnce({ rows: [sampleRevisionRow], rowCount: 1 });
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+      mockFindFeedPostById.mockResolvedValueOnce({
+        ...sampleFeedRow,
+        fork_count: 0,
+        forked_from_title: null,
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/posts/${chainSourcePost.id}/fork`,
+        headers: { authorization: `Bearer ${token}` },
+      });
+
+      expect(response.statusCode).toBe(201);
+      // forkedFromId points to the immediate parent, NOT the grandparent
+      expect(response.json().post.forkedFromId).toBe(chainSourcePost.id);
+    });
+
+    it('broadcasts post:new on feed channel after fork', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [sourcePostRow], rowCount: 1 });
+      mockQuery.mockResolvedValueOnce({
+        rows: [
+          {
+            ...sourcePostRow,
+            revision_id: 'rev-1',
+            content: 'code',
+            revision_number: 1,
+            message: null,
+          },
+        ],
+        rowCount: 1,
+      });
+      const forkedPostRow = {
+        ...samplePostRow,
+        forked_from_id: sourcePostRow.id,
+        author_id: userId,
+      };
+      mockQuery.mockResolvedValueOnce({ rows: [forkedPostRow], rowCount: 1 });
+      mockQuery.mockResolvedValueOnce({ rows: [sampleRevisionRow], rowCount: 1 });
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+      mockFindFeedPostById.mockResolvedValueOnce({ ...sampleFeedRow, fork_count: 0 });
+
+      await app.inject({
+        method: 'POST',
+        url: `/api/posts/${sourcePostRow.id}/fork`,
+        headers: { authorization: `Bearer ${token}` },
+      });
+
+      expect(broadcastSpy).toHaveBeenCalledWith(
+        'feed',
+        expect.objectContaining({ type: 'post:new', channel: 'feed' }),
         undefined,
       );
     });

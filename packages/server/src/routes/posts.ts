@@ -1,9 +1,11 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { createPostSchema, updatePostSchema, createRevisionSchema } from '@forge/shared';
+import { query } from '../db/connection.js';
 import {
   findPostById,
   createPost,
+  createForkedPost,
   updatePost,
   softDeletePost,
   publishPost,
@@ -223,6 +225,75 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
     }
 
     return reply.send({ post: toPost(publishedRow) });
+  });
+
+  // POST /:id/fork — fork a public post
+  app.post('/:id/fork', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+
+    const source = await findPostById(id);
+    if (!source) {
+      return reply.status(404).send({ error: 'Post not found' });
+    }
+
+    if (source.author_id === request.user.id) {
+      return reply.status(403).send({ error: 'Cannot fork your own post' });
+    }
+
+    if (source.visibility !== 'public' || source.is_draft) {
+      return reply.status(403).send({ error: 'Cannot fork a private post' });
+    }
+
+    // Get latest revision content
+    const sourceWithRevision = await findPostWithLatestRevision(id);
+    if (!sourceWithRevision) {
+      return reply.status(404).send({ error: 'Post not found' });
+    }
+
+    // Create forked post
+    const forkedPostRow = await createForkedPost({
+      authorId: request.user.id,
+      title: source.title,
+      contentType: source.content_type,
+      language: source.language,
+      visibility: 'private',
+      isDraft: true,
+      forkedFromId: id,
+    });
+
+    // Create initial revision with source content
+    const revisionRow = await createRevision({
+      postId: forkedPostRow.id,
+      authorId: request.user.id,
+      content: sourceWithRevision.content,
+      message: `Forked from ${source.title}`,
+      revisionNumber: 1,
+    });
+
+    // Copy tags from source
+    const tagRows = await query<{ tag_id: string }>(
+      'SELECT tag_id FROM post_tags WHERE post_id = $1',
+      [id],
+    );
+    for (const { tag_id } of tagRows.rows) {
+      await addPostTag(forkedPostRow.id, tag_id);
+    }
+
+    // Broadcast new post to feed
+    const feedRow = await findFeedPostById(forkedPostRow.id);
+    if (feedRow) {
+      const excludeWs = getExcludeWs(app, request);
+      app.websocket.channels.broadcast(
+        'feed',
+        { type: 'post:new', channel: 'feed', data: toPostWithAuthor(feedRow) },
+        excludeWs,
+      );
+    }
+
+    return reply.status(201).send({
+      post: toPost(forkedPostRow),
+      revision: toRevision(revisionRow),
+    });
   });
 
   // POST /:id/revisions — create revision using createRevisionAtomic (ownership check)

@@ -24,6 +24,8 @@ const mockPost: PostWithAuthor = {
   updatedAt: new Date(),
   author: { id: 'u1', displayName: 'Test User', avatarUrl: null },
   tags: [],
+  forkCount: 0,
+  forkedFromTitle: null,
 };
 
 function createTestRouter() {
@@ -133,6 +135,28 @@ describe('PostListItem', () => {
       });
       expect(wrapper.text()).toContain('2d ago');
     });
+  });
+
+  it('shows fork count when forkCount > 0', () => {
+    const router = createTestRouter();
+    const forkedPost = { ...mockPost, forkCount: 3 };
+    const wrapper = mount(PostListItem, {
+      props: { post: forkedPost, selected: false },
+      global: { plugins: [router] },
+    });
+
+    expect(wrapper.find('[data-testid="fork-count"]').exists()).toBe(true);
+    expect(wrapper.text()).toContain('3');
+  });
+
+  it('does not show fork count when forkCount is 0', () => {
+    const router = createTestRouter();
+    const wrapper = mount(PostListItem, {
+      props: { post: mockPost, selected: false },
+      global: { plugins: [router] },
+    });
+
+    expect(wrapper.find('[data-testid="fork-count"]').exists()).toBe(false);
   });
 
   describe('vote count reactivity via store', () => {
