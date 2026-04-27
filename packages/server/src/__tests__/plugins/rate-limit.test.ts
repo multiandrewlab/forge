@@ -29,6 +29,7 @@ describe('rate-limit plugin', () => {
   beforeAll(async () => {
     process.env.JWT_REFRESH_SECRET = 'test-refresh-secret';
     app = await buildApp();
+    await app.ready();
   });
 
   afterAll(async () => {
@@ -61,6 +62,7 @@ describe('rate-limit plugin', () => {
     it('includes rate limit headers in responses', async () => {
       // Use a fresh app to avoid interference from other tests
       const freshApp = await buildApp();
+      await freshApp.ready();
 
       const response = await freshApp.inject({
         method: 'POST',
@@ -78,6 +80,7 @@ describe('rate-limit plugin', () => {
   describe('POST /api/auth/register rate limit', () => {
     it('returns 429 after exceeding 3 requests per hour', async () => {
       const freshApp = await buildApp();
+      await freshApp.ready();
 
       // Make 3 allowed requests
       for (let i = 0; i < 3; i++) {
@@ -115,6 +118,7 @@ describe('rate-limit plugin', () => {
   describe('GET /api/auth/google/callback rate limit', () => {
     it('returns 429 after exceeding 10 requests per minute', async () => {
       const freshApp = await buildApp();
+      await freshApp.ready();
 
       // Make 10 allowed requests (they will fail with 501 since OAuth isn't configured, but not 429)
       for (let i = 0; i < 10; i++) {

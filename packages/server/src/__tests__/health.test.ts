@@ -7,6 +7,7 @@ describe('GET /api/health', () => {
 
   beforeAll(async () => {
     app = await buildApp();
+    await app.ready();
   });
 
   afterAll(async () => {

@@ -225,6 +225,7 @@ describe('POST /api/posts/:id/fork — file carry-forward', () => {
 
   beforeAll(async () => {
     app = await buildApp();
+    await app.ready();
     token = app.jwt.sign({ id: userId, email: 'test@example.com', displayName: 'Test User' });
   });
 

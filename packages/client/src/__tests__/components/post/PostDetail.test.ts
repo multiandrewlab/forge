@@ -608,6 +608,60 @@ describe('PostDetail', () => {
       expect(preview.props('postId')).toBe('post-1');
     });
 
+    it('does not render FilePreview when activeFileId does not match any file (activeFile null branch)', async () => {
+      setupUrlAwareMockWithFiles(mockPostWithRevision, mockFiles);
+
+      const wrapper = mount(PostDetail, { props: { post: mockPost } });
+      await flushPromises();
+
+      // Sidebar should be visible (files exist)
+      const sidebar = wrapper.findComponent({ name: 'FileSidebar' });
+      expect(sidebar.exists()).toBe(true);
+
+      // Set activeFileId to a non-existent file id — exercises `files.value.find(...)` returning undefined → null
+      const fStore = useFilesStore();
+      fStore.activeFileId = 'nonexistent-file-id';
+      await wrapper.vm.$nextTick();
+
+      // FilePreview should NOT be rendered because activeFile is null (v-if="activeFile" is false)
+      const preview = wrapper.findComponent({ name: 'FilePreview' });
+      expect(preview.exists()).toBe(false);
+    });
+
+    it('falls back to empty array when filesByRevision has no entry for revision id (?? [] branch)', async () => {
+      // Return a post with a revision, but the files fetch returns no data for that revision key
+      mockApiFetch.mockImplementation((url: string) => {
+        if (url.includes('/comments')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve({ comments: [] }),
+          } as Response);
+        }
+        if (url.includes('/files')) {
+          // Return ok but don't populate the store's filesByRevision for rev-1
+          return Promise.resolve({
+            ok: false,
+            status: 500,
+            json: () => Promise.resolve({ error: 'fail' }),
+          } as Response);
+        }
+        return Promise.resolve(mockOkResponse(mockPostWithRevision));
+      });
+
+      const wrapper = mount(PostDetail, { props: { post: mockPost } });
+      await flushPromises();
+
+      // Since fetchFiles got a non-ok response, filesByRevision['rev-1'] is never set
+      // The component code does: files.value = filesStore.filesByRevision[rev.id] ?? []
+      // This hits the ?? [] fallback, and files.length === 0, so CodeViewer renders instead
+      const codeViewer = wrapper.findComponent({ name: 'CodeViewer' });
+      expect(codeViewer.exists()).toBe(true);
+
+      const sidebarComp = wrapper.findComponent({ name: 'FileSidebar' });
+      expect(sidebarComp.exists()).toBe(false);
+    });
+
     it('resets files store when post changes to null', async () => {
       setupUrlAwareMockWithFiles(mockPostWithRevision, mockFiles);
 

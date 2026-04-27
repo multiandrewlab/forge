@@ -43,6 +43,7 @@ export async function withTransaction<T>(
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
+  /* v8 ignore next -- V8 tracks an unreachable "normal completion" branch for catch blocks that always throw */
   } finally {
     client.release();
   }

@@ -152,6 +152,7 @@ describe('file routes', () => {
 
   beforeAll(async () => {
     app = await buildApp();
+    await app.ready();
     token = app.jwt.sign({ id: userId, email: 'test@example.com', displayName: 'Test User' });
   });
 

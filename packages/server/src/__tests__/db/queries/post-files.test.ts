@@ -258,6 +258,12 @@ describe('post file queries', () => {
       const result = await deleteFileById('nonexistent', stagedFile.post_id);
       expect(result).toBe(false);
     });
+
+    it('returns false when rowCount is null (nullish coalescing branch)', async () => {
+      mockQuery.mockResolvedValue({ rows: [], rowCount: null });
+      const result = await deleteFileById(stagedFile.id, stagedFile.post_id);
+      expect(result).toBe(false);
+    });
   });
 
   describe('cleanupStagedFiles', () => {
@@ -273,6 +279,12 @@ describe('post file queries', () => {
 
     it('returns 0 when no stale staged files exist', async () => {
       mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });
+      const result = await cleanupStagedFiles();
+      expect(result).toBe(0);
+    });
+
+    it('returns 0 when rowCount is null (nullish coalescing branch)', async () => {
+      mockQuery.mockResolvedValue({ rows: [], rowCount: null });
       const result = await cleanupStagedFiles();
       expect(result).toBe(0);
     });

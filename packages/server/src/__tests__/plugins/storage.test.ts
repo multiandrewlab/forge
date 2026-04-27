@@ -249,6 +249,26 @@ describe('MinioStorage', () => {
   });
 
   // =========================================================================
+  // Constructor defaults (lines 50-53 — env vars missing)
+  // =========================================================================
+  describe('constructor defaults', () => {
+    it('uses default values when env vars are missing', () => {
+      // Passing an empty env object exercises the ?? fallback on every env key
+      const storageDefaults = new MinioStorage({});
+      // The storage should be created without throwing
+      expect(storageDefaults).toBeInstanceOf(MinioStorage);
+    });
+
+    it('falls back to defaults for endpoint and port when not provided', async () => {
+      const storagePartial = new MinioStorage({ MINIO_ACCESS_KEY: 'ak', MINIO_SECRET_KEY: 'sk' });
+      sendMock.mockResolvedValueOnce({});
+      await storagePartial.ensureBucket();
+      // Verifies the object was created with defaults (won't throw)
+      expect(HeadBucketCommand).toHaveBeenCalledWith({ Bucket: 'forge-uploads' });
+    });
+  });
+
+  // =========================================================================
   // StorageProvider interface conformance
   // =========================================================================
   describe('interface conformance', () => {
@@ -296,6 +316,28 @@ describe('storagePlugin', () => {
     expect(typeof app.storage.getSignedUrl).toBe('function');
     expect(typeof app.storage.delete).toBe('function');
     expect(typeof app.storage.exists).toBe('function');
+
+    await app.close();
+  });
+
+  it('uses default bucket when bucket option is omitted (opts.bucket ?? DEFAULT_BUCKET branch)', async () => {
+    sendMock.mockResolvedValueOnce({}); // ensureBucket HeadBucketCommand succeeds
+
+    const app: FastifyInstance = Fastify({ logger: false });
+
+    await app.register(storagePlugin, {
+      endpoint: 'localhost',
+      port: '9000',
+      accessKey: 'minioadmin',
+      secretKey: 'minioadmin',
+      // bucket intentionally omitted — exercises opts.bucket ?? DEFAULT_BUCKET
+    });
+
+    await app.ready();
+
+    // ensureBucket should have been called with the default bucket name
+    expect(HeadBucketCommand).toHaveBeenCalledWith({ Bucket: 'forge-uploads' });
+    expect(app.storage).toBeDefined();
 
     await app.close();
   });

@@ -70,6 +70,7 @@ describe('search routes', () => {
 
   beforeAll(async () => {
     app = await buildApp();
+    await app.ready();
   });
 
   afterAll(async () => {

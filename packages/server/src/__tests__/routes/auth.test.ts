@@ -76,6 +76,7 @@ describe('auth routes', () => {
     app.decorate('googleOAuth2', {
       getAccessTokenFromAuthorizationCodeFlow: mockGetAccessToken,
     });
+    await app.ready();
   });
 
   afterAll(async () => {
@@ -1230,6 +1231,7 @@ describe('app with Google OAuth configured', () => {
     // Intentionally NOT setting GOOGLE_CLIENT_SECRET to cover the ?? '' fallback
     delete process.env.GOOGLE_CLIENT_SECRET;
     oauthApp = await buildApp();
+    await oauthApp.ready();
   });
 
   afterAll(async () => {

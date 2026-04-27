@@ -528,6 +528,44 @@ describe('PostEditor', () => {
       expect(uploadSpy).not.toHaveBeenCalled();
     });
 
+    it('should call filesStore.uploadFile when FileUpload emits upload', async () => {
+      const filesStore = useFilesStore();
+      filesStore.stagedFiles.push({ id: 'f1', postId: 'p1', revisionId: null, filename: 'a.ts', mimeType: 'text/plain', fileSize: 10, sortOrder: 0, createdAt: new Date() } as PostFile);
+      const uploadSpy = vi.spyOn(filesStore, 'uploadFile').mockResolvedValue(null);
+
+      const w = mount(PostEditor, {
+        props: { ...defaultProps, postId: 'post-123' },
+      });
+      await nextTick();
+      await flushPromises();
+
+      const fileUpload = w.findComponent({ name: 'FileUpload' });
+      const mockFile = new File(['hello'], 'test.ts', { type: 'text/plain' });
+      fileUpload.vm.$emit('upload', mockFile);
+      await flushPromises();
+
+      expect(uploadSpy).toHaveBeenCalledWith('post-123', mockFile);
+    });
+
+    it('should not upload via FileUpload when postId is missing', async () => {
+      const filesStore = useFilesStore();
+      filesStore.stagedFiles.push({ id: 'f1', postId: 'p1', revisionId: null, filename: 'a.ts', mimeType: 'text/plain', fileSize: 10, sortOrder: 0, createdAt: new Date() } as PostFile);
+      const uploadSpy = vi.spyOn(filesStore, 'uploadFile').mockResolvedValue(null);
+
+      const w = mount(PostEditor, {
+        props: { ...defaultProps },
+      });
+      await nextTick();
+      await flushPromises();
+
+      const fileUpload = w.findComponent({ name: 'FileUpload' });
+      const mockFile = new File(['hello'], 'test.ts', { type: 'text/plain' });
+      fileUpload.vm.$emit('upload', mockFile);
+      await flushPromises();
+
+      expect(uploadSpy).not.toHaveBeenCalled();
+    });
+
     it('should upload multiple files when multiple are dropped', async () => {
       const filesStore = useFilesStore();
       const uploadSpy = vi.spyOn(filesStore, 'uploadFile').mockResolvedValue(null);
