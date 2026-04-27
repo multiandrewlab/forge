@@ -24,6 +24,11 @@ vi.mock('../../db/queries/feed.js', async (importOriginal) => {
   };
 });
 
+// Mock fetchLinkPreview for link post creation tests
+vi.mock('../../services/link-preview.js', () => ({
+  fetchLinkPreview: vi.fn(),
+}));
+
 // Allow spy on @forge/shared schema methods to exercise unreachable ?? branches
 vi.mock('@forge/shared', async (importOriginal) => {
   const original = await importOriginal<typeof import('@forge/shared')>();
@@ -43,6 +48,7 @@ const mockWithTransaction = withTransaction as Mock;
 import { buildApp } from '../../app.js';
 import { createPostSchema } from '@forge/shared';
 import { findFeedPostById } from '../../db/queries/feed.js';
+import { fetchLinkPreview } from '../../services/link-preview.js';
 import type { PostWithAuthorRow } from '../../db/queries/feed.js';
 import type { FastifyInstance } from 'fastify';
 import type {
@@ -56,6 +62,7 @@ import type {
 
 const mockCreatePostSchema = createPostSchema as { safeParse: Mock };
 const mockFindFeedPostById = findFeedPostById as Mock;
+const mockFetchLinkPreview = fetchLinkPreview as Mock;
 
 const mockQuery = query as Mock;
 
@@ -1400,6 +1407,303 @@ describe('post routes', () => {
         expect.objectContaining({ type: 'revision:new' }),
         undefined,
       );
+    });
+  });
+
+  // ─── POST /api/posts (link post creation) ────────────────────────
+
+  describe('POST /api/posts — link post creation', () => {
+    const sampleLinkPreview = {
+      title: 'Example Site',
+      description: 'A description',
+      image: 'https://example.com/img.png',
+      readingTime: 3,
+    };
+
+    const linkPostRow: PostRow = {
+      ...samplePostRow,
+      content_type: 'link',
+      language: null,
+      link_url: 'https://example.com/article',
+      link_preview: sampleLinkPreview,
+    };
+
+    const linkPostPayload = {
+      title: 'Link Post',
+      contentType: 'link',
+      linkUrl: 'https://example.com/article',
+      visibility: 'public',
+    };
+
+    it('calls fetchLinkPreview and stores result when creating a link post', async () => {
+      mockFetchLinkPreview.mockResolvedValueOnce(sampleLinkPreview);
+      // createPost query
+      mockQuery.mockResolvedValueOnce({ rows: [linkPostRow], rowCount: 1 });
+      // createRevision query
+      mockQuery.mockResolvedValueOnce({ rows: [sampleRevisionRow], rowCount: 1 });
+      // findFeedPostById for broadcast
+      mockFindFeedPostById.mockResolvedValueOnce(sampleFeedRow);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/posts',
+        headers: { authorization: `Bearer ${token}` },
+        payload: linkPostPayload,
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(mockFetchLinkPreview).toHaveBeenCalledWith('https://example.com/article');
+      const body = response.json();
+      expect(body.post.linkUrl).toBe('https://example.com/article');
+      expect(body.post.linkPreview).toEqual(sampleLinkPreview);
+    });
+
+    it('creates link post with null linkPreview when fetch fails (graceful degradation)', async () => {
+      mockFetchLinkPreview.mockResolvedValueOnce(null);
+      const nullPreviewRow: PostRow = { ...linkPostRow, link_preview: null };
+      // createPost query
+      mockQuery.mockResolvedValueOnce({ rows: [nullPreviewRow], rowCount: 1 });
+      // createRevision query
+      mockQuery.mockResolvedValueOnce({ rows: [sampleRevisionRow], rowCount: 1 });
+      // findFeedPostById for broadcast
+      mockFindFeedPostById.mockResolvedValueOnce(sampleFeedRow);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/posts',
+        headers: { authorization: `Bearer ${token}` },
+        payload: linkPostPayload,
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(mockFetchLinkPreview).toHaveBeenCalledWith('https://example.com/article');
+      const body = response.json();
+      expect(body.post.linkPreview).toBeNull();
+    });
+
+    it('returns 400 when contentType is link but linkUrl is missing', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/posts',
+        headers: { authorization: `Bearer ${token}` },
+        payload: {
+          title: 'Link Post No URL',
+          contentType: 'link',
+          visibility: 'public',
+        },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toContain('linkUrl is required');
+    });
+
+    it('uses linkUrl as revision content when content is not provided for link posts', async () => {
+      mockFetchLinkPreview.mockResolvedValueOnce(sampleLinkPreview);
+      // createPost query
+      mockQuery.mockResolvedValueOnce({ rows: [linkPostRow], rowCount: 1 });
+      // createRevision query — we check what content was passed
+      mockQuery.mockResolvedValueOnce({ rows: [{ ...sampleRevisionRow, content: 'https://example.com/article' }], rowCount: 1 });
+      // findFeedPostById for broadcast
+      mockFindFeedPostById.mockResolvedValueOnce(sampleFeedRow);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/posts',
+        headers: { authorization: `Bearer ${token}` },
+        payload: linkPostPayload, // no content field
+      });
+
+      expect(response.statusCode).toBe(201);
+      // Verify createRevision was called with linkUrl as content
+      // The second mockQuery call is createRevision
+      const createRevisionCall = mockQuery.mock.calls[1];
+      expect(createRevisionCall[1]).toContain('https://example.com/article');
+    });
+
+    it('uses provided content over linkUrl when both are present for link posts', async () => {
+      mockFetchLinkPreview.mockResolvedValueOnce(sampleLinkPreview);
+      // createPost query
+      mockQuery.mockResolvedValueOnce({ rows: [linkPostRow], rowCount: 1 });
+      // createRevision query
+      mockQuery.mockResolvedValueOnce({ rows: [{ ...sampleRevisionRow, content: 'Custom description' }], rowCount: 1 });
+      // findFeedPostById for broadcast
+      mockFindFeedPostById.mockResolvedValueOnce(sampleFeedRow);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/posts',
+        headers: { authorization: `Bearer ${token}` },
+        payload: { ...linkPostPayload, content: 'Custom description' },
+      });
+
+      expect(response.statusCode).toBe(201);
+      // Verify createRevision was called with the provided content
+      const createRevisionCall = mockQuery.mock.calls[1];
+      expect(createRevisionCall[1]).toContain('Custom description');
+    });
+
+    it('does not call fetchLinkPreview for non-link posts', async () => {
+      // createPost query
+      mockQuery.mockResolvedValueOnce({ rows: [samplePostRow], rowCount: 1 });
+      // createRevision query
+      mockQuery.mockResolvedValueOnce({ rows: [sampleRevisionRow], rowCount: 1 });
+      // findFeedPostById for broadcast
+      mockFindFeedPostById.mockResolvedValueOnce(sampleFeedRow);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/posts',
+        headers: { authorization: `Bearer ${token}` },
+        payload: {
+          title: 'Snippet Post',
+          contentType: 'snippet',
+          language: 'typescript',
+          visibility: 'public',
+          content: 'console.log("hello");',
+        },
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(mockFetchLinkPreview).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── POST /api/posts/:id/refresh-preview ──────────────────────────
+
+  describe('POST /api/posts/:id/refresh-preview', () => {
+    const sampleLinkPreview = {
+      title: 'Refreshed Title',
+      description: 'Refreshed description',
+      image: 'https://example.com/new-img.png',
+      readingTime: 5,
+    };
+
+    const linkPostRow: PostRow = {
+      ...samplePostRow,
+      content_type: 'link',
+      language: null,
+      link_url: 'https://example.com/article',
+      link_preview: { title: 'Old Title', description: 'Old', image: null, readingTime: 2 },
+    };
+
+    const updatedLinkPostRow: PostRow = {
+      ...linkPostRow,
+      link_preview: sampleLinkPreview,
+      updated_at: new Date('2026-01-02'),
+    };
+
+    it('refreshes preview for author and returns 200', async () => {
+      // findPostById
+      mockQuery.mockResolvedValueOnce({ rows: [linkPostRow], rowCount: 1 });
+      // fetchLinkPreview
+      mockFetchLinkPreview.mockResolvedValueOnce(sampleLinkPreview);
+      // updateLinkPreview query
+      mockQuery.mockResolvedValueOnce({ rows: [updatedLinkPostRow], rowCount: 1 });
+      // findFeedPostById for broadcast
+      mockFindFeedPostById.mockResolvedValueOnce({ ...sampleFeedRow, content_type: 'link' });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/posts/${postId}/refresh-preview`,
+        headers: { authorization: `Bearer ${token}` },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(mockFetchLinkPreview).toHaveBeenCalledWith('https://example.com/article');
+      const body = response.json();
+      expect(body.post.linkPreview).toEqual(sampleLinkPreview);
+    });
+
+    it('broadcasts post:updated on feed channel after refresh', async () => {
+      // findPostById
+      mockQuery.mockResolvedValueOnce({ rows: [linkPostRow], rowCount: 1 });
+      // fetchLinkPreview
+      mockFetchLinkPreview.mockResolvedValueOnce(sampleLinkPreview);
+      // updateLinkPreview query
+      mockQuery.mockResolvedValueOnce({ rows: [updatedLinkPostRow], rowCount: 1 });
+      // findFeedPostById for broadcast
+      mockFindFeedPostById.mockResolvedValueOnce({ ...sampleFeedRow, content_type: 'link' });
+
+      await app.inject({
+        method: 'POST',
+        url: `/api/posts/${postId}/refresh-preview`,
+        headers: { authorization: `Bearer ${token}` },
+      });
+
+      expect(broadcastSpy).toHaveBeenCalledWith(
+        'feed',
+        expect.objectContaining({ type: 'post:updated', channel: 'feed' }),
+      );
+    });
+
+    it('skips broadcast when findFeedPostById returns null', async () => {
+      // findPostById
+      mockQuery.mockResolvedValueOnce({ rows: [linkPostRow], rowCount: 1 });
+      // fetchLinkPreview
+      mockFetchLinkPreview.mockResolvedValueOnce(sampleLinkPreview);
+      // updateLinkPreview query
+      mockQuery.mockResolvedValueOnce({ rows: [updatedLinkPostRow], rowCount: 1 });
+      // findFeedPostById returns null
+      mockFindFeedPostById.mockResolvedValueOnce(null);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/posts/${postId}/refresh-preview`,
+        headers: { authorization: `Bearer ${token}` },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(broadcastSpy).not.toHaveBeenCalled();
+    });
+
+    it('returns 403 for non-author', async () => {
+      // findPostById — post belongs to userId, request from otherUserId
+      mockQuery.mockResolvedValueOnce({ rows: [linkPostRow], rowCount: 1 });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/posts/${postId}/refresh-preview`,
+        headers: { authorization: `Bearer ${otherToken}` },
+      });
+
+      expect(response.statusCode).toBe(403);
+      expect(response.json().error).toBe('Only the author can refresh the link preview');
+    });
+
+    it('returns 400 for non-link post', async () => {
+      // findPostById — samplePostRow has content_type='snippet'
+      mockQuery.mockResolvedValueOnce({ rows: [samplePostRow], rowCount: 1 });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/posts/${postId}/refresh-preview`,
+        headers: { authorization: `Bearer ${token}` },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toBe('Only link posts can have their preview refreshed');
+    });
+
+    it('returns 404 for nonexistent post', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/posts/${postId}/refresh-preview`,
+        headers: { authorization: `Bearer ${token}` },
+      });
+
+      expect(response.statusCode).toBe(404);
+      expect(response.json().error).toBe('Post not found');
+    });
+
+    it('returns 401 without auth', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/posts/${postId}/refresh-preview`,
+      });
+
+      expect(response.statusCode).toBe(401);
     });
   });
 
