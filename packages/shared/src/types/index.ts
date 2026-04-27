@@ -100,3 +100,9 @@ export type {
 export { searchQuerySchema, aiSearchFiltersSchema } from './search.js';
 export type { PromptVariable } from './prompt.js';
 export { extractVariables, assemblePrompt } from './prompt.js';
+export type {
+  UserProfileBadge,
+  UserProfileStats,
+  UserProfilePost,
+  UserProfileResponse,
+} from './profile.js';
