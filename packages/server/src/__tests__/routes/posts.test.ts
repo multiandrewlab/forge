@@ -1376,6 +1376,22 @@ describe('post routes', () => {
       expect(response.statusCode).toBe(201);
     });
 
+    it('returns 404 when findPostWithLatestRevision returns null', async () => {
+      // findPostById succeeds
+      mockQuery.mockResolvedValueOnce({ rows: [sourcePostRow], rowCount: 1 });
+      // findPostWithLatestRevision returns null (edge case: post exists but has no revisions)
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/posts/${postId}/fork`,
+        headers: { authorization: `Bearer ${token}` },
+      });
+
+      expect(response.statusCode).toBe(404);
+      expect(response.json().error).toBe('Post not found');
+    });
+
     it('chain forking works — forking a fork sets forkedFromId to immediate parent', async () => {
       // Source post is itself a fork (has forked_from_id set)
       const chainSourcePost = { ...sourcePostRow, forked_from_id: 'grandparent-post-id' };
