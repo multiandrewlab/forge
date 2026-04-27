@@ -32,6 +32,8 @@ export type UpdatePostInput = z.infer<typeof updatePostSchema>;
 export const createRevisionSchema = z.object({
   content: z.string().min(1),
   message: z.string().max(500).optional(),
+  stagedFileIds: z.array(z.string().uuid()).optional(),
+  removeFileIds: z.array(z.string().uuid()).optional(),
 });
 
 export type CreateRevisionInput = z.infer<typeof createRevisionSchema>;
