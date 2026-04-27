@@ -1209,6 +1209,10 @@ describe('post routes', () => {
       mockQuery.mockResolvedValueOnce({ rows: [forkedPostRow], rowCount: 1 });
       // createRevision (initial revision for fork)
       mockQuery.mockResolvedValueOnce({ rows: [sampleRevisionRow], rowCount: 1 });
+      // findRevisionsByPostId (file carry-forward: get source revisions)
+      mockQuery.mockResolvedValueOnce({ rows: [{ id: 'rev-1', post_id: sourcePostRow.id, revision_number: 1 }], rowCount: 1 });
+      // findFilesByRevisionId (file carry-forward: no files on source)
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
       // findTagsByPostId (copy tags)
       mockQuery.mockResolvedValueOnce({ rows: [{ tag_id: 'tag-1' }], rowCount: 1 });
       // addPostTag
@@ -1309,6 +1313,10 @@ describe('post routes', () => {
       };
       mockQuery.mockResolvedValueOnce({ rows: [forkedPostRow], rowCount: 1 });
       mockQuery.mockResolvedValueOnce({ rows: [sampleRevisionRow], rowCount: 1 });
+      // findRevisionsByPostId (file carry-forward: get source revisions)
+      mockQuery.mockResolvedValueOnce({ rows: [{ id: 'rev-1', post_id: sourcePostRow.id, revision_number: 1 }], rowCount: 1 });
+      // findFilesByRevisionId (file carry-forward: no files)
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
       // Two tags
       mockQuery.mockResolvedValueOnce({
         rows: [{ tag_id: 'tag-1' }, { tag_id: 'tag-2' }],
@@ -1363,6 +1371,10 @@ describe('post routes', () => {
       };
       mockQuery.mockResolvedValueOnce({ rows: [forkedPostRow], rowCount: 1 });
       mockQuery.mockResolvedValueOnce({ rows: [sampleRevisionRow], rowCount: 1 });
+      // findRevisionsByPostId (file carry-forward: get source revisions)
+      mockQuery.mockResolvedValueOnce({ rows: [{ id: 'rev-1', post_id: sourcePostRow.id, revision_number: 1 }], rowCount: 1 });
+      // findFilesByRevisionId (file carry-forward: no files)
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
       // No tags
       mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
       mockFindFeedPostById.mockResolvedValueOnce({ ...sampleFeedRow, fork_count: 0 });
@@ -1415,6 +1427,10 @@ describe('post routes', () => {
       };
       mockQuery.mockResolvedValueOnce({ rows: [forkedPostRow], rowCount: 1 });
       mockQuery.mockResolvedValueOnce({ rows: [sampleRevisionRow], rowCount: 1 });
+      // findRevisionsByPostId (file carry-forward: get source revisions)
+      mockQuery.mockResolvedValueOnce({ rows: [{ id: 'rev-1', post_id: chainSourcePost.id, revision_number: 1 }], rowCount: 1 });
+      // findFilesByRevisionId (file carry-forward: no files)
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
       mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
       mockFindFeedPostById.mockResolvedValueOnce({
         ...sampleFeedRow,
@@ -1454,6 +1470,10 @@ describe('post routes', () => {
       };
       mockQuery.mockResolvedValueOnce({ rows: [forkedPostRow], rowCount: 1 });
       mockQuery.mockResolvedValueOnce({ rows: [sampleRevisionRow], rowCount: 1 });
+      // findRevisionsByPostId (file carry-forward: get source revisions)
+      mockQuery.mockResolvedValueOnce({ rows: [{ id: 'rev-1', post_id: sourcePostRow.id, revision_number: 1 }], rowCount: 1 });
+      // findFilesByRevisionId (file carry-forward: no files)
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
       mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
       mockFindFeedPostById.mockResolvedValueOnce({ ...sampleFeedRow, fork_count: 0 });
 

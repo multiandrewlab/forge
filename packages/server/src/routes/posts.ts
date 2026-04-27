@@ -12,11 +12,13 @@ import {
   findPostWithLatestRevision,
 } from '../db/queries/posts.js';
 import {
+  findRevisionsByPostId,
   findRevisionsWithAuthorByPostId,
   findRevision,
   createRevision,
   createRevisionAtomic,
 } from '../db/queries/revisions.js';
+import { findFilesByRevisionId, createPostFile } from '../db/queries/post-files.js';
 import { toPost, toRevision, toPostWithRevision } from '../services/posts.js';
 import { permanentKey } from '../services/files.js';
 import type { PostFileRow, PostRevisionRow } from '../db/queries/types.js';
@@ -271,6 +273,25 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
       message: `Forked from ${source.title}`,
       revisionNumber: 1,
     });
+
+    // Copy files from source post's latest revision (shared storage_key, no object copy)
+    const sourceRevisions = await findRevisionsByPostId(id);
+    const latestSourceRevision = sourceRevisions[0];
+    if (latestSourceRevision) {
+      const sourceFiles = await findFilesByRevisionId(latestSourceRevision.id);
+      for (const sourceFile of sourceFiles) {
+        await createPostFile({
+          postId: forkedPostRow.id,
+          revisionId: revisionRow.id,
+          filename: sourceFile.filename,
+          content: sourceFile.content,
+          storageKey: sourceFile.storage_key,
+          mimeType: sourceFile.mime_type,
+          fileSize: sourceFile.file_size,
+          sortOrder: sourceFile.sort_order,
+        });
+      }
+    }
 
     // Copy tags from source
     const tagRows = await query<{ tag_id: string }>(
