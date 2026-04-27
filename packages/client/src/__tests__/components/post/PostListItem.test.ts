@@ -159,6 +159,27 @@ describe('PostListItem', () => {
     expect(wrapper.find('[data-testid="fork-count"]').exists()).toBe(false);
   });
 
+  describe('link icon', () => {
+    it('shows link icon when contentType is "link"', () => {
+      const router = createTestRouter();
+      const linkPost = { ...mockPost, contentType: 'link' as const };
+      const wrapper = mount(PostListItem, {
+        props: { post: linkPost, selected: false },
+        global: { plugins: [router] },
+      });
+      expect(wrapper.find('[data-testid="link-icon"]').exists()).toBe(true);
+    });
+
+    it('does not show link icon when contentType is "snippet"', () => {
+      const router = createTestRouter();
+      const wrapper = mount(PostListItem, {
+        props: { post: mockPost, selected: false },
+        global: { plugins: [router] },
+      });
+      expect(wrapper.find('[data-testid="link-icon"]').exists()).toBe(false);
+    });
+  });
+
   describe('vote count reactivity via store', () => {
     it('updates displayed vote count when store.updatePostVote is called', async () => {
       setActivePinia(createPinia());
