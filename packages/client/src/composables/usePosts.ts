@@ -191,6 +191,26 @@ export function usePosts() {
     }
   }
 
+  async function forkPost(sourcePostId: string): Promise<string | null> {
+    error.value = null;
+    try {
+      const response = await apiFetch(`/api/posts/${sourcePostId}/fork`, {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        error.value = await parseErrorMessage(response, 'Failed to fork post');
+        return null;
+      }
+
+      const data = (await response.json()) as { post: { id: string } };
+      return data.post.id;
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : 'Failed to fork post';
+      return null;
+    }
+  }
+
   return {
     currentPost,
     isDirty,
@@ -205,5 +225,6 @@ export function usePosts() {
     saveRevision,
     fetchRevisions,
     restoreRevision,
+    forkPost,
   };
 }
