@@ -226,6 +226,8 @@ export type UpdatePostInput = z.infer<typeof updatePostSchema>;
 export const createRevisionSchema = z.object({
   content: z.string().min(1),
   message: z.string().max(500).optional(),
+  stagedFileIds: z.array(z.string().uuid()).optional(),
+  removeFileIds: z.array(z.string().uuid()).optional(),
 });
 
 export type CreateRevisionInput = z.infer<typeof createRevisionSchema>;
@@ -270,8 +272,8 @@ Create or extend `packages/server/src/__tests__/db/queries/posts.test.ts`:
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockQuery = vi.fn();
-vi.mock('../../connection.js', () => ({
-  getPool: () => ({ query: mockQuery }),
+vi.mock('../../db/connection.js', () => ({
+  query: mockQuery,
 }));
 
 import { createPost, updateLinkPreview } from '../../db/queries/posts.js';
@@ -431,8 +433,7 @@ Update `createPost()` to include link fields:
 
 ```typescript
 export async function createPost(input: CreatePostInput): Promise<PostRow> {
-  const pool = getPool();
-  const result = await pool.query(
+  const result = await query<PostRow>(
     `INSERT INTO posts (author_id, title, content_type, language, visibility, is_draft, link_url, link_preview)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      RETURNING *`,
@@ -458,8 +459,7 @@ export async function updateLinkPreview(
   postId: string,
   preview: { title: string; description: string; image: string | null; readingTime: number | null } | null,
 ): Promise<PostRow> {
-  const pool = getPool();
-  const result = await pool.query(
+  const result = await query<PostRow>(
     `UPDATE posts SET link_preview = $1, updated_at = NOW()
      WHERE id = $2 AND deleted_at IS NULL
      RETURNING *`,
