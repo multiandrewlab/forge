@@ -64,6 +64,11 @@ const router = createRouter({
           component: () => import('@/pages/SearchPage.vue'),
           meta: { requiresAuth: false },
         },
+        {
+          path: 'user/:id',
+          name: 'user-profile',
+          component: () => import('@/pages/UserProfilePage.vue'),
+        },
       ],
     },
     // Login — wrapped in AuthLayout
