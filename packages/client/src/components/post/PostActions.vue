@@ -47,8 +47,14 @@
       </svg>
     </button>
 
-    <!-- Fork (placeholder) -->
-    <button disabled class="flex items-center gap-1 text-sm text-gray-500" aria-label="Fork">
+    <!-- Fork -->
+    <button
+      class="flex items-center gap-1 text-sm"
+      :class="canFork ? 'text-gray-400 hover:text-gray-200' : 'text-gray-600 cursor-not-allowed'"
+      :disabled="!canFork"
+      aria-label="Fork"
+      @click="handleFork"
+    >
       <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path
           stroke-linecap="round"
@@ -81,18 +87,28 @@
 import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useFeedStore } from '../../stores/feed.js';
+import { useAuthStore } from '../../stores/auth.js';
 import { useVotes } from '../../composables/useVotes.js';
 import { useBookmarks } from '../../composables/useBookmarks.js';
 import type { PostWithAuthor } from '@forge/shared';
 
 const props = defineProps<{ post: PostWithAuthor }>();
+const emit = defineEmits<{ fork: [] }>();
 const router = useRouter();
 const store = useFeedStore();
+const authStore = useAuthStore();
 const { vote, removeVote } = useVotes();
 const { toggleBookmark } = useBookmarks();
 
 const currentVote = computed(() => store.userVotes[props.post.id] ?? null);
 const isBookmarked = computed(() => store.userBookmarks[props.post.id] === true);
+const canFork = computed(() => authStore.user?.id !== props.post.authorId);
+
+function handleFork(): void {
+  if (canFork.value) {
+    emit('fork');
+  }
+}
 
 function handleUpvote(): void {
   if (currentVote.value === 1) {

@@ -33,6 +33,12 @@ vi.mock('../../../composables/useBookmarks.js', () => ({
   }),
 }));
 
+vi.mock('../../../stores/auth.js', () => ({
+  useAuthStore: () => ({
+    user: { id: 'u1', email: 'test@example.com', displayName: 'Test' },
+  }),
+}));
+
 const mockPost: PostWithAuthor = {
   id: '1',
   authorId: 'u1',
@@ -195,20 +201,52 @@ describe('PostActions', () => {
   });
 
   describe('fork button', () => {
-    it('is disabled', () => {
-      const wrapper = mount(PostActions, {
-        props: { post: mockPost },
-      });
+    it('is enabled for public posts by other users', () => {
+      const otherUserPost = { ...mockPost, authorId: 'other-user' };
+      const wrapper = mount(PostActions, { props: { post: otherUserPost } });
+
+      const forkBtn = wrapper.find('[aria-label="Fork"]');
+      expect(forkBtn.attributes('disabled')).toBeUndefined();
+    });
+
+    it('has hover styling when enabled', () => {
+      const otherUserPost = { ...mockPost, authorId: 'other-user' };
+      const wrapper = mount(PostActions, { props: { post: otherUserPost } });
+
+      const forkBtn = wrapper.find('[aria-label="Fork"]');
+      expect(forkBtn.classes()).toContain('text-gray-400');
+    });
+
+    it('is disabled for own posts', () => {
+      // mockPost.authorId ('u1') matches the mocked auth user id ('u1')
+      const wrapper = mount(PostActions, { props: { post: mockPost } });
+
       const forkBtn = wrapper.find('[aria-label="Fork"]');
       expect(forkBtn.attributes('disabled')).toBeDefined();
     });
 
-    it('has text-gray-500 class', () => {
-      const wrapper = mount(PostActions, {
-        props: { post: mockPost },
-      });
+    it('has cursor-not-allowed class for own posts', () => {
+      const wrapper = mount(PostActions, { props: { post: mockPost } });
+
       const forkBtn = wrapper.find('[aria-label="Fork"]');
-      expect(forkBtn.classes()).toContain('text-gray-500');
+      expect(forkBtn.classes()).toContain('cursor-not-allowed');
+    });
+
+    it('emits fork event when clicked on enabled state', async () => {
+      const otherUserPost = { ...mockPost, authorId: 'other-user' };
+      const wrapper = mount(PostActions, { props: { post: otherUserPost } });
+
+      await wrapper.find('[aria-label="Fork"]').trigger('click');
+
+      expect(wrapper.emitted('fork')).toBeTruthy();
+    });
+
+    it('does not emit fork event when clicked on disabled state', async () => {
+      const wrapper = mount(PostActions, { props: { post: mockPost } });
+
+      await wrapper.find('[aria-label="Fork"]').trigger('click');
+
+      expect(wrapper.emitted('fork')).toBeFalsy();
     });
   });
 
