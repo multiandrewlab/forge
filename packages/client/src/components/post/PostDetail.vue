@@ -2,7 +2,25 @@
   <div v-if="post" class="flex h-full flex-col overflow-y-auto p-6">
     <PostMetaHeader :post="post" />
     <PostActions :post="post" @fork="handleFork" />
-    <div class="mt-4 flex-1">
+    <!-- Multi-file layout -->
+    <div v-if="files.length > 0" class="mt-4 flex flex-1 gap-3">
+      <FileSidebar
+        :files="files"
+        :active-file-id="filesStore.activeFileId"
+        :editable="false"
+        @select="filesStore.setActiveFile"
+      />
+      <div class="flex-1 overflow-auto">
+        <FilePreview
+          v-if="activeFile"
+          :file="activeFile"
+          :post-id="fullPost!.id"
+        />
+      </div>
+    </div>
+
+    <!-- Single-file layout (existing) -->
+    <div v-else class="mt-4 flex-1">
       <CodeViewer
         v-if="revision"
         :code="revision.content"
@@ -52,8 +70,10 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue';
 import { apiFetch } from '../../lib/api.js';
-import type { PostWithAuthor, PostWithRevision } from '@forge/shared';
+import type { PostWithAuthor, PostWithRevision, PostFile } from '@forge/shared';
 import CodeViewer from './CodeViewer.vue';
+import FileSidebar from './FileSidebar.vue';
+import FilePreview from './FilePreview.vue';
 import PostMetaHeader from './PostMetaHeader.vue';
 import PostActions from './PostActions.vue';
 import CommentSection from './CommentSection.vue';
@@ -63,6 +83,7 @@ import { useRouter } from 'vue-router';
 import { useComments } from '../../composables/useComments.js';
 import { useCommentsStore } from '../../stores/comments.js';
 import { useAuthStore } from '../../stores/auth.js';
+import { useFilesStore } from '../../stores/files.js';
 import { usePosts } from '../../composables/usePosts.js';
 
 const props = defineProps<{ post: PostWithAuthor | null }>();
@@ -72,17 +93,26 @@ const inlineCommentLine = ref<number | null>(null);
 
 const revision = computed(() => fullPost.value?.revisions?.[0] ?? null);
 
+const files = ref<PostFile[]>([]);
+
 const router = useRouter();
 const authStore = useAuthStore();
 const commentsStore = useCommentsStore();
+const filesStore = useFilesStore();
 const { fetchComments, addComment } = useComments();
 const { forkPost } = usePosts();
+
+const activeFile = computed(() =>
+  files.value.find((f) => f.id === filesStore.activeFileId) ?? null,
+);
 
 watch(
   () => props.post?.id,
   async (id) => {
     if (!id) {
       fullPost.value = null;
+      files.value = [];
+      filesStore.$reset();
       commentsStore.clearComments();
       inlineCommentLine.value = null;
       return;
@@ -97,9 +127,15 @@ watch(
           commentsStore.setCurrentRevisionId(rev.id);
         }
         await fetchComments(id);
+        if (rev) {
+          // Fetch files associated with this revision for multi-file layout
+          await filesStore.fetchFiles(id, rev.id);
+          files.value = filesStore.filesByRevision[rev.id] ?? [];
+        }
       }
     } catch {
       fullPost.value = null;
+      files.value = [];
       commentsStore.clearComments();
       inlineCommentLine.value = null;
     }
