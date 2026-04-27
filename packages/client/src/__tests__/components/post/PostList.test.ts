@@ -45,6 +45,8 @@ const mockPost: PostWithAuthor = {
   updatedAt: new Date(),
   author: { id: 'u1', displayName: 'Alice', avatarUrl: null },
   tags: [],
+  forkCount: 0,
+  forkedFromTitle: null,
 };
 
 function createTestRouter() {

@@ -99,6 +99,8 @@ const sampleFeedRow: PostWithAuthorRow = {
   author_display_name: 'Test User',
   author_avatar_url: null,
   tags: 'typescript',
+  fork_count: 0,
+  forked_from_title: null,
 };
 
 describe('post routes', () => {

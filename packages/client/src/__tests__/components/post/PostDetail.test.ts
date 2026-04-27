@@ -40,6 +40,8 @@ const mockPost: PostWithAuthor = {
   updatedAt: new Date('2025-01-01'),
   author: { id: 'user-1', displayName: 'Alice', avatarUrl: null },
   tags: [],
+  forkCount: 0,
+  forkedFromTitle: null,
 };
 
 const mockPostWithRevision: PostWithRevision = {

@@ -43,6 +43,8 @@ const mockPost: PostWithAuthor = {
   updatedAt: new Date(),
   author: { id: 'u1', displayName: 'Test User', avatarUrl: null },
   tags: [],
+  forkCount: 0,
+  forkedFromTitle: null,
 };
 
 function makeFeedResponse(posts: PostWithAuthor[] = [mockPost]) {

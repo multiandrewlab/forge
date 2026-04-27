@@ -22,6 +22,8 @@ const baseRow: PostWithAuthorRow = {
   author_display_name: 'Alice',
   author_avatar_url: 'https://example.com/avatar.png',
   tags: 'typescript,node,vitest',
+  fork_count: 0,
+  forked_from_title: null,
 };
 
 describe('toPostWithAuthor', () => {
@@ -43,6 +45,8 @@ describe('toPostWithAuthor', () => {
     expect(result.deletedAt).toBeNull();
     expect(result.createdAt).toEqual(new Date('2026-01-01'));
     expect(result.updatedAt).toEqual(new Date('2026-01-02'));
+    expect(result.forkCount).toBe(0);
+    expect(result.forkedFromTitle).toBeNull();
   });
 
   it('maps author fields into nested author object', () => {
@@ -124,5 +128,19 @@ describe('toPostWithAuthor', () => {
     const result = toPostWithAuthor(row);
 
     expect(result.deletedAt).toEqual(new Date('2026-06-01'));
+  });
+
+  it('maps fork_count to forkCount', () => {
+    const row: PostWithAuthorRow = { ...baseRow, fork_count: 5 };
+    const result = toPostWithAuthor(row);
+
+    expect(result.forkCount).toBe(5);
+  });
+
+  it('maps forked_from_title to forkedFromTitle', () => {
+    const row: PostWithAuthorRow = { ...baseRow, forked_from_title: 'Source Post' };
+    const result = toPostWithAuthor(row);
+
+    expect(result.forkedFromTitle).toBe('Source Post');
   });
 });
