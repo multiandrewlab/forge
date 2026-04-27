@@ -18,6 +18,7 @@ import { searchRoutes } from './routes/search.js';
 import { aiRoutes } from './routes/ai.js';
 import { playgroundRoutes } from './routes/playground.js';
 import { fileRoutes } from './routes/files.js';
+import { userProfileRoutes } from './routes/user-profiles.js';
 import { websocketPlugin } from './plugins/websocket/index.js';
 import { langchainPlugin } from './plugins/langchain/index.js';
 import { cleanupStagedFiles } from './db/queries/post-files.js';
@@ -88,6 +89,7 @@ export async function buildApp() {
   await app.register(aiRoutes, { prefix: '/api/ai' });
   await app.register(playgroundRoutes, { prefix: '/api' });
   await app.register(fileRoutes, { prefix: '/api/posts' });
+  await app.register(userProfileRoutes, { prefix: '/api/users' });
 
   app.addHook('onReady', async () => {
     try {
