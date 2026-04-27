@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { nextTick, shallowRef } from 'vue';
+import { setActivePinia, createPinia } from 'pinia';
+import type { PostFile } from '@forge/shared';
 
 const fakeEditorView = {
   state: {
@@ -69,7 +71,32 @@ vi.mock('@/components/editor/AiGeneratePanel.vue', () => ({
   },
 }));
 
+vi.mock('@/components/post/FileSidebar.vue', () => ({
+  default: {
+    name: 'FileSidebar',
+    props: ['files', 'activeFileId', 'editable'],
+    emits: ['select'],
+    template: '<div data-testid="file-sidebar-stub"><slot name="upload" /></div>',
+  },
+}));
+
+vi.mock('@/components/post/FileUpload.vue', () => ({
+  default: {
+    name: 'FileUpload',
+    emits: ['upload'],
+    template: '<div data-testid="file-upload-stub"></div>',
+  },
+}));
+
 import PostEditor from '@/components/editor/PostEditor.vue';
+import { useFilesStore } from '@/stores/files';
+
+/** Create a minimal DragEvent-compatible object with a files list, since jsdom lacks DataTransfer. */
+function createDropEvent(files: File[]): { dataTransfer: { files: File[] } } {
+  return {
+    dataTransfer: { files },
+  };
+}
 
 describe('PostEditor', () => {
   const defaultProps = {
@@ -86,6 +113,7 @@ describe('PostEditor', () => {
   let wrapper: ReturnType<typeof mount>;
 
   beforeEach(() => {
+    setActivePinia(createPinia());
     wrapper = mount(PostEditor, { props: { ...defaultProps } });
   });
 
@@ -348,6 +376,177 @@ describe('PostEditor', () => {
       expect(call.language).toBe('javascript');
       expect(typeof call.before).toBe('string');
       expect(typeof call.after).toBe('string');
+    });
+  });
+
+  describe('FileSidebar integration', () => {
+    function createMockPostFile(overrides: Partial<PostFile> = {}): PostFile {
+      return {
+        id: 'file-1',
+        postId: 'post-1',
+        revisionId: null,
+        filename: 'screenshot.png',
+        mimeType: 'image/png',
+        fileSize: 1024,
+        sortOrder: 0,
+        createdAt: new Date('2026-01-15T12:00:00Z'),
+        ...overrides,
+      };
+    }
+
+    it('should NOT render FileSidebar when no staged files exist', () => {
+      const w = mount(PostEditor, { props: { ...defaultProps } });
+      expect(w.find('[data-testid="file-sidebar-stub"]').exists()).toBe(false);
+    });
+
+    it('should render FileSidebar when stagedFiles exist', async () => {
+      const filesStore = useFilesStore();
+      filesStore.stagedFiles.push(createMockPostFile());
+
+      const w = mount(PostEditor, { props: { ...defaultProps } });
+      await nextTick();
+
+      expect(w.find('[data-testid="file-sidebar-stub"]').exists()).toBe(true);
+    });
+
+    it('should render FileUpload inside FileSidebar upload slot', async () => {
+      const filesStore = useFilesStore();
+      filesStore.stagedFiles.push(createMockPostFile());
+
+      const w = mount(PostEditor, { props: { ...defaultProps } });
+      await nextTick();
+
+      const sidebar = w.find('[data-testid="file-sidebar-stub"]');
+      expect(sidebar.exists()).toBe(true);
+      expect(sidebar.find('[data-testid="file-upload-stub"]').exists()).toBe(true);
+    });
+
+    it('should pass correct props to FileSidebar', async () => {
+      const filesStore = useFilesStore();
+      const mockFile = createMockPostFile();
+      filesStore.stagedFiles.push(mockFile);
+      filesStore.activeFileId = 'file-1';
+
+      const w = mount(PostEditor, { props: { ...defaultProps } });
+      await nextTick();
+
+      const sidebar = w.findComponent({ name: 'FileSidebar' });
+      expect(sidebar.exists()).toBe(true);
+      expect(sidebar.props('files')).toEqual([mockFile]);
+      expect(sidebar.props('activeFileId')).toBe('file-1');
+      expect(sidebar.props('editable')).toBe(true);
+    });
+
+    it('should call filesStore.setActiveFile when sidebar emits select', async () => {
+      const filesStore = useFilesStore();
+      filesStore.stagedFiles.push(createMockPostFile());
+      const setActiveSpy = vi.spyOn(filesStore, 'setActiveFile');
+
+      const w = mount(PostEditor, { props: { ...defaultProps } });
+      await nextTick();
+
+      const sidebar = w.findComponent({ name: 'FileSidebar' });
+      await sidebar.vm.$emit('select', 'file-2');
+
+      expect(setActiveSpy).toHaveBeenCalledWith('file-2');
+    });
+
+    it('should hide FileSidebar when stagedFiles become empty', async () => {
+      const filesStore = useFilesStore();
+      filesStore.stagedFiles.push(createMockPostFile());
+
+      const w = mount(PostEditor, { props: { ...defaultProps } });
+      await nextTick();
+      expect(w.find('[data-testid="file-sidebar-stub"]').exists()).toBe(true);
+
+      filesStore.stagedFiles.splice(0);
+      await nextTick();
+      expect(w.find('[data-testid="file-sidebar-stub"]').exists()).toBe(false);
+    });
+  });
+
+  describe('drop zone', () => {
+    it('should have a drop zone wrapper element', () => {
+      const dropZone = wrapper.find('[data-testid="editor-drop-zone"]');
+      expect(dropZone.exists()).toBe(true);
+    });
+
+    it('should add visual ring on dragover', async () => {
+      const dropZone = wrapper.find('[data-testid="editor-drop-zone"]');
+      await dropZone.trigger('dragover');
+
+      expect(dropZone.classes()).toContain('ring-2');
+      expect(dropZone.classes()).toContain('ring-purple-500');
+    });
+
+    it('should remove visual ring on dragleave', async () => {
+      const dropZone = wrapper.find('[data-testid="editor-drop-zone"]');
+      await dropZone.trigger('dragover');
+      expect(dropZone.classes()).toContain('ring-2');
+
+      await dropZone.trigger('dragleave');
+      expect(dropZone.classes()).not.toContain('ring-2');
+    });
+
+    it('should remove visual ring on drop', async () => {
+      const dropZone = wrapper.find('[data-testid="editor-drop-zone"]');
+      await dropZone.trigger('dragover');
+      expect(dropZone.classes()).toContain('ring-2');
+
+      const mockFile = new File(['test content'], 'test.txt', { type: 'text/plain' });
+      await dropZone.trigger('drop', createDropEvent([mockFile]));
+      expect(dropZone.classes()).not.toContain('ring-2');
+    });
+
+    it('should call filesStore.uploadFile when a file is dropped and postId is provided', async () => {
+      const filesStore = useFilesStore();
+      const uploadSpy = vi.spyOn(filesStore, 'uploadFile').mockResolvedValue(null);
+
+      const w = mount(PostEditor, {
+        props: { ...defaultProps, postId: 'post-123' },
+      });
+      await nextTick();
+      await flushPromises();
+
+      const dropZone = w.find('[data-testid="editor-drop-zone"]');
+      const mockFile = new File(['test content'], 'test.txt', { type: 'text/plain' });
+      await dropZone.trigger('drop', createDropEvent([mockFile]));
+      await flushPromises();
+
+      expect(uploadSpy).toHaveBeenCalledWith('post-123', mockFile);
+    });
+
+    it('should NOT call filesStore.uploadFile on drop when postId is not provided', async () => {
+      const filesStore = useFilesStore();
+      const uploadSpy = vi.spyOn(filesStore, 'uploadFile').mockResolvedValue(null);
+
+      const dropZone = wrapper.find('[data-testid="editor-drop-zone"]');
+      const mockFile = new File(['test content'], 'test.txt', { type: 'text/plain' });
+      await dropZone.trigger('drop', createDropEvent([mockFile]));
+      await flushPromises();
+
+      expect(uploadSpy).not.toHaveBeenCalled();
+    });
+
+    it('should upload multiple files when multiple are dropped', async () => {
+      const filesStore = useFilesStore();
+      const uploadSpy = vi.spyOn(filesStore, 'uploadFile').mockResolvedValue(null);
+
+      const w = mount(PostEditor, {
+        props: { ...defaultProps, postId: 'post-123' },
+      });
+      await nextTick();
+      await flushPromises();
+
+      const dropZone = w.find('[data-testid="editor-drop-zone"]');
+      const mockFile1 = new File(['content1'], 'file1.txt', { type: 'text/plain' });
+      const mockFile2 = new File(['content2'], 'file2.txt', { type: 'text/plain' });
+      await dropZone.trigger('drop', createDropEvent([mockFile1, mockFile2]));
+      await flushPromises();
+
+      expect(uploadSpy).toHaveBeenCalledTimes(2);
+      expect(uploadSpy).toHaveBeenCalledWith('post-123', mockFile1);
+      expect(uploadSpy).toHaveBeenCalledWith('post-123', mockFile2);
     });
   });
 });

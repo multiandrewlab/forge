@@ -8,6 +8,9 @@ import EditorToolbar from '@/components/editor/EditorToolbar.vue';
 import DraftStatus from '@/components/editor/DraftStatus.vue';
 import AiSuggestion from '@/components/editor/AiSuggestion.vue';
 import AiGeneratePanel from '@/components/editor/AiGeneratePanel.vue';
+import FileSidebar from '@/components/post/FileSidebar.vue';
+import FileUpload from '@/components/post/FileUpload.vue';
+import { useFilesStore } from '@/stores/files';
 
 /** Narrow content-type enum accepted by AiGeneratePanel (excludes 'link'). */
 type AiGenerateContentType = AiGenerateRequest['contentType'];
@@ -21,6 +24,7 @@ const props = defineProps<{
   tags: string[];
   saveStatus: SaveStatus;
   lastSavedAt: Date | null;
+  postId?: string;
 }>();
 
 const emit = defineEmits<{
@@ -32,6 +36,24 @@ const emit = defineEmits<{
   'update:tags': [value: string[]];
   publish: [];
 }>();
+
+const filesStore = useFilesStore();
+const isDragging = ref(false);
+const showFileSidebar = computed(() => filesStore.stagedFiles.length > 0);
+
+function handleDrop(e: DragEvent): void {
+  isDragging.value = false;
+  const files = e.dataTransfer?.files;
+  if (!files || files.length === 0 || !props.postId) return;
+  for (const file of Array.from(files)) {
+    void filesStore.uploadFile(props.postId, file);
+  }
+}
+
+async function handleFileUpload(file: File): Promise<void> {
+  if (!props.postId) return;
+  await filesStore.uploadFile(props.postId, file);
+}
 
 const editorRef = ref<{ view: EditorView | null } | null>(null);
 const editorView = computed(() => editorRef.value?.view ?? null);
@@ -49,7 +71,7 @@ watch([() => props.modelValue, () => props.language, editorView], () => {
   });
 });
 
-/* global Event */
+/* global Event, DragEvent, File */
 function onTitleInput(event: Event): void {
   const target = event.target as unknown as { value: string };
   emit('update:title', target.value);
@@ -98,21 +120,41 @@ const isAiGenerateContentType = computed(() => AI_GENERATE_CONTENT_TYPES.has(pro
       />
     </div>
 
-    <div class="flex-1 relative">
-      <CodeEditor
-        ref="editorRef"
-        :model-value="modelValue"
-        :language="language"
-        @update:model-value="(val) => emit('update:modelValue', val)"
-      />
-      <AiSuggestion v-if="editorView" ref="aiRef" :editor-view="editorView as EditorView" />
-      <AiGeneratePanel
-        v-if="editorView && isAiGenerateContentType"
-        :editor-view="editorView as EditorView"
-        :content-type="contentType as AiGenerateContentType"
-        :language="language"
-        class="absolute bottom-4 right-4"
-      />
+    <div
+      data-testid="editor-drop-zone"
+      class="flex flex-1 overflow-hidden"
+      :class="{ 'ring-2 ring-purple-500 ring-inset': isDragging }"
+      @dragover.prevent="isDragging = true"
+      @dragleave.self="isDragging = false"
+      @drop.prevent="handleDrop"
+    >
+      <FileSidebar
+        v-if="showFileSidebar"
+        :files="filesStore.stagedFiles"
+        :active-file-id="filesStore.activeFileId"
+        :editable="true"
+        @select="filesStore.setActiveFile"
+      >
+        <template #upload>
+          <FileUpload @upload="handleFileUpload" />
+        </template>
+      </FileSidebar>
+      <div class="flex-1 relative">
+        <CodeEditor
+          ref="editorRef"
+          :model-value="modelValue"
+          :language="language"
+          @update:model-value="(val) => emit('update:modelValue', val)"
+        />
+        <AiSuggestion v-if="editorView" ref="aiRef" :editor-view="editorView as EditorView" />
+        <AiGeneratePanel
+          v-if="editorView && isAiGenerateContentType"
+          :editor-view="editorView as EditorView"
+          :content-type="contentType as AiGenerateContentType"
+          :language="language"
+          class="absolute bottom-4 right-4"
+        />
+      </div>
     </div>
   </div>
 </template>
