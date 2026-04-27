@@ -1012,4 +1012,163 @@ describe('post routes', () => {
       expect(body.error).toBe('Invalid revision number');
     });
   });
+
+  // ─── POST /api/posts/:id/revisions/:rev/restore ─────────────────────
+
+  describe('POST /api/posts/:id/revisions/:rev/restore', () => {
+    it('restores a revision and returns 201 with new revision', async () => {
+      // findPostById
+      mockQuery.mockResolvedValueOnce({ rows: [samplePostRow], rowCount: 1 });
+      // findRevision (target revision to restore)
+      mockQuery.mockResolvedValueOnce({ rows: [sampleRevisionRow], rowCount: 1 });
+      // createRevisionAtomic (creates the restored revision)
+      const restoredRow: PostRevisionRow = {
+        ...sampleRevisionRow,
+        id: '990e8400-e29b-41d4-a716-446655440099',
+        revision_number: 2,
+        message: 'Restored from revision 1',
+      };
+      mockQuery.mockResolvedValueOnce({ rows: [restoredRow], rowCount: 1 });
+      // findFeedPostById for broadcast
+      mockFindFeedPostById.mockResolvedValueOnce(sampleFeedRow);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/posts/${postId}/revisions/1/restore`,
+        headers: { authorization: `Bearer ${token}` },
+      });
+
+      expect(response.statusCode).toBe(201);
+      const body = response.json();
+      expect(body.revision.revisionNumber).toBe(2);
+      expect(body.revision.message).toBe('Restored from revision 1');
+      expect(body.revision.content).toBe(sampleRevisionRow.content);
+
+      // Verify broadcast
+      expect(broadcastSpy).toHaveBeenCalledWith(
+        `post:${postId}`,
+        expect.objectContaining({ type: 'revision:new' }),
+        undefined,
+      );
+    });
+
+    it('returns 401 without authentication', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/posts/${postId}/revisions/1/restore`,
+      });
+      expect(response.statusCode).toBe(401);
+    });
+
+    it('returns 404 when post does not exist', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/posts/${postId}/revisions/1/restore`,
+        headers: { authorization: `Bearer ${token}` },
+      });
+      expect(response.statusCode).toBe(404);
+      expect(response.json().error).toBe('Post not found');
+    });
+
+    it('returns 403 when user is not the post author', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [samplePostRow], rowCount: 1 });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/posts/${postId}/revisions/1/restore`,
+        headers: { authorization: `Bearer ${otherToken}` },
+      });
+      expect(response.statusCode).toBe(403);
+      expect(response.json().error).toBe('Forbidden');
+    });
+
+    it('returns 404 when target revision does not exist', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [samplePostRow], rowCount: 1 });
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/posts/${postId}/revisions/999/restore`,
+        headers: { authorization: `Bearer ${token}` },
+      });
+      expect(response.statusCode).toBe(404);
+      expect(response.json().error).toBe('Revision not found');
+    });
+
+    it('returns 400 for invalid revision number', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/posts/${postId}/revisions/abc/restore`,
+        headers: { authorization: `Bearer ${token}` },
+      });
+      expect(response.statusCode).toBe(400);
+      expect(response.json().error).toBe('Invalid revision number');
+    });
+
+    it('returns 400 for negative revision number', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/posts/${postId}/revisions/-1/restore`,
+        headers: { authorization: `Bearer ${token}` },
+      });
+      expect(response.statusCode).toBe(400);
+    });
+
+    it('returns 400 for decimal revision number', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/posts/${postId}/revisions/1.5/restore`,
+        headers: { authorization: `Bearer ${token}` },
+      });
+      expect(response.statusCode).toBe(400);
+    });
+
+    it('broadcasts to feed channel when feedRow exists', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [samplePostRow], rowCount: 1 });
+      mockQuery.mockResolvedValueOnce({ rows: [sampleRevisionRow], rowCount: 1 });
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ ...sampleRevisionRow, revision_number: 2, message: 'Restored from revision 1' }],
+        rowCount: 1,
+      });
+      mockFindFeedPostById.mockResolvedValueOnce(sampleFeedRow);
+
+      await app.inject({
+        method: 'POST',
+        url: `/api/posts/${postId}/revisions/1/restore`,
+        headers: { authorization: `Bearer ${token}` },
+      });
+
+      expect(broadcastSpy).toHaveBeenCalledWith(
+        'feed',
+        expect.objectContaining({ type: 'post:updated', channel: 'feed' }),
+        undefined,
+      );
+    });
+
+    it('skips feed broadcast when findFeedPostById returns null', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [samplePostRow], rowCount: 1 });
+      mockQuery.mockResolvedValueOnce({ rows: [sampleRevisionRow], rowCount: 1 });
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ ...sampleRevisionRow, revision_number: 2, message: 'Restored from revision 1' }],
+        rowCount: 1,
+      });
+      mockFindFeedPostById.mockResolvedValueOnce(null);
+
+      await app.inject({
+        method: 'POST',
+        url: `/api/posts/${postId}/revisions/1/restore`,
+        headers: { authorization: `Bearer ${token}` },
+      });
+
+      // Only post channel broadcast, no feed broadcast
+      expect(broadcastSpy).toHaveBeenCalledTimes(1);
+      expect(broadcastSpy).toHaveBeenCalledWith(
+        `post:${postId}`,
+        expect.objectContaining({ type: 'revision:new' }),
+        undefined,
+      );
+    });
+  });
 });
