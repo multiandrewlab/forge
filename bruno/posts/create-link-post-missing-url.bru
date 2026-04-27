@@ -1,0 +1,28 @@
+meta {
+  name: Create Link Post - Missing URL
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{baseUrl}}/api/posts
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "title": "Missing URL Link",
+    "contentType": "link",
+    "isDraft": false,
+    "visibility": "public"
+  }
+}
+
+assert {
+  res.status: eq 400
+}
