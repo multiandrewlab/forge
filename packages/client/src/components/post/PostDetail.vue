@@ -131,6 +131,9 @@ watch(
           // Fetch files associated with this revision for multi-file layout
           await filesStore.fetchFiles(id, rev.id);
           files.value = filesStore.filesByRevision[rev.id] ?? [];
+          if (files.value.length > 0) {
+            console.info('[analytics] post.view.multifile', { postId: fullPost.value?.id, fileCount: files.value.length });
+          }
         }
       }
     } catch {

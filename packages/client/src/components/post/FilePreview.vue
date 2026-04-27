@@ -138,11 +138,13 @@ async function fetchAndRender(): Promise<void> {
       imageUrl.value = URL.createObjectURL(blob);
       isImage.value = true;
       loading.value = false;
+      console.info('[analytics] file.view', { postId: props.postId, fileId: props.file.id, mimeType: props.file.mimeType });
       return;
     }
 
     const text = await response.text();
     content.value = text;
+    console.info('[analytics] file.view', { postId: props.postId, fileId: props.file.id, mimeType: props.file.mimeType });
 
     // JSON files
     if (ext === 'json') {
