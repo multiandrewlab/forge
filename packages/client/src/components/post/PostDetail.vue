@@ -132,6 +132,7 @@ watch(
           await filesStore.fetchFiles(id, rev.id);
           files.value = filesStore.filesByRevision[rev.id] ?? [];
           if (files.value.length > 0) {
+            // eslint-disable-next-line no-undef
             console.info('[analytics] post.view.multifile', { postId: fullPost.value?.id, fileCount: files.value.length });
           }
         }
