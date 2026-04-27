@@ -603,6 +603,16 @@ describe('usePosts', () => {
       expect(result).toEqual([]);
       expect(error.value).toBe('Network error');
     });
+
+    it('should use fallback message when catch receives non-Error', async () => {
+      mockApiFetch.mockRejectedValue('string-rejection');
+
+      const { fetchRevisions, error } = usePosts();
+      const result = await fetchRevisions('post-1');
+
+      expect(result).toEqual([]);
+      expect(error.value).toBe('Failed to fetch revisions');
+    });
   });
 
   describe('restoreRevision', () => {
@@ -644,6 +654,16 @@ describe('usePosts', () => {
 
       expect(result).toBeNull();
       expect(error.value).toBe('Network error');
+    });
+
+    it('should use fallback message when catch receives non-Error', async () => {
+      mockApiFetch.mockRejectedValue('string-rejection');
+
+      const { restoreRevision, error } = usePosts();
+      const result = await restoreRevision('post-1', 1);
+
+      expect(result).toBeNull();
+      expect(error.value).toBe('Failed to restore revision');
     });
   });
 });

@@ -158,4 +158,184 @@ describe('RevisionTimeline', () => {
 
     expect(wrapper.text()).toContain('No revisions');
   });
+
+  it('hides message paragraph when message is null', () => {
+    const wrapper = mount(RevisionTimeline, {
+      props: {
+        revisions: [makeRevision({ message: null })],
+        selectedIds: [],
+      },
+    });
+
+    // The message paragraph has v-if="rev.message", so it should not render
+    const item = wrapper.find('[data-testid="revision-item"]');
+    // Should NOT contain a message line but should still show other content
+    expect(item.text()).toContain('Rev 1');
+    expect(item.text()).not.toContain('Initial version');
+  });
+
+  it('shows "?" initials when authorDisplayName is null', () => {
+    const wrapper = mount(RevisionTimeline, {
+      props: {
+        revisions: [makeRevision({ authorDisplayName: null, authorAvatarUrl: null })],
+        selectedIds: [],
+      },
+    });
+
+    expect(wrapper.find('[data-testid="author-avatar"]').text()).toBe('?');
+  });
+
+  it('shows "Unknown" when authorDisplayName is null', () => {
+    const wrapper = mount(RevisionTimeline, {
+      props: {
+        revisions: [makeRevision({ authorDisplayName: null })],
+        selectedIds: [],
+      },
+    });
+
+    expect(wrapper.text()).toContain('Unknown');
+  });
+
+  it('does not show "Restored" badge when message does not start with "Restored from revision"', () => {
+    const wrapper = mount(RevisionTimeline, {
+      props: {
+        revisions: [makeRevision({ message: 'Fixed a typo' })],
+        selectedIds: [],
+      },
+    });
+
+    expect(wrapper.text()).not.toContain('Restored');
+    expect(wrapper.text()).toContain('Fixed a typo');
+  });
+
+  it('shows "Restored" badge when message starts with "Restored from revision"', () => {
+    const wrapper = mount(RevisionTimeline, {
+      props: {
+        revisions: [makeRevision({ message: 'Restored from revision 3' })],
+        selectedIds: [],
+      },
+    });
+
+    expect(wrapper.text()).toContain('Restored');
+  });
+
+  it('formats time as minutes ago', () => {
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    const wrapper = mount(RevisionTimeline, {
+      props: {
+        revisions: [makeRevision({ createdAt: fiveMinutesAgo })],
+        selectedIds: [],
+      },
+    });
+
+    expect(wrapper.text()).toContain('5m ago');
+  });
+
+  it('formats time as hours ago', () => {
+    const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000);
+    const wrapper = mount(RevisionTimeline, {
+      props: {
+        revisions: [makeRevision({ createdAt: threeHoursAgo })],
+        selectedIds: [],
+      },
+    });
+
+    expect(wrapper.text()).toContain('3h ago');
+  });
+
+  it('formats time as days ago', () => {
+    const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+    const wrapper = mount(RevisionTimeline, {
+      props: {
+        revisions: [makeRevision({ createdAt: twoDaysAgo })],
+        selectedIds: [],
+      },
+    });
+
+    expect(wrapper.text()).toContain('2d ago');
+  });
+
+  it('formats time as locale date when older than 30 days', () => {
+    const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
+    const wrapper = mount(RevisionTimeline, {
+      props: {
+        revisions: [makeRevision({ createdAt: sixtyDaysAgo })],
+        selectedIds: [],
+      },
+    });
+
+    // Should show a localized date string, not a relative time
+    const item = wrapper.find('[data-testid="revision-item"]');
+    expect(item.text()).not.toContain('ago');
+    expect(item.text()).not.toContain('just now');
+  });
+
+  it('formats string date correctly', () => {
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    const wrapper = mount(RevisionTimeline, {
+      props: {
+        revisions: [makeRevision({ createdAt: fiveMinutesAgo.toISOString() as unknown as Date })],
+        selectedIds: [],
+      },
+    });
+
+    expect(wrapper.text()).toContain('5m ago');
+  });
+
+  it('does not show "Current" badge on non-first revisions', () => {
+    const revisions = [
+      makeRevision({ id: 'rev-2', revisionNumber: 2 }),
+      makeRevision({ id: 'rev-1', revisionNumber: 1 }),
+    ];
+
+    const wrapper = mount(RevisionTimeline, {
+      props: { revisions, selectedIds: [] },
+    });
+
+    const items = wrapper.findAll('[data-testid="revision-item"]');
+    expect(items[1].text()).not.toContain('Current');
+  });
+
+  it('applies unselected styles to non-selected revisions', () => {
+    const revisions = [
+      makeRevision({ id: 'rev-2', revisionNumber: 2 }),
+      makeRevision({ id: 'rev-1', revisionNumber: 1 }),
+    ];
+
+    const wrapper = mount(RevisionTimeline, {
+      props: { revisions, selectedIds: [] },
+    });
+
+    const items = wrapper.findAll('[data-testid="revision-item"]');
+    expect(items[0].classes()).toContain('border-gray-700');
+    expect(items[0].classes()).not.toContain('ring-2');
+  });
+
+  it('shows avatar alt text from authorDisplayName', () => {
+    const wrapper = mount(RevisionTimeline, {
+      props: {
+        revisions: [
+          makeRevision({ authorAvatarUrl: 'https://example.com/a.png', authorDisplayName: 'Jane' }),
+        ],
+        selectedIds: [],
+      },
+    });
+
+    const img = wrapper.find('[data-testid="author-avatar"] img');
+    expect(img.attributes('alt')).toBe('Jane');
+  });
+
+  it('shows "Author" as avatar alt text when authorDisplayName is null', () => {
+    const wrapper = mount(RevisionTimeline, {
+      props: {
+        revisions: [
+          makeRevision({ authorAvatarUrl: 'https://example.com/a.png', authorDisplayName: null }),
+        ],
+        selectedIds: [],
+      },
+    });
+
+    const img = wrapper.find('[data-testid="author-avatar"] img');
+    expect(img.attributes('alt')).toBe('Author');
+  });
 });
