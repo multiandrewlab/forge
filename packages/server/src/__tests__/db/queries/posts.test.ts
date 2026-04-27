@@ -8,6 +8,7 @@ import { query } from '../../../db/connection.js';
 import {
   findPostById,
   createPost,
+  createForkedPost,
   findPostWithLatestRevision,
   updatePost,
   softDeletePost,
@@ -181,6 +182,29 @@ describe('post queries', () => {
       mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });
       const result = await publishPost('nonexistent');
       expect(result).toBeNull();
+    });
+  });
+
+  describe('createForkedPost', () => {
+    it('creates a post with forked_from_id set', async () => {
+      const forkedRow = { ...samplePost, forked_from_id: 'source-post-id' };
+      mockQuery.mockResolvedValueOnce({ rows: [forkedRow], rowCount: 1 });
+
+      const result = await createForkedPost({
+        authorId: samplePost.author_id,
+        title: 'Forked Post',
+        contentType: 'snippet',
+        language: 'typescript',
+        visibility: 'private',
+        isDraft: true,
+        forkedFromId: 'source-post-id',
+      });
+
+      expect(result.forked_from_id).toBe('source-post-id');
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('forked_from_id'),
+        expect.arrayContaining(['source-post-id']),
+      );
     });
   });
 });
