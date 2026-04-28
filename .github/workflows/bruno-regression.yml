@@ -47,6 +47,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Build shared package
+        # The server imports from @forge/shared via its dist/index.js (per
+        # packages/shared/package.json `main` field). npm ci does NOT build
+        # workspaces, so without this step `tsx src/server.ts` fails with
+        # ERR_MODULE_NOT_FOUND on the server boot.
+        run: npm run build --workspace=packages/shared
+
       - name: Wait for Postgres
         run: |
           for i in $(seq 1 60); do
