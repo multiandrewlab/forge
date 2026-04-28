@@ -40,6 +40,19 @@ vi.mock('dompurify', () => ({
   default: { sanitize: vi.fn((html: string) => html) },
 }));
 
+vi.mock('../../../composables/useCodeRunner.js', () => ({
+  useCodeRunner: () => ({
+    output: { value: [] },
+    status: { value: 'idle' },
+    executionTime: { value: null },
+    exitCode: { value: null },
+    truncated: { value: false },
+    run: vi.fn(),
+    abort: vi.fn(),
+    clear: vi.fn(),
+  }),
+}));
+
 import { apiFetch } from '../../../lib/api.js';
 import PostDetail from '../../../components/post/PostDetail.vue';
 import { useCommentsStore } from '../../../stores/comments.js';

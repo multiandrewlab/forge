@@ -16,6 +16,14 @@
           :file="activeFile"
           :post-id="fullPost!.id"
         />
+        <CodeRunner
+          v-if="fullPost?.contentType === 'snippet'"
+          :post-id="fullPost.id"
+          :revision-id="revision?.id ?? ''"
+          :language="fullPost.language ?? null"
+          :files="files"
+          :active-filename="activeFile?.filename"
+        />
       </div>
     </div>
 
@@ -53,6 +61,13 @@
           {{ line }}
         </button>
       </div>
+      <CodeRunner
+        v-if="fullPost?.contentType === 'snippet'"
+        :post-id="fullPost.id"
+        :revision-id="revision?.id ?? ''"
+        :language="fullPost.language ?? null"
+        :single-file-content="revision?.content ?? ''"
+      />
     </div>
     <div class="mt-6 border-t border-gray-700 pt-4">
       <CommentSection
@@ -79,6 +94,7 @@ import PostActions from './PostActions.vue';
 import CommentSection from './CommentSection.vue';
 import CommentInput from './CommentInput.vue';
 import InlineComment from './InlineComment.vue';
+import CodeRunner from './CodeRunner.vue';
 import { useRouter } from 'vue-router';
 import { useComments } from '../../composables/useComments.js';
 import { useCommentsStore } from '../../stores/comments.js';
