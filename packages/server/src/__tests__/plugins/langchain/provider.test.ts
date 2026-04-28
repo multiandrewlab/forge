@@ -60,3 +60,27 @@ describe('createChatModel', () => {
     expect(() => createChatModel()).toThrow(/Unknown LLM provider: bogus/);
   });
 });
+
+describe('createChatModel mock case', () => {
+  const original = { ...process.env };
+
+  afterEach(() => {
+    process.env = { ...original };
+  });
+
+  it('returns a ChatMock when LLM_PROVIDER=mock and NODE_ENV=test', async () => {
+    process.env.LLM_PROVIDER = 'mock';
+    process.env.NODE_ENV = 'test';
+    const { createChatModel: create } = await import('../../../plugins/langchain/provider.js');
+    const { ChatMock } = await import('../../../plugins/langchain/mock-provider.js');
+    const model = create();
+    expect(model).toBeInstanceOf(ChatMock);
+  });
+
+  it('throws when LLM_PROVIDER=mock and NODE_ENV=production', async () => {
+    process.env.LLM_PROVIDER = 'mock';
+    process.env.NODE_ENV = 'production';
+    const { createChatModel: create } = await import('../../../plugins/langchain/provider.js');
+    expect(() => create()).toThrow(/mock.*production/i);
+  });
+});
