@@ -1,1 +1,12 @@
+# Refuse to stage E2E auth state or the test-route secret. Defense-in-depth on
+# top of .gitignore — covers `git add -f` and accidental moves.
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+if printf '%s\n' "$staged" | grep -E '(\.auth\.json$|(^|/)forge-e2e-secret$)' >/dev/null; then
+  echo "✖ pre-commit: refusing to stage auth state or e2e secret:" >&2
+  printf '%s\n' "$staged" | grep -E '(\.auth\.json$|(^|/)forge-e2e-secret$)' >&2
+  echo "  These files contain credentials and must never be committed." >&2
+  echo "  Remove from index: git restore --staged <file>" >&2
+  exit 1
+fi
+
 npx lint-staged
