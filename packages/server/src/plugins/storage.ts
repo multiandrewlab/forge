@@ -68,7 +68,21 @@ export class MinioStorage implements StorageProvider {
   async ensureBucket(): Promise<void> {
     try {
       await this.client.send(new HeadBucketCommand({ Bucket: this.bucket }));
-    } catch {
+    } catch (err: unknown) {
+      // Only create the bucket when the error is a 404 (not found).
+      // Auth failures, network errors, and other issues must propagate
+      // so misconfiguration is surfaced at startup instead of masked.
+      const meta =
+        err != null &&
+        typeof err === 'object' &&
+        '$metadata' in err &&
+        typeof (err as Record<string, unknown>)['$metadata'] === 'object'
+          ? ((err as Record<string, unknown>)['$metadata'] as Record<string, unknown>)
+          : undefined;
+      const status = meta?.['httpStatusCode'] as number | undefined;
+
+      if (status !== 404) throw err;
+
       await this.client.send(new CreateBucketCommand({ Bucket: this.bucket }));
     }
   }

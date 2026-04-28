@@ -94,8 +94,8 @@ describe('MinioStorage', () => {
 
     it('creates the bucket when it does not exist', async () => {
       const notFound = new Error('NotFound');
-      notFound.name = 'NotFound';
-      sendMock.mockRejectedValueOnce(notFound); // HeadBucketCommand fails
+      Object.assign(notFound, { $metadata: { httpStatusCode: 404 } });
+      sendMock.mockRejectedValueOnce(notFound); // HeadBucketCommand fails with 404
       sendMock.mockResolvedValueOnce({}); // CreateBucketCommand succeeds
 
       await storage.ensureBucket();
@@ -111,6 +111,47 @@ describe('MinioStorage', () => {
       await storageDefault.ensureBucket();
 
       expect(HeadBucketCommand).toHaveBeenCalledWith({ Bucket: 'forge-uploads' });
+    });
+
+    it('rethrows 403 Forbidden errors (auth failure)', async () => {
+      const forbiddenError = new Error('Forbidden');
+      Object.assign(forbiddenError, { $metadata: { httpStatusCode: 403 } });
+      sendMock.mockRejectedValueOnce(forbiddenError);
+
+      await expect(storage.ensureBucket()).rejects.toThrow('Forbidden');
+      expect(sendMock).toHaveBeenCalledTimes(1);
+      expect(CreateBucketCommand).not.toHaveBeenCalled();
+    });
+
+    it('rethrows 500 errors (server error)', async () => {
+      const serverError = new Error('Internal Server Error');
+      Object.assign(serverError, { $metadata: { httpStatusCode: 500 } });
+      sendMock.mockRejectedValueOnce(serverError);
+
+      await expect(storage.ensureBucket()).rejects.toThrow('Internal Server Error');
+      expect(sendMock).toHaveBeenCalledTimes(1);
+      expect(CreateBucketCommand).not.toHaveBeenCalled();
+    });
+
+    it('rethrows network errors (no $metadata)', async () => {
+      const networkError = new Error('ECONNREFUSED');
+      sendMock.mockRejectedValueOnce(networkError);
+
+      await expect(storage.ensureBucket()).rejects.toThrow('ECONNREFUSED');
+      expect(sendMock).toHaveBeenCalledTimes(1);
+      expect(CreateBucketCommand).not.toHaveBeenCalled();
+    });
+
+    it('creates bucket when error has $metadata with httpStatusCode 404', async () => {
+      const notFoundError = new Error('Not Found');
+      Object.assign(notFoundError, { $metadata: { httpStatusCode: 404 } });
+      sendMock.mockRejectedValueOnce(notFoundError);
+      sendMock.mockResolvedValueOnce({});
+
+      await storage.ensureBucket();
+
+      expect(sendMock).toHaveBeenCalledTimes(2);
+      expect(CreateBucketCommand).toHaveBeenCalledWith({ Bucket: 'test-bucket' });
     });
   });
 
