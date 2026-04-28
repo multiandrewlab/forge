@@ -425,6 +425,27 @@ describe('SandboxManager', () => {
     expect(onLoading).toHaveBeenCalledWith('runtime');
   });
 
+  it('routes ready message to onLoading with executing phase', () => {
+    const onOutput = vi.fn();
+    const onComplete = vi.fn();
+    const onError = vi.fn();
+    const onLoading = vi.fn();
+
+    manager.execute({
+      language: 'python',
+      files: [{ filename: 'main.py', content: '' }],
+      entryFile: 'main.py',
+      onOutput,
+      onComplete,
+      onError,
+      onLoading,
+    });
+
+    mockWorker._emit({ type: 'ready' });
+
+    expect(onLoading).toHaveBeenCalledWith('executing');
+  });
+
   it('routes done messages to onComplete and terminates worker', () => {
     const onOutput = vi.fn();
     const onComplete = vi.fn();
@@ -698,6 +719,9 @@ export class SandboxManager {
           break;
         case 'loading':
           options.onLoading(msg.phase as 'runtime' | 'executing');
+          break;
+        case 'ready':
+          options.onLoading('executing');
           break;
         case 'done':
           options.onComplete({
@@ -2019,16 +2043,27 @@ describe('CodeRunner', () => {
     vi.clearAllMocks();
   });
 
-  it('does not render when language is not supported', () => {
+  it('renders disabled RunButton for recognized but unsupported language (go)', () => {
     const wrapper = mount(CodeRunner, {
       props: { postId: '1', revisionId: 'r1', language: 'go' },
     });
-    expect(wrapper.find('[data-testid="code-runner"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="code-runner"]').exists()).toBe(true);
+    const runButton = wrapper.findComponent({ name: 'RunButton' });
+    expect(runButton.exists()).toBe(true);
+    expect(runButton.props('disabled')).toBe(true);
+    expect(runButton.props('disabledReason')).toBe('Run not available for go');
   });
 
   it('does not render when language is null', () => {
     const wrapper = mount(CodeRunner, {
       props: { postId: '1', revisionId: 'r1', language: null },
+    });
+    expect(wrapper.find('[data-testid="code-runner"]').exists()).toBe(false);
+  });
+
+  it('does not render when language is unrecognized (brainfuck)', () => {
+    const wrapper = mount(CodeRunner, {
+      props: { postId: '1', revisionId: 'r1', language: 'brainfuck' },
     });
     expect(wrapper.find('[data-testid="code-runner"]').exists()).toBe(false);
   });
@@ -2158,6 +2193,16 @@ const props = defineProps<{
 const supported = isSandboxLanguage(props.language);
 const { output, status, executionTime, exitCode, truncated, run, abort, clear } = useCodeRunner();
 
+// Known programming languages that could plausibly have a Run button
+const RECOGNIZED_LANGUAGES = [
+  'python', 'javascript', 'typescript', 'go', 'rust', 'java', 'c', 'cpp',
+  'csharp', 'ruby', 'php', 'swift', 'kotlin', 'scala', 'haskell', 'lua',
+  'perl', 'r', 'dart', 'elixir', 'clojure', 'zig', 'nim',
+] as const;
+
+const isRecognizedLanguage = props.language !== null && RECOGNIZED_LANGUAGES.includes(props.language as (typeof RECOGNIZED_LANGUAGES)[number]);
+const showDisabled = !supported && isRecognizedLanguage;
+
 function isTextMimeType(mimeType: string | null): boolean {
   if (!mimeType) return true; // Assume text if unknown
   return mimeType.startsWith('text/') || mimeType === 'application/json' || mimeType === 'application/javascript';
@@ -2213,17 +2258,25 @@ async function handleRun(): Promise<void> {
 
 <template>
   <div
-    v-if="supported"
+    v-if="supported || showDisabled"
     data-testid="code-runner"
   >
     <div class="flex items-center justify-end py-1">
       <RunButton
+        v-if="supported"
         :status="status"
         @run="handleRun"
         @abort="abort"
       />
+      <RunButton
+        v-else
+        status="idle"
+        :disabled="true"
+        :disabled-reason="`Run not available for ${language}`"
+      />
     </div>
     <ExecutionOutput
+      v-if="supported"
       :output="output"
       :status="status"
       :execution-time="executionTime"
