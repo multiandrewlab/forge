@@ -14,22 +14,24 @@
 
 ## File Map
 
-### New Files (8)
+### New Files (9)
 ```
-packages/client/src/lib/sandbox/languages.ts              — Language constants, guards, extension map
-packages/client/src/lib/sandbox/manager.ts                 — SandboxManager with injectable WorkerFactory
-packages/client/src/lib/sandbox/workers/python-worker.ts   — Pyodide Web Worker
-packages/client/src/lib/sandbox/workers/js-worker.ts       — QuickJS + esbuild-wasm Web Worker
-packages/client/src/composables/useCodeRunner.ts           — Vue composable bridge
-packages/client/src/components/post/CodeRunner.vue         — Wrapper (fetches content, composes RunButton + ExecutionOutput)
-packages/client/src/components/post/RunButton.vue          — Play/stop/loading button overlay
-packages/client/src/components/post/ExecutionOutput.vue    — Streaming output panel with truncation
+packages/client/src/lib/sandbox/languages.ts                    — Language constants, guards, extension map
+packages/client/src/lib/sandbox/manager.ts                       — SandboxManager with injectable WorkerFactory
+packages/client/src/lib/sandbox/workers/neutralize-apis.ts       — Extracted testable helper: deletes browser APIs from worker scope
+packages/client/src/lib/sandbox/workers/python-worker.ts         — Pyodide Web Worker (thin entry point)
+packages/client/src/lib/sandbox/workers/js-worker.ts             — QuickJS + esbuild-wasm Web Worker (thin entry point)
+packages/client/src/composables/useCodeRunner.ts                 — Vue composable bridge
+packages/client/src/components/post/CodeRunner.vue               — Wrapper (fetches content, composes RunButton + ExecutionOutput)
+packages/client/src/components/post/RunButton.vue                — Play/stop/loading button overlay
+packages/client/src/components/post/ExecutionOutput.vue          — Streaming output panel with truncation
 ```
 
-### Test Files (6)
+### Test Files (7)
 ```
 packages/client/src/__tests__/lib/sandbox/languages.test.ts
 packages/client/src/__tests__/lib/sandbox/manager.test.ts
+packages/client/src/__tests__/lib/sandbox/workers/neutralize-apis.test.ts
 packages/client/src/__tests__/composables/useCodeRunner.test.ts
 packages/client/src/__tests__/components/post/RunButton.test.ts
 packages/client/src/__tests__/components/post/ExecutionOutput.test.ts
@@ -758,29 +760,115 @@ git commit -m "feat(sandbox): add SandboxManager with injectable WorkerFactory"
 ## Task 3: Web Worker Implementations
 
 **Files:**
+- Create: `packages/client/src/lib/sandbox/workers/neutralize-apis.ts`
 - Create: `packages/client/src/lib/sandbox/workers/python-worker.ts`
 - Create: `packages/client/src/lib/sandbox/workers/js-worker.ts`
+- Test: `packages/client/src/__tests__/lib/sandbox/workers/neutralize-apis.test.ts`
 
-Workers are thin orchestrators that load WASM runtimes, mount VFS, and bridge stdout/stderr back to the main thread. They are NOT unit-tested directly (they load real WASM runtimes from CDN/npm). Instead, the message protocol is tested via SandboxManager's mock worker tests (Task 2). Integration testing with real WASM happens via Playwright (optional, not coverage-gated).
+Per the design spec's testing strategy, testable pure logic is extracted into separate files. The worker entry points are thin wiring that loads a WASM runtime and delegates to extracted helpers. Worker entry points use `/* v8 ignore start */` only for the minimal WASM-loading glue; all logic that CAN be tested IS tested.
 
-The design spec's testing strategy says: "Extract pure logic into testable functions in separate files. The thin worker entry point just wires message handlers."
+- [ ] **Step 1: Write tests for neutralize-apis.ts**
 
-However, since the workers are thin (< 80 lines each) and their logic is entirely WASM-runtime-specific (Pyodide API, QuickJS API), extracting "pure functions" would create files that are just wrappers around WASM runtime calls — untestable without the real runtime. The pragmatic approach: workers are excluded from coverage via a `/* v8 ignore start */` pragma (they are E2E-tested), and all testable logic lives in the manager + composable layers.
+```typescript
+// packages/client/src/__tests__/lib/sandbox/workers/neutralize-apis.test.ts
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { neutralizeBrowserApis } from '../../../lib/sandbox/workers/neutralize-apis.js';
 
-- [ ] **Step 1: Create python-worker.ts**
+describe('neutralizeBrowserApis', () => {
+  let fakeScope: Record<string, unknown>;
+
+  beforeEach(() => {
+    fakeScope = {
+      fetch: vi.fn(),
+      XMLHttpRequest: vi.fn(),
+      WebSocket: vi.fn(),
+      indexedDB: {},
+      caches: {},
+      EventSource: vi.fn(),
+      postMessage: vi.fn(), // should NOT be deleted
+    };
+  });
+
+  it('deletes fetch from the scope', () => {
+    neutralizeBrowserApis(fakeScope);
+    expect(fakeScope.fetch).toBeUndefined();
+  });
+
+  it('deletes XMLHttpRequest from the scope', () => {
+    neutralizeBrowserApis(fakeScope);
+    expect(fakeScope.XMLHttpRequest).toBeUndefined();
+  });
+
+  it('deletes WebSocket from the scope', () => {
+    neutralizeBrowserApis(fakeScope);
+    expect(fakeScope.WebSocket).toBeUndefined();
+  });
+
+  it('deletes indexedDB from the scope', () => {
+    neutralizeBrowserApis(fakeScope);
+    expect(fakeScope.indexedDB).toBeUndefined();
+  });
+
+  it('deletes caches from the scope', () => {
+    neutralizeBrowserApis(fakeScope);
+    expect(fakeScope.caches).toBeUndefined();
+  });
+
+  it('deletes EventSource from the scope', () => {
+    neutralizeBrowserApis(fakeScope);
+    expect(fakeScope.EventSource).toBeUndefined();
+  });
+
+  it('does not delete postMessage', () => {
+    neutralizeBrowserApis(fakeScope);
+    expect(fakeScope.postMessage).toBeDefined();
+  });
+
+  it('handles missing properties gracefully', () => {
+    const emptyScope: Record<string, unknown> = {};
+    expect(() => neutralizeBrowserApis(emptyScope)).not.toThrow();
+  });
+});
+```
+
+- [ ] **Step 2: Implement neutralize-apis.ts**
+
+```typescript
+// packages/client/src/lib/sandbox/workers/neutralize-apis.ts
+
+// Defense-in-depth: neutralize browser APIs before loading any WASM runtime.
+// Primary isolation is the WASM VM boundary (user code runs in WASM linear memory).
+// This removes APIs from the worker global scope as a second layer of defense.
+const APIS_TO_REMOVE = [
+  'fetch',
+  'XMLHttpRequest',
+  'WebSocket',
+  'indexedDB',
+  'caches',
+  'EventSource',
+] as const;
+
+export function neutralizeBrowserApis(scope: Record<string, unknown>): void {
+  for (const api of APIS_TO_REMOVE) {
+    delete scope[api];
+  }
+}
+```
+
+- [ ] **Step 3: Run tests to verify they pass**
+
+```bash
+npx vitest run packages/client/src/__tests__/lib/sandbox/workers/neutralize-apis.test.ts
+```
+
+- [ ] **Step 4: Create python-worker.ts**
 
 ```typescript
 // packages/client/src/lib/sandbox/workers/python-worker.ts
-/* v8 ignore start — Web Worker: tested via E2E, not unit tests */
+/* v8 ignore start — Worker entry point: loads WASM from CDN, untestable without real runtime */
+import { neutralizeBrowserApis } from './neutralize-apis.js';
 
-// Defense-in-depth: neutralize browser APIs before loading any runtime.
-// Primary isolation is the Pyodide WASM VM boundary.
-const _self = self as DedicatedWorkerGlobalScope & Record<string, unknown>;
-delete _self.fetch;
-delete _self.XMLHttpRequest;
-delete _self.WebSocket;
-delete _self.indexedDB;
-delete _self.caches;
+neutralizeBrowserApis(self as unknown as Record<string, unknown>);
 
 interface ExecuteMessage {
   type: 'execute';
@@ -894,20 +982,14 @@ sys.stdin = _StdinReader()
 /* v8 ignore stop */
 ```
 
-- [ ] **Step 2: Create js-worker.ts**
+- [ ] **Step 5: Create js-worker.ts**
 
 ```typescript
 // packages/client/src/lib/sandbox/workers/js-worker.ts
-/* v8 ignore start — Web Worker: tested via E2E, not unit tests */
+/* v8 ignore start — Worker entry point: loads WASM runtimes, untestable without real runtime */
+import { neutralizeBrowserApis } from './neutralize-apis.js';
 
-// Defense-in-depth: neutralize browser APIs before loading any runtime.
-// Primary isolation is the QuickJS WASM VM boundary.
-const _self = self as DedicatedWorkerGlobalScope & Record<string, unknown>;
-delete _self.fetch;
-delete _self.XMLHttpRequest;
-delete _self.WebSocket;
-delete _self.indexedDB;
-delete _self.caches;
+neutralizeBrowserApis(self as unknown as Record<string, unknown>);
 
 interface ExecuteMessage {
   type: 'execute';
@@ -1021,11 +1103,11 @@ async function runJavaScript(msg: ExecuteMessage): Promise<void> {
 /* v8 ignore stop */
 ```
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add packages/client/src/lib/sandbox/workers/
-git commit -m "feat(sandbox): add Python and JS/TS Web Worker implementations"
+git add packages/client/src/lib/sandbox/workers/ packages/client/src/__tests__/lib/sandbox/workers/
+git commit -m "feat(sandbox): add Web Workers with extracted neutralize-apis helper"
 ```
 
 ---
@@ -1126,6 +1208,8 @@ npx vitest run packages/client/src/__tests__/components/post/RunButton.test.ts
 ```vue
 <!-- packages/client/src/components/post/RunButton.vue -->
 <script setup lang="ts">
+import { computed } from 'vue';
+
 const props = defineProps<{
   status: 'idle' | 'loading' | 'running' | 'done' | 'error';
   disabled?: boolean;
@@ -1147,7 +1231,7 @@ function handleClick() {
   }
 }
 
-const showPlay = ['idle', 'done', 'error'].includes(props.status);
+const showPlay = computed(() => ['idle', 'done', 'error'].includes(props.status));
 </script>
 
 <template>
@@ -1409,6 +1493,8 @@ npx vitest run packages/client/src/__tests__/components/post/ExecutionOutput.tes
 ```vue
 <!-- packages/client/src/components/post/ExecutionOutput.vue -->
 <script setup lang="ts">
+import { computed } from 'vue';
+
 interface OutputLine {
   stream: 'stdout' | 'stderr';
   text: string;
@@ -1425,7 +1511,7 @@ const props = defineProps<{
 
 defineEmits<{ clear: [] }>();
 
-const isVisible = ['loading', 'running', 'done', 'error'].includes(props.status) || props.output.length > 0;
+const isVisible = computed(() => ['loading', 'running', 'done', 'error'].includes(props.status) || props.output.length > 0);
 </script>
 
 <template>
@@ -1735,6 +1821,32 @@ describe('useCodeRunner', () => {
 
     expect(output.value).toHaveLength(10_000);
     expect(truncated.value).toBe(true);
+  });
+
+  it('truncates output at MAX_OUTPUT_BYTES (1MB)', async () => {
+    let capturedOnOutput: ((stream: 'stdout' | 'stderr', data: string) => void) | undefined;
+    mockExecute.mockImplementation((opts: { onOutput: typeof capturedOnOutput }) => {
+      capturedOnOutput = opts.onOutput;
+      return { abort: mockAbort };
+    });
+
+    const { run, output, truncated } = useCodeRunner();
+    run({
+      language: 'python',
+      files: [{ filename: 'main.py', content: '' }],
+      entryFile: 'main.py',
+    });
+
+    // Each line is ~1KB, so ~1024 lines should exceed 1MB
+    const bigLine = 'x'.repeat(1024);
+    for (let i = 0; i < 1025; i++) {
+      capturedOnOutput?.('stdout', bigLine);
+    }
+    await nextTick();
+
+    expect(truncated.value).toBe(true);
+    // Should have stopped before reaching 10,000 lines
+    expect(output.value.length).toBeLessThan(1025);
   });
 });
 ```
@@ -2182,18 +2294,65 @@ In the single-file layout section (after `</CodeViewer>`, around line 29), add:
 />
 ```
 
-- [ ] **Step 4: Run full test suite**
+- [ ] **Step 4: Add PostDetail integration tests for CodeRunner**
+
+Add tests to the existing PostDetail test file (`packages/client/src/__tests__/components/post/PostDetail.test.ts`) that verify the new CodeRunner conditional rendering branches. The exact test approach depends on the existing test structure, but must cover:
+
+```typescript
+// Add to existing PostDetail test file
+describe('CodeRunner integration', () => {
+  it('renders CodeRunner when contentType is snippet and language is supported', async () => {
+    // Mount PostDetail with a post that has contentType: 'snippet', language: 'python'
+    // Assert CodeRunner component is present
+    const wrapper = mount(PostDetail, {
+      props: {
+        post: { ...mockPost, contentType: 'snippet', language: 'python' },
+      },
+      global: { stubs: { CodeRunner: true, CodeViewer: true, CommentSection: true } },
+    });
+    // After fullPost loads (mock API response), verify CodeRunner renders
+    await flushPromises();
+    expect(wrapper.findComponent({ name: 'CodeRunner' }).exists()).toBe(true);
+  });
+
+  it('does not render CodeRunner when contentType is not snippet', async () => {
+    const wrapper = mount(PostDetail, {
+      props: {
+        post: { ...mockPost, contentType: 'document', language: null },
+      },
+      global: { stubs: { CodeRunner: true, CodeViewer: true, CommentSection: true } },
+    });
+    await flushPromises();
+    expect(wrapper.findComponent({ name: 'CodeRunner' }).exists()).toBe(false);
+  });
+
+  it('does not render CodeRunner when contentType is prompt', async () => {
+    const wrapper = mount(PostDetail, {
+      props: {
+        post: { ...mockPost, contentType: 'prompt', language: 'python' },
+      },
+      global: { stubs: { CodeRunner: true, CodeViewer: true, CommentSection: true } },
+    });
+    await flushPromises();
+    expect(wrapper.findComponent({ name: 'CodeRunner' }).exists()).toBe(false);
+  });
+});
+```
+
+The exact mock setup must match the existing PostDetail test file's patterns (mock API, mock stores, etc.). Read the existing test file first and follow its conventions.
+
+- [ ] **Step 5: Run full test suite**
 
 ```bash
 npm test
 ```
 
-Verify no regressions in existing PostDetail tests.
+Verify no regressions in existing PostDetail tests and new tests pass.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add packages/client/src/components/post/PostDetail.vue
+git add packages/client/src/components/post/PostDetail.vue packages/client/src/__tests__/components/post/PostDetail.test.ts
 git commit -m "feat(sandbox): integrate CodeRunner into PostDetail for single and multi-file posts"
 ```
 
