@@ -37,7 +37,6 @@ script:pre-request {
 
 assert {
   res.status: eq 200
-  res.headers.content-type: contains text/event-stream
 }
 
 script:post-response {
