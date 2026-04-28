@@ -224,6 +224,7 @@ describe('PostListItem', () => {
     });
   });
 
+
   describe('vote count reactivity via store', () => {
     it('updates displayed vote count when store.updatePostVote is called', async () => {
       setActivePinia(createPinia());
