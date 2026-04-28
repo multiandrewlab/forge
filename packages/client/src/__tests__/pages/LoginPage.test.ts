@@ -186,7 +186,7 @@ describe('LoginPage', () => {
       mockError.value = null;
       const wrapper = await mountLoginPage();
 
-      const errorEl = wrapper.find('[data-testid="error-message"]');
+      const errorEl = wrapper.find('[data-testid="login-error-message"]');
       expect(errorEl.exists()).toBe(false);
     });
   });

@@ -65,6 +65,7 @@ async function handleSubmit(): Promise<void> {
           <input
             id="email"
             v-model="email"
+            data-testid="register-email-input"
             type="email"
             required
             class="w-full px-3 py-2 bg-surface-700 border border-surface-500 rounded focus:outline-none focus:ring-2 focus:ring-primary"
@@ -76,7 +77,7 @@ async function handleSubmit(): Promise<void> {
           <input
             id="display-name"
             v-model="displayName"
-            data-testid="display-name"
+            data-testid="register-name-input"
             type="text"
             required
             class="w-full px-3 py-2 bg-surface-700 border border-surface-500 rounded focus:outline-none focus:ring-2 focus:ring-primary"
@@ -88,7 +89,7 @@ async function handleSubmit(): Promise<void> {
           <input
             id="password"
             v-model="password"
-            data-testid="password"
+            data-testid="register-password-input"
             type="password"
             required
             class="w-full px-3 py-2 bg-surface-700 border border-surface-500 rounded focus:outline-none focus:ring-2 focus:ring-primary"
@@ -102,7 +103,7 @@ async function handleSubmit(): Promise<void> {
           <input
             id="confirm-password"
             v-model="confirmPassword"
-            data-testid="confirm-password"
+            data-testid="register-confirm-password-input"
             type="password"
             required
             class="w-full px-3 py-2 bg-surface-700 border border-surface-500 rounded focus:outline-none focus:ring-2 focus:ring-primary"
@@ -111,6 +112,7 @@ async function handleSubmit(): Promise<void> {
 
         <button
           type="submit"
+          data-testid="register-submit-btn"
           class="w-full py-2 bg-primary text-white rounded hover:bg-primary-600 font-medium"
         >
           Create Account

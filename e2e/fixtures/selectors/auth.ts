@@ -11,6 +11,8 @@ export const auth = {
   registerEmail: (page: Page): Locator => page.getByTestId('register-email-input'),
   registerName: (page: Page): Locator => page.getByTestId('register-name-input'),
   registerPassword: (page: Page): Locator => page.getByTestId('register-password-input'),
+  registerConfirmPassword: (page: Page): Locator =>
+    page.getByTestId('register-confirm-password-input'),
   registerSubmit: (page: Page): Locator => page.getByTestId('register-submit-btn'),
 
   // Top bar (logged in)
