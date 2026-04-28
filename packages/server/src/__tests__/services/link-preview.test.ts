@@ -245,9 +245,7 @@ describe('link-preview service', () => {
     });
 
     it('should return null when no title is found at all', () => {
-      const html = htmlPage(
-        '<meta property="og:description" content="No title page">',
-      );
+      const html = htmlPage('<meta property="og:description" content="No title page">');
 
       expect(parseOpenGraph(html)).toBeNull();
     });
@@ -297,9 +295,7 @@ describe('link-preview service', () => {
     });
 
     it('should set description to empty string when neither og:description nor meta description exists', () => {
-      const html = htmlPage(
-        '<meta property="og:title" content="Title">',
-      );
+      const html = htmlPage('<meta property="og:title" content="Title">');
 
       const result = assertDefined(parseOpenGraph(html));
       expect(result.description).toBe('');
@@ -399,9 +395,7 @@ describe('link-preview service', () => {
       mockFetch.mockResolvedValueOnce(redirectResponse('https://internal.local/secret'));
 
       // First hop: public IP, second hop: private IP
-      mockResolve4
-        .mockResolvedValueOnce(['93.184.216.34'])
-        .mockResolvedValueOnce(['10.0.0.1']);
+      mockResolve4.mockResolvedValueOnce(['93.184.216.34']).mockResolvedValueOnce(['10.0.0.1']);
 
       const result = await fetchLinkPreview('https://example.com/ssrf');
       expect(result).toBeNull();
@@ -462,9 +456,7 @@ describe('link-preview service', () => {
     });
 
     it('should return null when redirect has no Location header', async () => {
-      mockFetch.mockResolvedValueOnce(
-        new Response(null, { status: 302 }),
-      );
+      mockFetch.mockResolvedValueOnce(new Response(null, { status: 302 }));
 
       const result = await fetchLinkPreview('https://example.com/no-location');
       expect(result).toBeNull();

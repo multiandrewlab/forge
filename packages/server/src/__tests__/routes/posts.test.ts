@@ -5,7 +5,9 @@ const mockClient = { query: mockClientQuery };
 
 vi.mock('../../db/connection.js', () => ({
   query: vi.fn(),
-  withTransaction: vi.fn(async (fn: (client: { query: ReturnType<typeof vi.fn> }) => Promise<unknown>) => fn(mockClient)),
+  withTransaction: vi.fn(
+    async (fn: (client: { query: ReturnType<typeof vi.fn> }) => Promise<unknown>) => fn(mockClient),
+  ),
 }));
 
 // Disable rate limiting in route tests
@@ -155,7 +157,8 @@ describe('post routes', () => {
     mockClientQuery.mockReset();
     // Restore default withTransaction behavior (execute callback with mockClient)
     mockWithTransaction.mockImplementation(
-      async (fn: (client: { query: ReturnType<typeof vi.fn> }) => Promise<unknown>) => fn(mockClient),
+      async (fn: (client: { query: ReturnType<typeof vi.fn> }) => Promise<unknown>) =>
+        fn(mockClient),
     );
   });
 
@@ -1052,9 +1055,7 @@ describe('post routes', () => {
 
       expect(response.statusCode).toBe(201);
       // Feed broadcast should NOT have been called
-      const feedCalls = broadcastSpy.mock.calls.filter(
-        (call: unknown[]) => call[0] === 'feed',
-      );
+      const feedCalls = broadcastSpy.mock.calls.filter((call: unknown[]) => call[0] === 'feed');
       expect(feedCalls).toHaveLength(0);
     });
 
@@ -1080,7 +1081,8 @@ describe('post routes', () => {
 
       // Make withTransaction propagate the error thrown by the callback
       mockWithTransaction.mockImplementationOnce(
-        async (fn: (client: { query: ReturnType<typeof vi.fn> }) => Promise<unknown>) => fn(mockClient),
+        async (fn: (client: { query: ReturnType<typeof vi.fn> }) => Promise<unknown>) =>
+          fn(mockClient),
       );
 
       const response = await app.inject({
@@ -1502,7 +1504,10 @@ describe('post routes', () => {
       // createPost query
       mockQuery.mockResolvedValueOnce({ rows: [linkPostRow], rowCount: 1 });
       // createRevision query — we check what content was passed
-      mockQuery.mockResolvedValueOnce({ rows: [{ ...sampleRevisionRow, content: 'https://example.com/article' }], rowCount: 1 });
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ ...sampleRevisionRow, content: 'https://example.com/article' }],
+        rowCount: 1,
+      });
       // findFeedPostById for broadcast
       mockFindFeedPostById.mockResolvedValueOnce(sampleFeedRow);
 
@@ -1525,7 +1530,10 @@ describe('post routes', () => {
       // createPost query
       mockQuery.mockResolvedValueOnce({ rows: [linkPostRow], rowCount: 1 });
       // createRevision query
-      mockQuery.mockResolvedValueOnce({ rows: [{ ...sampleRevisionRow, content: 'Custom description' }], rowCount: 1 });
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ ...sampleRevisionRow, content: 'Custom description' }],
+        rowCount: 1,
+      });
       // findFeedPostById for broadcast
       mockFindFeedPostById.mockResolvedValueOnce(sampleFeedRow);
 
@@ -1743,7 +1751,10 @@ describe('post routes', () => {
       // createRevision (initial revision for fork)
       mockQuery.mockResolvedValueOnce({ rows: [sampleRevisionRow], rowCount: 1 });
       // findRevisionsByPostId (file carry-forward: get source revisions)
-      mockQuery.mockResolvedValueOnce({ rows: [{ id: 'rev-1', post_id: sourcePostRow.id, revision_number: 1 }], rowCount: 1 });
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ id: 'rev-1', post_id: sourcePostRow.id, revision_number: 1 }],
+        rowCount: 1,
+      });
       // findFilesByRevisionId (file carry-forward: no files on source)
       mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
       // findTagsByPostId (copy tags)
@@ -1847,7 +1858,10 @@ describe('post routes', () => {
       mockQuery.mockResolvedValueOnce({ rows: [forkedPostRow], rowCount: 1 });
       mockQuery.mockResolvedValueOnce({ rows: [sampleRevisionRow], rowCount: 1 });
       // findRevisionsByPostId (file carry-forward: get source revisions)
-      mockQuery.mockResolvedValueOnce({ rows: [{ id: 'rev-1', post_id: sourcePostRow.id, revision_number: 1 }], rowCount: 1 });
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ id: 'rev-1', post_id: sourcePostRow.id, revision_number: 1 }],
+        rowCount: 1,
+      });
       // findFilesByRevisionId (file carry-forward: no files)
       mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
       // Two tags
@@ -1905,7 +1919,10 @@ describe('post routes', () => {
       mockQuery.mockResolvedValueOnce({ rows: [forkedPostRow], rowCount: 1 });
       mockQuery.mockResolvedValueOnce({ rows: [sampleRevisionRow], rowCount: 1 });
       // findRevisionsByPostId (file carry-forward: get source revisions)
-      mockQuery.mockResolvedValueOnce({ rows: [{ id: 'rev-1', post_id: sourcePostRow.id, revision_number: 1 }], rowCount: 1 });
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ id: 'rev-1', post_id: sourcePostRow.id, revision_number: 1 }],
+        rowCount: 1,
+      });
       // findFilesByRevisionId (file carry-forward: no files)
       mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
       // No tags
@@ -1961,7 +1978,10 @@ describe('post routes', () => {
       mockQuery.mockResolvedValueOnce({ rows: [forkedPostRow], rowCount: 1 });
       mockQuery.mockResolvedValueOnce({ rows: [sampleRevisionRow], rowCount: 1 });
       // findRevisionsByPostId (file carry-forward: get source revisions)
-      mockQuery.mockResolvedValueOnce({ rows: [{ id: 'rev-1', post_id: chainSourcePost.id, revision_number: 1 }], rowCount: 1 });
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ id: 'rev-1', post_id: chainSourcePost.id, revision_number: 1 }],
+        rowCount: 1,
+      });
       // findFilesByRevisionId (file carry-forward: no files)
       mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
       mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
@@ -2004,7 +2024,10 @@ describe('post routes', () => {
       mockQuery.mockResolvedValueOnce({ rows: [forkedPostRow], rowCount: 1 });
       mockQuery.mockResolvedValueOnce({ rows: [sampleRevisionRow], rowCount: 1 });
       // findRevisionsByPostId (file carry-forward: get source revisions)
-      mockQuery.mockResolvedValueOnce({ rows: [{ id: 'rev-1', post_id: sourcePostRow.id, revision_number: 1 }], rowCount: 1 });
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ id: 'rev-1', post_id: sourcePostRow.id, revision_number: 1 }],
+        rowCount: 1,
+      });
       // findFilesByRevisionId (file carry-forward: no files)
       mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
       mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });

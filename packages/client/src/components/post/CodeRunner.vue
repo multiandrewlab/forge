@@ -1,15 +1,7 @@
 <template>
-  <div
-    v-if="supported || showDisabled"
-    data-testid="code-runner"
-  >
+  <div v-if="supported || showDisabled" data-testid="code-runner">
     <div class="flex items-center justify-end py-1">
-      <RunButton
-        v-if="supported"
-        :status="status"
-        @run="handleRun"
-        @abort="abort"
-      />
+      <RunButton v-if="supported" :status="status" @run="handleRun" @abort="abort" />
       <RunButton
         v-else
         status="idle"
@@ -57,9 +49,29 @@ const props = defineProps<{
 // ---------------------------------------------------------------------------
 
 const RECOGNIZED_LANGUAGES = [
-  'python', 'javascript', 'typescript', 'go', 'rust', 'java', 'c', 'cpp',
-  'csharp', 'ruby', 'php', 'swift', 'kotlin', 'scala', 'haskell', 'lua',
-  'perl', 'r', 'dart', 'elixir', 'clojure', 'zig', 'nim',
+  'python',
+  'javascript',
+  'typescript',
+  'go',
+  'rust',
+  'java',
+  'c',
+  'cpp',
+  'csharp',
+  'ruby',
+  'php',
+  'swift',
+  'kotlin',
+  'scala',
+  'haskell',
+  'lua',
+  'perl',
+  'r',
+  'dart',
+  'elixir',
+  'clojure',
+  'zig',
+  'nim',
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -70,8 +82,7 @@ const RECOGNIZED_LANGUAGES = [
 // Composable
 // ---------------------------------------------------------------------------
 
-const { output, status, executionTime, exitCode, truncated, run, abort, clear } =
-  useCodeRunner();
+const { output, status, executionTime, exitCode, truncated, run, abort, clear } = useCodeRunner();
 
 // ---------------------------------------------------------------------------
 // Computed
@@ -81,10 +92,7 @@ const supported = computed(() => isSandboxLanguage(props.language));
 
 const showDisabled = computed(() => {
   if (props.language === null) return false;
-  return (
-    !supported.value &&
-    (RECOGNIZED_LANGUAGES as readonly string[]).includes(props.language)
-  );
+  return !supported.value && (RECOGNIZED_LANGUAGES as readonly string[]).includes(props.language);
 });
 
 // ---------------------------------------------------------------------------

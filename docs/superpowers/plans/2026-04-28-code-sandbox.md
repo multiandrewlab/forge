@@ -15,6 +15,7 @@
 ## File Map
 
 ### New Files (9)
+
 ```
 packages/client/src/lib/sandbox/languages.ts                    — Language constants, guards, extension map
 packages/client/src/lib/sandbox/manager.ts                       — SandboxManager with injectable WorkerFactory
@@ -28,6 +29,7 @@ packages/client/src/components/post/ExecutionOutput.vue          — Streaming o
 ```
 
 ### Test Files (7)
+
 ```
 packages/client/src/__tests__/lib/sandbox/languages.test.ts
 packages/client/src/__tests__/lib/sandbox/manager.test.ts
@@ -39,11 +41,13 @@ packages/client/src/__tests__/components/post/CodeRunner.test.ts
 ```
 
 ### Modified Files (1)
+
 ```
 packages/client/src/components/post/PostDetail.vue         — Add CodeRunner to both layouts
 ```
 
 ### Dependencies
+
 ```
 packages/client devDependencies:
   quickjs-emscripten       — QuickJS WASM runtime
@@ -73,6 +77,7 @@ Task 7 depends on Task 6.
 ## Task 0: Install Dependencies
 
 **Files:**
+
 - Modify: `packages/client/package.json`
 
 - [ ] **Step 1: Install npm packages**
@@ -100,6 +105,7 @@ git commit -m "chore: add quickjs-emscripten and esbuild-wasm dependencies"
 ## Task 1: Language Constants & Guards
 
 **Files:**
+
 - Create: `packages/client/src/lib/sandbox/languages.ts`
 - Test: `packages/client/src/__tests__/lib/sandbox/languages.test.ts`
 
@@ -211,11 +217,7 @@ Expected: FAIL — module not found.
 
 ```typescript
 // packages/client/src/lib/sandbox/languages.ts
-export const SANDBOX_LANGUAGES = Object.freeze([
-  'python',
-  'javascript',
-  'typescript',
-] as const);
+export const SANDBOX_LANGUAGES = Object.freeze(['python', 'javascript', 'typescript'] as const);
 
 export type SandboxLanguage = (typeof SANDBOX_LANGUAGES)[number];
 
@@ -267,6 +269,7 @@ git commit -m "feat(sandbox): add language constants, guards, and extension mapp
 ## Task 2: SandboxManager
 
 **Files:**
+
 - Create: `packages/client/src/lib/sandbox/manager.ts`
 - Test: `packages/client/src/__tests__/lib/sandbox/manager.test.ts`
 
@@ -784,6 +787,7 @@ git commit -m "feat(sandbox): add SandboxManager with injectable WorkerFactory"
 ## Task 3: Web Worker Implementations
 
 **Files:**
+
 - Create: `packages/client/src/lib/sandbox/workers/neutralize-apis.ts`
 - Create: `packages/client/src/lib/sandbox/workers/python-worker.ts`
 - Create: `packages/client/src/lib/sandbox/workers/js-worker.ts`
@@ -1139,6 +1143,7 @@ git commit -m "feat(sandbox): add Web Workers with extracted neutralize-apis hel
 ## Task 4a: RunButton Component
 
 **Files:**
+
 - Create: `packages/client/src/components/post/RunButton.vue`
 - Test: `packages/client/src/__tests__/components/post/RunButton.test.ts`
 
@@ -1282,7 +1287,9 @@ const showPlay = computed(() => ['idle', 'done', 'error'].includes(props.status)
       fill="currentColor"
       class="h-4 w-4"
     >
-      <path d="M6.3 2.84A1.5 1.5 0 004 4.11v11.78a1.5 1.5 0 002.3 1.27l9.344-5.891a1.5 1.5 0 000-2.538L6.3 2.841z" />
+      <path
+        d="M6.3 2.84A1.5 1.5 0 004 4.11v11.78a1.5 1.5 0 002.3 1.27l9.344-5.891a1.5 1.5 0 000-2.538L6.3 2.841z"
+      />
     </svg>
 
     <!-- Spinner -->
@@ -1295,7 +1302,11 @@ const showPlay = computed(() => ['idle', 'done', 'error'].includes(props.status)
       viewBox="0 0 24 24"
     >
       <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+      <path
+        class="opacity-75"
+        fill="currentColor"
+        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+      />
     </svg>
 
     <!-- Stop icon -->
@@ -1331,6 +1342,7 @@ git commit -m "feat(sandbox): add RunButton component with play/stop/loading sta
 ## Task 4b: ExecutionOutput Component
 
 **Files:**
+
 - Create: `packages/client/src/components/post/ExecutionOutput.vue`
 - Test: `packages/client/src/__tests__/components/post/ExecutionOutput.test.ts`
 
@@ -1359,9 +1371,7 @@ describe('ExecutionOutput', () => {
   });
 
   it('renders output panel when output has lines', () => {
-    const output: OutputLine[] = [
-      { stream: 'stdout', text: 'Hello, world!', timestamp: 1 },
-    ];
+    const output: OutputLine[] = [{ stream: 'stdout', text: 'Hello, world!', timestamp: 1 }];
     const wrapper = mount(ExecutionOutput, {
       props: { output, status: 'done', executionTime: 50, exitCode: 0, truncated: false },
     });
@@ -1370,9 +1380,7 @@ describe('ExecutionOutput', () => {
   });
 
   it('renders stdout lines without special styling', () => {
-    const output: OutputLine[] = [
-      { stream: 'stdout', text: 'normal output', timestamp: 1 },
-    ];
+    const output: OutputLine[] = [{ stream: 'stdout', text: 'normal output', timestamp: 1 }];
     const wrapper = mount(ExecutionOutput, {
       props: { output, status: 'done', executionTime: 50, exitCode: 0, truncated: false },
     });
@@ -1382,9 +1390,7 @@ describe('ExecutionOutput', () => {
   });
 
   it('renders stderr lines with red styling', () => {
-    const output: OutputLine[] = [
-      { stream: 'stderr', text: 'error output', timestamp: 1 },
-    ];
+    const output: OutputLine[] = [{ stream: 'stderr', text: 'error output', timestamp: 1 }];
     const wrapper = mount(ExecutionOutput, {
       props: { output, status: 'done', executionTime: 50, exitCode: 1, truncated: false },
     });
@@ -1492,14 +1498,26 @@ describe('ExecutionOutput', () => {
 
   it('renders panel when status is loading even with empty output', () => {
     const wrapper = mount(ExecutionOutput, {
-      props: { output: [], status: 'loading', executionTime: null, exitCode: null, truncated: false },
+      props: {
+        output: [],
+        status: 'loading',
+        executionTime: null,
+        exitCode: null,
+        truncated: false,
+      },
     });
     expect(wrapper.find('[data-testid="execution-output"]').exists()).toBe(true);
   });
 
   it('renders panel when status is running even with empty output', () => {
     const wrapper = mount(ExecutionOutput, {
-      props: { output: [], status: 'running', executionTime: null, exitCode: null, truncated: false },
+      props: {
+        output: [],
+        status: 'running',
+        executionTime: null,
+        exitCode: null,
+        truncated: false,
+      },
     });
     expect(wrapper.find('[data-testid="execution-output"]').exists()).toBe(true);
   });
@@ -1535,7 +1553,9 @@ const props = defineProps<{
 
 defineEmits<{ clear: [] }>();
 
-const isVisible = computed(() => ['loading', 'running', 'done', 'error'].includes(props.status) || props.output.length > 0);
+const isVisible = computed(
+  () => ['loading', 'running', 'done', 'error'].includes(props.status) || props.output.length > 0,
+);
 </script>
 
 <template>
@@ -1554,16 +1574,8 @@ const isVisible = computed(() => ['loading', 'running', 'done', 'error'].include
             :class="line.stream === 'stderr' ? 'text-red-400' : 'text-gray-100'"
           >{{ line.text }}
 </span></template></pre>
-      <div
-        v-if="status === 'loading'"
-        class="text-sm text-gray-400"
-      >
-        Loading runtime...
-      </div>
-      <div
-        v-if="status === 'running' && output.length === 0"
-        class="text-sm text-gray-400"
-      >
+      <div v-if="status === 'loading'" class="text-sm text-gray-400">Loading runtime...</div>
+      <div v-if="status === 'running' && output.length === 0" class="text-sm text-gray-400">
         Running...
       </div>
     </div>
@@ -1583,18 +1595,10 @@ const isVisible = computed(() => ['loading', 'running', 'done', 'error'].include
       class="flex items-center justify-between border-t border-gray-700 px-3 py-1.5 text-xs"
     >
       <div class="flex items-center gap-3">
-        <span
-          v-if="exitCode !== null"
-          :class="exitCode === 0 ? 'text-green-400' : 'text-red-400'"
-        >
+        <span v-if="exitCode !== null" :class="exitCode === 0 ? 'text-green-400' : 'text-red-400'">
           Exit: {{ exitCode }}
         </span>
-        <span
-          v-if="executionTime !== null"
-          class="text-gray-400"
-        >
-          {{ executionTime }}ms
-        </span>
+        <span v-if="executionTime !== null" class="text-gray-400"> {{ executionTime }}ms </span>
       </div>
       <button
         data-testid="clear-button"
@@ -1626,6 +1630,7 @@ git commit -m "feat(sandbox): add ExecutionOutput component with streaming displ
 ## Task 5: useCodeRunner Composable
 
 **Files:**
+
 - Create: `packages/client/src/composables/useCodeRunner.ts`
 - Test: `packages/client/src/__tests__/composables/useCodeRunner.test.ts`
 
@@ -1718,7 +1723,9 @@ describe('useCodeRunner', () => {
   });
 
   it('sets status to done and records results on onComplete', async () => {
-    let capturedOnComplete: ((result: { exitCode: number; executionTimeMs: number }) => void) | undefined;
+    let capturedOnComplete:
+      | ((result: { exitCode: number; executionTimeMs: number }) => void)
+      | undefined;
     mockExecute.mockImplementation((opts: { onComplete: typeof capturedOnComplete }) => {
       capturedOnComplete = opts.onComplete;
       return { abort: mockAbort };
@@ -1795,12 +1802,16 @@ describe('useCodeRunner', () => {
 
   it('clear resets output and status to idle', async () => {
     let capturedOnOutput: ((stream: 'stdout' | 'stderr', data: string) => void) | undefined;
-    let capturedOnComplete: ((result: { exitCode: number; executionTimeMs: number }) => void) | undefined;
-    mockExecute.mockImplementation((opts: { onOutput: typeof capturedOnOutput; onComplete: typeof capturedOnComplete }) => {
-      capturedOnOutput = opts.onOutput;
-      capturedOnComplete = opts.onComplete;
-      return { abort: mockAbort };
-    });
+    let capturedOnComplete:
+      | ((result: { exitCode: number; executionTimeMs: number }) => void)
+      | undefined;
+    mockExecute.mockImplementation(
+      (opts: { onOutput: typeof capturedOnOutput; onComplete: typeof capturedOnComplete }) => {
+        capturedOnOutput = opts.onOutput;
+        capturedOnComplete = opts.onComplete;
+        return { abort: mockAbort };
+      },
+    );
 
     const { run, clear, output, status, executionTime, exitCode, truncated } = useCodeRunner();
     run({
@@ -2002,6 +2013,7 @@ git commit -m "feat(sandbox): add useCodeRunner composable with output truncatio
 ## Task 6: CodeRunner Wrapper Component
 
 **Files:**
+
 - Create: `packages/client/src/components/post/CodeRunner.vue`
 - Test: `packages/client/src/__tests__/components/post/CodeRunner.test.ts`
 
@@ -2070,7 +2082,12 @@ describe('CodeRunner', () => {
 
   it('renders RunButton for supported language', () => {
     const wrapper = mount(CodeRunner, {
-      props: { postId: '1', revisionId: 'r1', language: 'python', singleFileContent: 'print("hi")' },
+      props: {
+        postId: '1',
+        revisionId: 'r1',
+        language: 'python',
+        singleFileContent: 'print("hi")',
+      },
     });
     expect(wrapper.find('[data-testid="code-runner"]').exists()).toBe(true);
     expect(wrapper.findComponent({ name: 'RunButton' }).exists()).toBe(true);
@@ -2078,7 +2095,12 @@ describe('CodeRunner', () => {
 
   it('calls run with single-file content on Run click', async () => {
     const wrapper = mount(CodeRunner, {
-      props: { postId: '1', revisionId: 'r1', language: 'python', singleFileContent: 'print("hi")' },
+      props: {
+        postId: '1',
+        revisionId: 'r1',
+        language: 'python',
+        singleFileContent: 'print("hi")',
+      },
     });
 
     const runButton = wrapper.findComponent({ name: 'RunButton' });
@@ -2102,8 +2124,26 @@ describe('CodeRunner', () => {
         revisionId: 'r1',
         language: 'python',
         files: [
-          { id: 'f1', postId: 'p1', revisionId: 'r1', filename: 'main.py', mimeType: 'text/x-python', fileSize: 100, sortOrder: 0, createdAt: new Date() },
-          { id: 'f2', postId: 'p1', revisionId: 'r1', filename: 'utils.py', mimeType: 'text/x-python', fileSize: 50, sortOrder: 1, createdAt: new Date() },
+          {
+            id: 'f1',
+            postId: 'p1',
+            revisionId: 'r1',
+            filename: 'main.py',
+            mimeType: 'text/x-python',
+            fileSize: 100,
+            sortOrder: 0,
+            createdAt: new Date(),
+          },
+          {
+            id: 'f2',
+            postId: 'p1',
+            revisionId: 'r1',
+            filename: 'utils.py',
+            mimeType: 'text/x-python',
+            fileSize: 50,
+            sortOrder: 1,
+            createdAt: new Date(),
+          },
         ],
         activeFilename: 'main.py',
       },
@@ -2135,8 +2175,26 @@ describe('CodeRunner', () => {
         revisionId: 'r1',
         language: 'python',
         files: [
-          { id: 'f1', postId: 'p1', revisionId: 'r1', filename: 'main.py', mimeType: 'text/x-python', fileSize: 100, sortOrder: 0, createdAt: new Date() },
-          { id: 'f2', postId: 'p1', revisionId: 'r1', filename: 'photo.png', mimeType: 'image/png', fileSize: 5000, sortOrder: 1, createdAt: new Date() },
+          {
+            id: 'f1',
+            postId: 'p1',
+            revisionId: 'r1',
+            filename: 'main.py',
+            mimeType: 'text/x-python',
+            fileSize: 100,
+            sortOrder: 0,
+            createdAt: new Date(),
+          },
+          {
+            id: 'f2',
+            postId: 'p1',
+            revisionId: 'r1',
+            filename: 'photo.png',
+            mimeType: 'image/png',
+            fileSize: 5000,
+            sortOrder: 1,
+            createdAt: new Date(),
+          },
         ],
         activeFilename: 'main.py',
       },
@@ -2195,17 +2253,43 @@ const { output, status, executionTime, exitCode, truncated, run, abort, clear } 
 
 // Known programming languages that could plausibly have a Run button
 const RECOGNIZED_LANGUAGES = [
-  'python', 'javascript', 'typescript', 'go', 'rust', 'java', 'c', 'cpp',
-  'csharp', 'ruby', 'php', 'swift', 'kotlin', 'scala', 'haskell', 'lua',
-  'perl', 'r', 'dart', 'elixir', 'clojure', 'zig', 'nim',
+  'python',
+  'javascript',
+  'typescript',
+  'go',
+  'rust',
+  'java',
+  'c',
+  'cpp',
+  'csharp',
+  'ruby',
+  'php',
+  'swift',
+  'kotlin',
+  'scala',
+  'haskell',
+  'lua',
+  'perl',
+  'r',
+  'dart',
+  'elixir',
+  'clojure',
+  'zig',
+  'nim',
 ] as const;
 
-const isRecognizedLanguage = props.language !== null && RECOGNIZED_LANGUAGES.includes(props.language as (typeof RECOGNIZED_LANGUAGES)[number]);
+const isRecognizedLanguage =
+  props.language !== null &&
+  RECOGNIZED_LANGUAGES.includes(props.language as (typeof RECOGNIZED_LANGUAGES)[number]);
 const showDisabled = !supported && isRecognizedLanguage;
 
 function isTextMimeType(mimeType: string | null): boolean {
   if (!mimeType) return true; // Assume text if unknown
-  return mimeType.startsWith('text/') || mimeType === 'application/json' || mimeType === 'application/javascript';
+  return (
+    mimeType.startsWith('text/') ||
+    mimeType === 'application/json' ||
+    mimeType === 'application/javascript'
+  );
 }
 
 async function handleRun(): Promise<void> {
@@ -2257,17 +2341,9 @@ async function handleRun(): Promise<void> {
 </script>
 
 <template>
-  <div
-    v-if="supported || showDisabled"
-    data-testid="code-runner"
-  >
+  <div v-if="supported || showDisabled" data-testid="code-runner">
     <div class="flex items-center justify-end py-1">
-      <RunButton
-        v-if="supported"
-        :status="status"
-        @run="handleRun"
-        @abort="abort"
-      />
+      <RunButton v-if="supported" :status="status" @run="handleRun" @abort="abort" />
       <RunButton
         v-else
         status="idle"
@@ -2306,6 +2382,7 @@ git commit -m "feat(sandbox): add CodeRunner wrapper with content resolution"
 ## Task 7: PostDetail Integration
 
 **Files:**
+
 - Modify: `packages/client/src/components/post/PostDetail.vue`
 
 Add CodeRunner to both single-file and multi-file layouts. Only renders when `contentType === 'snippet'` and language is sandbox-supported.
@@ -2329,7 +2406,11 @@ In the multi-file layout section (after `<FilePreview>`, around line 18), add:
   :revision-id="revision?.id ?? ''"
   :language="fullPost.language ?? null"
   :files="files"
-  :active-filename="filesStore.activeFileId ? files.find(f => f.id === filesStore.activeFileId)?.filename : undefined"
+  :active-filename="
+    filesStore.activeFileId
+      ? files.find((f) => f.id === filesStore.activeFileId)?.filename
+      : undefined
+  "
 />
 ```
 
@@ -2424,6 +2505,7 @@ Verify all thresholds from `.coverage-thresholds.json` are met (100% lines, func
 - [ ] **Step 2: Fix any coverage gaps**
 
 If any branches/lines are uncovered, add targeted tests. Common gaps:
+
 - Template v-if false branches (test with props that hit both paths)
 - Optional chaining fallbacks (test with null/undefined inputs)
 - Error catch blocks (test with failing fetch responses)

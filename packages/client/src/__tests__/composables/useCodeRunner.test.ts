@@ -86,7 +86,11 @@ describe('useCodeRunner', () => {
       const { run, status } = composable;
       expect(status.value).toBe('idle');
 
-      run({ language: 'javascript', files: [{ filename: 'main.js', content: 'console.log("hi")' }], entryFile: 'main.js' });
+      run({
+        language: 'javascript',
+        files: [{ filename: 'main.js', content: 'console.log("hi")' }],
+        entryFile: 'main.js',
+      });
 
       expect(status.value).toBe('loading');
     });
@@ -94,7 +98,12 @@ describe('useCodeRunner', () => {
     it('calls SandboxManager.execute with correct options', () => {
       const { run } = composable;
 
-      run({ language: 'python', files: [{ filename: 'main.py', content: 'print("hi")' }], entryFile: 'main.py', stdin: 'some input' });
+      run({
+        language: 'python',
+        files: [{ filename: 'main.py', content: 'print("hi")' }],
+        entryFile: 'main.py',
+        stdin: 'some input',
+      });
 
       expect(mockExecute).toHaveBeenCalledOnce();
       const opts = mockExecute.mock.calls[0][0];
@@ -110,7 +119,11 @@ describe('useCodeRunner', () => {
 
     it('passes undefined stdin when not provided', () => {
       const { run } = composable;
-      run({ language: 'javascript', files: [{ filename: 'main.js', content: 'code' }], entryFile: 'main.js' });
+      run({
+        language: 'javascript',
+        files: [{ filename: 'main.js', content: 'code' }],
+        entryFile: 'main.js',
+      });
 
       const opts = mockExecute.mock.calls[0][0];
       expect(opts.stdin).toBeUndefined();
@@ -120,7 +133,11 @@ describe('useCodeRunner', () => {
       const { run, output, status, executionTime, exitCode, truncated } = composable;
 
       // First run
-      run({ language: 'javascript', files: [{ filename: 'main.js', content: 'code' }], entryFile: 'main.js' });
+      run({
+        language: 'javascript',
+        files: [{ filename: 'main.js', content: 'code' }],
+        entryFile: 'main.js',
+      });
       const cb1 = captureCallbacks();
       cb1.onOutput('stdout', 'hello');
       cb1.onComplete({ exitCode: 0, executionTimeMs: 50 });
@@ -130,7 +147,11 @@ describe('useCodeRunner', () => {
       expect(exitCode.value).toBe(0);
 
       // Second run should reset everything
-      run({ language: 'javascript', files: [{ filename: 'main.js', content: 'code2' }], entryFile: 'main.js' });
+      run({
+        language: 'javascript',
+        files: [{ filename: 'main.js', content: 'code2' }],
+        entryFile: 'main.js',
+      });
 
       expect(output.value).toEqual([]);
       expect(status.value).toBe('loading');
@@ -146,7 +167,11 @@ describe('useCodeRunner', () => {
   describe('onOutput', () => {
     it('accumulates output lines with stream, text, timestamp', () => {
       const { run, output } = composable;
-      run({ language: 'javascript', files: [{ filename: 'main.js', content: 'code' }], entryFile: 'main.js' });
+      run({
+        language: 'javascript',
+        files: [{ filename: 'main.js', content: 'code' }],
+        entryFile: 'main.js',
+      });
       const cb = captureCallbacks();
 
       const before = Date.now();
@@ -174,7 +199,11 @@ describe('useCodeRunner', () => {
   describe('onLoading', () => {
     it('sets status to running when stage is "executing"', () => {
       const { run, status } = composable;
-      run({ language: 'javascript', files: [{ filename: 'main.js', content: 'code' }], entryFile: 'main.js' });
+      run({
+        language: 'javascript',
+        files: [{ filename: 'main.js', content: 'code' }],
+        entryFile: 'main.js',
+      });
       const cb = captureCallbacks();
 
       expect(status.value).toBe('loading');
@@ -185,7 +214,11 @@ describe('useCodeRunner', () => {
 
     it('does not change status for other loading stages', () => {
       const { run, status } = composable;
-      run({ language: 'javascript', files: [{ filename: 'main.js', content: 'code' }], entryFile: 'main.js' });
+      run({
+        language: 'javascript',
+        files: [{ filename: 'main.js', content: 'code' }],
+        entryFile: 'main.js',
+      });
       const cb = captureCallbacks();
 
       cb.onLoading('booting');
@@ -199,7 +232,11 @@ describe('useCodeRunner', () => {
   describe('onComplete', () => {
     it('sets status to done and records exitCode', () => {
       const { run, status, exitCode } = composable;
-      run({ language: 'javascript', files: [{ filename: 'main.js', content: 'code' }], entryFile: 'main.js' });
+      run({
+        language: 'javascript',
+        files: [{ filename: 'main.js', content: 'code' }],
+        entryFile: 'main.js',
+      });
       const cb = captureCallbacks();
 
       cb.onComplete({ exitCode: 42, executionTimeMs: 150 });
@@ -210,7 +247,11 @@ describe('useCodeRunner', () => {
 
     it('records executionTime as non-negative number', () => {
       const { run, executionTime } = composable;
-      run({ language: 'javascript', files: [{ filename: 'main.js', content: 'code' }], entryFile: 'main.js' });
+      run({
+        language: 'javascript',
+        files: [{ filename: 'main.js', content: 'code' }],
+        entryFile: 'main.js',
+      });
       const cb = captureCallbacks();
 
       cb.onComplete({ exitCode: 0, executionTimeMs: 50 });
@@ -225,7 +266,11 @@ describe('useCodeRunner', () => {
   describe('onError', () => {
     it('sets status to error and adds stderr output line', () => {
       const { run, status, output } = composable;
-      run({ language: 'javascript', files: [{ filename: 'main.js', content: 'code' }], entryFile: 'main.js' });
+      run({
+        language: 'javascript',
+        files: [{ filename: 'main.js', content: 'code' }],
+        entryFile: 'main.js',
+      });
       const cb = captureCallbacks();
 
       cb.onError('Something went wrong');
@@ -244,7 +289,11 @@ describe('useCodeRunner', () => {
   describe('abort()', () => {
     it('calls the handle abort function', () => {
       const { run, abort } = composable;
-      run({ language: 'javascript', files: [{ filename: 'main.js', content: 'code' }], entryFile: 'main.js' });
+      run({
+        language: 'javascript',
+        files: [{ filename: 'main.js', content: 'code' }],
+        entryFile: 'main.js',
+      });
 
       abort();
 
@@ -267,7 +316,11 @@ describe('useCodeRunner', () => {
       const { run, clear, output, status, executionTime, exitCode, truncated } = composable;
 
       // Run and complete to populate state
-      run({ language: 'javascript', files: [{ filename: 'main.js', content: 'code' }], entryFile: 'main.js' });
+      run({
+        language: 'javascript',
+        files: [{ filename: 'main.js', content: 'code' }],
+        entryFile: 'main.js',
+      });
       const cb = captureCallbacks();
       cb.onOutput('stdout', 'some output');
       cb.onComplete({ exitCode: 1, executionTimeMs: 200 });
@@ -292,7 +345,11 @@ describe('useCodeRunner', () => {
   describe('line-count truncation', () => {
     it('truncates at MAX_OUTPUT_LINES (10,000) and sets truncated=true', () => {
       const { run, output, truncated } = composable;
-      run({ language: 'javascript', files: [{ filename: 'main.js', content: 'code' }], entryFile: 'main.js' });
+      run({
+        language: 'javascript',
+        files: [{ filename: 'main.js', content: 'code' }],
+        entryFile: 'main.js',
+      });
       const cb = captureCallbacks();
 
       // Emit 10,001 lines
@@ -306,7 +363,11 @@ describe('useCodeRunner', () => {
 
     it('ignores further output after truncation is set', () => {
       const { run, output, truncated } = composable;
-      run({ language: 'javascript', files: [{ filename: 'main.js', content: 'code' }], entryFile: 'main.js' });
+      run({
+        language: 'javascript',
+        files: [{ filename: 'main.js', content: 'code' }],
+        entryFile: 'main.js',
+      });
       const cb = captureCallbacks();
 
       // Fill to the limit
@@ -325,7 +386,11 @@ describe('useCodeRunner', () => {
 
     it('does not truncate at exactly 10,000 lines', () => {
       const { run, output, truncated } = composable;
-      run({ language: 'javascript', files: [{ filename: 'main.js', content: 'code' }], entryFile: 'main.js' });
+      run({
+        language: 'javascript',
+        files: [{ filename: 'main.js', content: 'code' }],
+        entryFile: 'main.js',
+      });
       const cb = captureCallbacks();
 
       for (let i = 0; i < 10_000; i++) {
@@ -343,7 +408,11 @@ describe('useCodeRunner', () => {
   describe('byte-count truncation', () => {
     it('truncates when total bytes exceed MAX_OUTPUT_BYTES (1MB)', () => {
       const { run, output, truncated } = composable;
-      run({ language: 'javascript', files: [{ filename: 'main.js', content: 'code' }], entryFile: 'main.js' });
+      run({
+        language: 'javascript',
+        files: [{ filename: 'main.js', content: 'code' }],
+        entryFile: 'main.js',
+      });
       const cb = captureCallbacks();
 
       // Each line is 1024 bytes of 'x' -- 1025 lines * 1024 bytes = 1,049,600 > 1,048,576
@@ -359,7 +428,11 @@ describe('useCodeRunner', () => {
 
     it('does not truncate when total bytes are under 1MB', () => {
       const { run, output, truncated } = composable;
-      run({ language: 'javascript', files: [{ filename: 'main.js', content: 'code' }], entryFile: 'main.js' });
+      run({
+        language: 'javascript',
+        files: [{ filename: 'main.js', content: 'code' }],
+        entryFile: 'main.js',
+      });
       const cb = captureCallbacks();
 
       // 1000 lines of 1000 bytes = 1,000,000 < 1,048,576
@@ -382,7 +455,11 @@ describe('useCodeRunner', () => {
       const { result: dedicated, scope: dedicatedScope } = mountComposable();
       const { run } = dedicated;
 
-      run({ language: 'javascript', files: [{ filename: 'main.js', content: 'code' }], entryFile: 'main.js' });
+      run({
+        language: 'javascript',
+        files: [{ filename: 'main.js', content: 'code' }],
+        entryFile: 'main.js',
+      });
       mockAbort.mockClear(); // clear any prior abort calls
 
       // Simulate component unmount

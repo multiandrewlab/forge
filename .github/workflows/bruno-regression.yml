@@ -31,8 +31,11 @@ jobs:
 
     env:
       DATABASE_URL: postgres://forge:forge@localhost:5432/forge
+      ENABLE_TEST_ROUTES: '1'
+      E2E_MODE: '1'
       JWT_SECRET: ci-test-secret
       JWT_REFRESH_SECRET: ci-test-refresh-secret
+      LLM_PROVIDER: mock
       NODE_ENV: test
       PORT: 3001
 

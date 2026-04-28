@@ -16,10 +16,7 @@
       >{{ line.text }}{{ i < output.length - 1 ? '\n' : '' }}</span></pre>
 
     <!-- Truncation indicator -->
-    <div
-      v-if="truncated"
-      class="border-t border-gray-700 px-3 py-1 text-xs text-yellow-400"
-    >
+    <div v-if="truncated" class="border-t border-gray-700 px-3 py-1 text-xs text-yellow-400">
       Output truncated
     </div>
 
@@ -28,16 +25,11 @@
       data-testid="status-bar"
       class="flex items-center gap-3 border-t border-gray-700 px-3 py-1 text-xs text-gray-400"
     >
-      <span
-        v-if="exitCode !== null"
-        :class="exitCode === 0 ? 'text-green-400' : 'text-red-400'"
-      >
+      <span v-if="exitCode !== null" :class="exitCode === 0 ? 'text-green-400' : 'text-red-400'">
         Exit: {{ exitCode }}
       </span>
 
-      <span v-if="executionTime !== null">
-        {{ executionTime }}ms
-      </span>
+      <span v-if="executionTime !== null"> {{ executionTime }}ms </span>
 
       <button
         data-testid="clear-button"
@@ -72,8 +64,6 @@ defineEmits<{
 }>();
 
 const isVisible = computed(
-  () =>
-    ['loading', 'running', 'done', 'error'].includes(props.status) ||
-    props.output.length > 0,
+  () => ['loading', 'running', 'done', 'error'].includes(props.status) || props.output.length > 0,
 );
 </script>

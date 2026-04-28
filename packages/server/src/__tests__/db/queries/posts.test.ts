@@ -72,10 +72,16 @@ describe('post queries', () => {
         visibility: 'public',
         isDraft: false,
       });
-      expect(mockQuery).toHaveBeenCalledWith(
-        expect.stringContaining('link_url, link_preview'),
-        [samplePost.author_id, 'Test Post', 'snippet', 'typescript', 'public', false, null, null],
-      );
+      expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining('link_url, link_preview'), [
+        samplePost.author_id,
+        'Test Post',
+        'snippet',
+        'typescript',
+        'public',
+        false,
+        null,
+        null,
+      ]);
       expect(result).toEqual(samplePost);
     });
 
@@ -104,19 +110,16 @@ describe('post queries', () => {
         linkPreview: linkPreview,
       });
 
-      expect(mockQuery).toHaveBeenCalledWith(
-        expect.stringContaining('link_url, link_preview'),
-        [
-          samplePost.author_id,
-          'Link Post',
-          'snippet',
-          null,
-          'public',
-          false,
-          'https://example.com',
-          JSON.stringify(linkPreview),
-        ],
-      );
+      expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining('link_url, link_preview'), [
+        samplePost.author_id,
+        'Link Post',
+        'snippet',
+        null,
+        'public',
+        false,
+        'https://example.com',
+        JSON.stringify(linkPreview),
+      ]);
       expect(result).toEqual(postWithLink);
     });
 
@@ -138,19 +141,16 @@ describe('post queries', () => {
         linkUrl: 'https://example.com',
       });
 
-      expect(mockQuery).toHaveBeenCalledWith(
-        expect.stringContaining('link_url, link_preview'),
-        [
-          samplePost.author_id,
-          'URL Only Post',
-          'snippet',
-          null,
-          'public',
-          false,
-          'https://example.com',
-          null,
-        ],
-      );
+      expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining('link_url, link_preview'), [
+        samplePost.author_id,
+        'URL Only Post',
+        'snippet',
+        null,
+        'public',
+        false,
+        'https://example.com',
+        null,
+      ]);
       expect(result).toEqual(postWithLinkUrl);
     });
   });

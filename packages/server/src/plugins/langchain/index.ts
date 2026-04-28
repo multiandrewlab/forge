@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply, preHandlerHookHandl
 import fp from 'fastify-plugin';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { createChatModel } from './provider.js';
+import { mockScriptStorage } from './mock-provider.js';
 import { AiRateLimiter, type AiSlot } from './rate-limiter.js';
 
 declare module 'fastify' {
@@ -46,6 +47,15 @@ async function langchainPluginImpl(app: FastifyInstance): Promise<void> {
   app.decorate('aiRateLimit', aiRateLimit);
   app.decorate('aiGate', [app.authenticate, aiRateLimit]);
   app.decorate('aiAcquire', (userId: string) => limiter.acquire(userId));
+
+  if (process.env.LLM_PROVIDER?.trim() === 'mock') {
+    app.addHook('onRequest', async (request) => {
+      const key = request.headers['x-mock-script'];
+      if (typeof key === 'string') {
+        mockScriptStorage.enterWith(key);
+      }
+    });
+  }
 
   // Safety net: release slot at the end of the request lifecycle
   app.addHook('onResponse', async (request) => {

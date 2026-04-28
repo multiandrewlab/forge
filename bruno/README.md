@@ -217,7 +217,7 @@ bruno/
 
 **The suite passes locally but fails in CI**: confirm the migration + seed step ran before the server started. The CI job requires the DB to be fully populated before the server polls `/api/health`.
 
-**`ai/complete` returns `event: error` with `fetch failed` or the post-response throws "Expected SSE stream to contain a done event"**: the AI autocomplete test requires a working LLM provider. Local dev defaults to `LLM_PROVIDER=openai` (see `.env.example`) — make sure `OPENAI_API_KEY` is set in `.env` and valid. If you switched to Ollama (`LLM_PROVIDER=ollama`), confirm the ollama service is running (`docker compose up ollama`) and the model named in `LLM_MODEL` has been pulled. After changing `.env`, restart the server — provider config is read at boot. Note: the `bruno-regression` CI workflow does not currently set AI provider secrets, so this test may need secrets wired into the workflow or a conditional skip before the full suite can pass in CI.
+**`ai/complete` runs against a mock LLM provider in CI**: the `bruno-regression` workflow sets `LLM_PROVIDER=mock` (see `.github/workflows/bruno-regression.yml`), which selects `ChatMock` and serves deterministic SSE chunks per the registry in `packages/server/src/plugins/langchain/mock-scripts.ts`. This means the CI test asserts the mock provider's wire format (the default script `['Hello', ' world', '[done]']` plus an `event: done` terminator), not a real OpenAI/Ollama response. To test against a real provider locally, set `LLM_PROVIDER=openai` (with `OPENAI_API_KEY`) or `LLM_PROVIDER=ollama` (with the docker-compose ollama service running) in your `.env` and restart the server. Provider config is read at boot.
 
 ## Notes
 

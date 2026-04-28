@@ -216,7 +216,10 @@ describe('POST /:id/revisions with file operations', () => {
       // Verify staged file (fileId1 belongs to postId and is staged)
       mockClient.query.mockResolvedValueOnce({ rows: [stagedInlineFile], rowCount: 1 });
       // Update staged file with revision_id
-      mockClient.query.mockResolvedValueOnce({ rows: [{ ...stagedInlineFile, revision_id: newRevisionId }], rowCount: 1 });
+      mockClient.query.mockResolvedValueOnce({
+        rows: [{ ...stagedInlineFile, revision_id: newRevisionId }],
+        rowCount: 1,
+      });
       // Get previous revision's files (for carry-forward) — empty since no prior revision with files
       mockClient.query.mockResolvedValueOnce({ rows: [], rowCount: 0 });
 
@@ -259,7 +262,9 @@ describe('POST /:id/revisions with file operations', () => {
       mockClient.query.mockResolvedValueOnce({ rows: [stagedObjectFile], rowCount: 1 });
       // Update staged file with revision_id and new storage_key
       mockClient.query.mockResolvedValueOnce({
-        rows: [{ ...stagedObjectFile, revision_id: newRevisionId, storage_key: expectedPermanentKey }],
+        rows: [
+          { ...stagedObjectFile, revision_id: newRevisionId, storage_key: expectedPermanentKey },
+        ],
         rowCount: 1,
       });
       // Get previous revision's files — empty

@@ -262,7 +262,9 @@ describe('file routes', () => {
       expect(response.statusCode).toBe(500);
       // The compensation DELETE should have been called
       const deleteCalls = mockQuery.mock.calls.filter(
-        (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).startsWith('DELETE FROM post_files WHERE id'),
+        (call: unknown[]) =>
+          typeof call[0] === 'string' &&
+          (call[0] as string).startsWith('DELETE FROM post_files WHERE id'),
       );
       expect(deleteCalls).toHaveLength(1);
       expect(deleteCalls[0][1]).toEqual([sampleObjectFileRow.id, postId]);
@@ -506,7 +508,11 @@ describe('file routes', () => {
     });
 
     it('returns 403 for staged files (no revisionId) when non-owner', async () => {
-      const otherToken = app.jwt.sign({ id: otherUserId, email: 'other@example.com', displayName: 'Other User' });
+      const otherToken = app.jwt.sign({
+        id: otherUserId,
+        email: 'other@example.com',
+        displayName: 'Other User',
+      });
 
       // findPostById — post owned by userId, not otherUserId
       mockQuery.mockResolvedValueOnce({ rows: [samplePostRow], rowCount: 1 });
@@ -584,7 +590,11 @@ describe('file routes', () => {
     });
 
     it('returns 403 for revision files on private post when non-owner', async () => {
-      const otherToken = app.jwt.sign({ id: otherUserId, email: 'other@example.com', displayName: 'Other User' });
+      const otherToken = app.jwt.sign({
+        id: otherUserId,
+        email: 'other@example.com',
+        displayName: 'Other User',
+      });
       const privatePost = { ...samplePostRow, visibility: 'private' };
 
       // findPostById — private post
@@ -602,7 +612,11 @@ describe('file routes', () => {
     });
 
     it('returns 403 for revision files on draft post when non-owner', async () => {
-      const otherToken = app.jwt.sign({ id: otherUserId, email: 'other@example.com', displayName: 'Other User' });
+      const otherToken = app.jwt.sign({
+        id: otherUserId,
+        email: 'other@example.com',
+        displayName: 'Other User',
+      });
       const draftPost = { ...samplePostRow, is_draft: true };
 
       // findPostById — draft post (public but draft)
@@ -700,7 +714,11 @@ describe('file routes', () => {
     });
 
     it('returns 403 for latest revision on private post when non-owner', async () => {
-      const otherToken = app.jwt.sign({ id: otherUserId, email: 'other@example.com', displayName: 'Other User' });
+      const otherToken = app.jwt.sign({
+        id: otherUserId,
+        email: 'other@example.com',
+        displayName: 'Other User',
+      });
       const privatePost = { ...samplePostRow, visibility: 'private' };
 
       // findPostById — private post
@@ -800,7 +818,11 @@ describe('file routes', () => {
     });
 
     it('returns 403 for staged file when non-owner', async () => {
-      const otherToken = app.jwt.sign({ id: otherUserId, email: 'other@example.com', displayName: 'Other User' });
+      const otherToken = app.jwt.sign({
+        id: otherUserId,
+        email: 'other@example.com',
+        displayName: 'Other User',
+      });
 
       // findPostById
       mockQuery.mockResolvedValueOnce({ rows: [samplePostRow], rowCount: 1 });
@@ -833,7 +855,11 @@ describe('file routes', () => {
     });
 
     it('returns 403 for committed file on private post when non-owner', async () => {
-      const otherToken = app.jwt.sign({ id: otherUserId, email: 'other@example.com', displayName: 'Other User' });
+      const otherToken = app.jwt.sign({
+        id: otherUserId,
+        email: 'other@example.com',
+        displayName: 'Other User',
+      });
       const privatePost = { ...samplePostRow, visibility: 'private' };
 
       // findPostById — private post
@@ -868,7 +894,11 @@ describe('file routes', () => {
     });
 
     it('returns 403 for committed file on draft post when non-owner', async () => {
-      const otherToken = app.jwt.sign({ id: otherUserId, email: 'other@example.com', displayName: 'Other User' });
+      const otherToken = app.jwt.sign({
+        id: otherUserId,
+        email: 'other@example.com',
+        displayName: 'Other User',
+      });
       const draftPost = { ...samplePostRow, is_draft: true };
 
       // findPostById — draft post

@@ -11,11 +11,7 @@
         @select="filesStore.setActiveFile"
       />
       <div class="flex-1 overflow-auto">
-        <FilePreview
-          v-if="activeFile"
-          :file="activeFile"
-          :post-id="fullPost!.id"
-        />
+        <FilePreview v-if="activeFile" :file="activeFile" :post-id="fullPost!.id" />
         <CodeRunner
           v-if="fullPost?.contentType === 'snippet' && revision"
           :post-id="fullPost.id"
@@ -118,8 +114,8 @@ const filesStore = useFilesStore();
 const { fetchComments, addComment } = useComments();
 const { forkPost } = usePosts();
 
-const activeFile = computed(() =>
-  files.value.find((f) => f.id === filesStore.activeFileId) ?? null,
+const activeFile = computed(
+  () => files.value.find((f) => f.id === filesStore.activeFileId) ?? null,
 );
 
 watch(
@@ -149,7 +145,10 @@ watch(
           files.value = filesStore.filesByRevision[rev.id] ?? [];
           if (files.value.length > 0) {
             // eslint-disable-next-line no-undef
-            console.info('[analytics] post.view.multifile', { postId: fullPost.value?.id, fileCount: files.value.length });
+            console.info('[analytics] post.view.multifile', {
+              postId: fullPost.value?.id,
+              fileCount: files.value.length,
+            });
           }
         }
       }

@@ -88,7 +88,7 @@ For single-file posts, content comes directly from `revision.content` — no fet
 ```typescript
 // packages/client/src/lib/sandbox/languages.ts
 export const SANDBOX_LANGUAGES = ['python', 'javascript', 'typescript'] as const;
-export type SandboxLanguage = typeof SANDBOX_LANGUAGES[number];
+export type SandboxLanguage = (typeof SANDBOX_LANGUAGES)[number];
 
 export function isSandboxLanguage(lang: string | null): lang is SandboxLanguage {
   return lang !== null && SANDBOX_LANGUAGES.includes(lang as SandboxLanguage);
@@ -125,6 +125,7 @@ User code runs inside a WASM virtual machine (QuickJS or Pyodide) which itself r
 2. **Web Worker boundary** (defense-in-depth): Even if the WASM VM had a bug, the worker's browser APIs are neutralized before the VM loads (see Security section).
 
 Properties enforced:
+
 - **Timeout**: `setTimeout(30_000)` + `worker.terminate()` — unconditional, cannot be blocked
 - **Memory isolation**: Worker memory is separate; termination reclaims everything
 - **No persistence**: Fresh worker per execution; VFS destroyed on termination
@@ -135,10 +136,9 @@ Properties enforced:
 Worker files are TypeScript (`.ts`) and use Vite's native worker support:
 
 ```typescript
-const worker = new Worker(
-  new URL('../lib/sandbox/workers/python-worker.ts', import.meta.url),
-  { type: 'module' }
-);
+const worker = new Worker(new URL('../lib/sandbox/workers/python-worker.ts', import.meta.url), {
+  type: 'module',
+});
 ```
 
 This integrates with Vite's dev server (HMR, ESM) and production bundler. Workers use ESM `import` syntax, not `importScripts()`. For CDN-loaded Pyodide, the worker uses dynamic `import()` or `fetch()` + `WebAssembly.instantiate()`.
@@ -180,10 +180,10 @@ The `sandboxManager.execute()` API accepts optional `stdin` for programmatic use
 
 ## Runtimes
 
-| Language | Runtime | Size | Source |
-|----------|---------|------|--------|
-| Python | Pyodide v0.27.1 | ~11MB | `cdn.jsdelivr.net/pyodide/v0.27.1/full/` |
-| JavaScript | quickjs-emscripten | ~1MB | npm package, bundled by Vite into worker |
+| Language   | Runtime                | Size       | Source                                    |
+| ---------- | ---------------------- | ---------- | ----------------------------------------- |
+| Python     | Pyodide v0.27.1        | ~11MB      | `cdn.jsdelivr.net/pyodide/v0.27.1/full/`  |
+| JavaScript | quickjs-emscripten     | ~1MB       | npm package, bundled by Vite into worker  |
 | TypeScript | esbuild-wasm + QuickJS | ~9MB total | npm packages, bundled by Vite into worker |
 
 ## Execution Service
@@ -198,9 +198,10 @@ Accepts an injectable worker factory for testability:
 type WorkerFactory = (language: SandboxLanguage) => Worker;
 
 const defaultWorkerFactory: WorkerFactory = (language) => {
-  const url = language === 'python'
-    ? new URL('./workers/python-worker.ts', import.meta.url)
-    : new URL('./workers/js-worker.ts', import.meta.url);
+  const url =
+    language === 'python'
+      ? new URL('./workers/python-worker.ts', import.meta.url)
+      : new URL('./workers/js-worker.ts', import.meta.url);
   return new Worker(url, { type: 'module' });
 };
 
@@ -228,6 +229,7 @@ export function createSandboxManager(factory?: WorkerFactory): SandboxManager;
 ```
 
 Responsibilities:
+
 - Create and terminate workers per execution
 - Enforce 30s timeout via `setTimeout` + `worker.terminate()`
 - Route messages from worker to calling composable via callbacks
@@ -237,18 +239,38 @@ Responsibilities:
 ### Worker Message Protocol
 
 **Main thread -> Worker:**
+
 ```typescript
 { type: 'execute'; language: string; files: Array<{ filename: string; content: string }>; entryFile: string; stdin?: string }
 ```
 
 **Worker -> Main thread:**
+
 ```typescript
-{ type: 'ready' }                                          // Runtime loaded, about to execute
-{ type: 'stdout'; data: string }
-{ type: 'stderr'; data: string }
-{ type: 'loading'; phase: 'runtime' | 'executing' }
-{ type: 'done'; exitCode: number; executionTimeMs: number }
-{ type: 'error'; message: string }
+{
+  type: 'ready';
+} // Runtime loaded, about to execute
+{
+  type: 'stdout';
+  data: string;
+}
+{
+  type: 'stderr';
+  data: string;
+}
+{
+  type: 'loading';
+  phase: 'runtime' | 'executing';
+}
+{
+  type: 'done';
+  exitCode: number;
+  executionTimeMs: number;
+}
+{
+  type: 'error';
+  message: string;
+}
 ```
 
 The `ready` message distinguishes "runtime loading" from "code executing" so `executionTimeMs` measures only code execution, not runtime initialization.
@@ -256,6 +278,7 @@ The `ready` message distinguishes "runtime loading" from "code executing" so `ex
 ### Worker Implementations
 
 **`python-worker.ts`**:
+
 - Neutralizes browser APIs before loading runtime (see Security)
 - Loads Pyodide via dynamic import from pinned CDN URL
 - `loadPackagesFromImports` is NOT called — no automatic package installation. Only the standard library is available
@@ -266,6 +289,7 @@ The `ready` message distinguishes "runtime loading" from "code executing" so `ex
 - If stdin provided, monkey-patches `input()` to read from a line buffer
 
 **`js-worker.ts`**:
+
 - Neutralizes browser APIs before loading runtime (see Security)
 - Imports `quickjs-emscripten` (bundled by Vite)
 - For TypeScript: also lazy-loads `esbuild-wasm` to transpile TS -> JS before execution
@@ -279,6 +303,7 @@ The `ready` message distinguishes "runtime loading" from "code executing" so `ex
 ### New Components
 
 **`CodeRunner.vue`** — Wrapper composing RunButton + ExecutionOutput:
+
 - Props: `postId: string`, `revisionId: string`, `language: string | null`, `singleFileContent?: string`
 - For multi-file: fetches file contents when Run is clicked (see Content Resolution)
 - For single-file: uses `singleFileContent` prop directly
@@ -287,6 +312,7 @@ The `ready` message distinguishes "runtime loading" from "code executing" so `ex
 - Slots into PostDetail cleanly — PostDetail passes data, CodeRunner handles execution
 
 **`RunButton.vue`** — Overlay button on code blocks:
+
 - Appears in top-right toolbar, next to existing copy button
 - States: idle (play icon), loading (spinner), running (stop/square icon for cancel)
 - Click triggers execution; click again during execution triggers abort
@@ -295,6 +321,7 @@ The `ready` message distinguishes "runtime loading" from "code executing" so `ex
 - For non-code content types or null language: does not render
 
 **`ExecutionOutput.vue`** — Output panel below code:
+
 - Renders below CodeViewer (single-file) or FilePreview (multi-file)
 - **All output rendered via `{{ }}` text interpolation — NEVER `v-html`** (prevents XSS from crafted output)
 - Monospace `<pre>` block with streaming line-by-line output
@@ -307,6 +334,7 @@ The `ready` message distinguishes "runtime loading" from "code executing" so `ex
 ### Modifications to Existing Components
 
 **`PostDetail.vue`**:
+
 - Single-file layout: Adds `CodeRunner` below `CodeViewer`, passing `language`, `postId`, `revisionId`, and `singleFileContent: revision.content`
 - Multi-file layout: Adds `CodeRunner` below `FilePreview`, passing `language`, `postId`, `revisionId` (CodeRunner fetches files itself)
 - Only renders `CodeRunner` when `contentType === 'snippet'`
@@ -353,16 +381,16 @@ function useCodeRunner() {
 
 ### Threat Model
 
-| Threat | Risk | Mitigation |
-|--------|------|------------|
-| Sandbox escape via WASM VM | Low | User code runs in WASM linear memory; no JS API access unless host bridges it. We bridge only stdout/stderr callbacks |
-| Worker browser API abuse | Medium | **Workers DO have `fetch`, `XHR`, `WebSocket`, `indexedDB` by default.** Worker scripts neutralize these before loading WASM (see below) |
-| Output XSS | High if v-html | **All output uses `{{ }}` text interpolation, never `v-html`.** Output is always plain text |
-| Output flooding / memory exhaustion | Medium | Output capped at 10,000 lines / 1MB. 30s timeout kills worker |
-| CDN WASM supply chain | Medium | Exact version pin. Browser HTTP cache. Self-hosting is a future option |
-| Pyodide auto-package install | Medium | `loadPackagesFromImports` never called. Only stdlib available |
-| Crypto mining via WASM | Low | 30s timeout + worker.terminate() limits computation |
-| Phishing via crafted output | Low | Output in distinct `<pre>` block with sandbox styling. Plain text only |
+| Threat                              | Risk           | Mitigation                                                                                                                               |
+| ----------------------------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Sandbox escape via WASM VM          | Low            | User code runs in WASM linear memory; no JS API access unless host bridges it. We bridge only stdout/stderr callbacks                    |
+| Worker browser API abuse            | Medium         | **Workers DO have `fetch`, `XHR`, `WebSocket`, `indexedDB` by default.** Worker scripts neutralize these before loading WASM (see below) |
+| Output XSS                          | High if v-html | **All output uses `{{ }}` text interpolation, never `v-html`.** Output is always plain text                                              |
+| Output flooding / memory exhaustion | Medium         | Output capped at 10,000 lines / 1MB. 30s timeout kills worker                                                                            |
+| CDN WASM supply chain               | Medium         | Exact version pin. Browser HTTP cache. Self-hosting is a future option                                                                   |
+| Pyodide auto-package install        | Medium         | `loadPackagesFromImports` never called. Only stdlib available                                                                            |
+| Crypto mining via WASM              | Low            | 30s timeout + worker.terminate() limits computation                                                                                      |
+| Phishing via crafted output         | Low            | Output in distinct `<pre>` block with sandbox styling. Plain text only                                                                   |
 
 ### Browser API Neutralization in Workers
 
@@ -389,62 +417,68 @@ This runs before any WASM runtime is imported. Even if a WASM VM had a bug allow
 
 ### Security Properties
 
-| Property | Mechanism |
-|----------|-----------|
-| Execution timeout (30s) | `setTimeout` + `worker.terminate()` on main thread — unconditional |
-| Memory limit | QuickJS: `setMemoryLimit(256MB)`. Pyodide: WASM linear memory, backstopped by 30s timeout. No explicit cap — a memory bomb may crash the tab (acceptable: only affects the user who ran the code) |
-| No network access | WASM VM boundary (primary) + browser API neutralization in worker (defense-in-depth) + Pyodide package loading disabled |
-| No filesystem persistence | Fresh worker per execution; VFS in-memory, destroyed on terminate |
-| CPU isolation | Worker runs on separate thread; main thread stays responsive |
-| No DOM access | Web Workers cannot access document, window, localStorage, sessionStorage |
-| Output safety | `{{ }}` text interpolation only — no HTML interpretation of sandbox output |
+| Property                  | Mechanism                                                                                                                                                                                         |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Execution timeout (30s)   | `setTimeout` + `worker.terminate()` on main thread — unconditional                                                                                                                                |
+| Memory limit              | QuickJS: `setMemoryLimit(256MB)`. Pyodide: WASM linear memory, backstopped by 30s timeout. No explicit cap — a memory bomb may crash the tab (acceptable: only affects the user who ran the code) |
+| No network access         | WASM VM boundary (primary) + browser API neutralization in worker (defense-in-depth) + Pyodide package loading disabled                                                                           |
+| No filesystem persistence | Fresh worker per execution; VFS in-memory, destroyed on terminate                                                                                                                                 |
+| CPU isolation             | Worker runs on separate thread; main thread stays responsive                                                                                                                                      |
+| No DOM access             | Web Workers cannot access document, window, localStorage, sessionStorage                                                                                                                          |
+| Output safety             | `{{ }}` text interpolation only — no HTML interpretation of sandbox output                                                                                                                        |
 
 ## Testing Strategy
 
 ### Testability by Layer
 
 **SandboxManager** (`lib/sandbox/manager.ts`):
+
 - Accepts injectable `WorkerFactory` — tests pass a mock that implements `Worker` interface (`postMessage`, `onmessage`, `terminate`)
 - Test cases: timeout enforcement, abort handling, message routing, rapid re-run (abort previous), error propagation
 
 **useCodeRunner composable** (`composables/useCodeRunner.ts`):
+
 - Mock `SandboxManager` module via `vi.mock()`
 - Test reactive state transitions: idle -> loading -> running -> done/error
 - Test output accumulation, truncation at limits, clear
 - Test `onUnmounted` cleanup
 
 **Worker logic** (`lib/sandbox/workers/*.ts`):
+
 - Extract pure logic (message routing, VFS mounting, stdout interception) into testable functions in separate files (e.g., `lib/sandbox/workers/python-runtime.ts`)
 - Unit test the pure functions with WASM parts mocked
 - The thin worker entry point (which just wires message handlers) is covered by SandboxManager integration tests with the mock worker
 
 **Vue components** (CodeRunner, RunButton, ExecutionOutput):
+
 - Standard `@vue/test-utils` with composable mocked
 - Test: supported/unsupported language rendering, button states, output rendering, truncation indicator, disabled tooltip for unsupported languages
 - Test: output uses text interpolation (no v-html) — assert output element's `textContent` matches, not `innerHTML`
 
 **Integration testing** (optional, not required for coverage gate):
+
 - Playwright E2E test with a real browser to verify actual WASM execution works end-to-end
 - Not gated on coverage thresholds since it requires actual CDN access
 
 ## Acceptance Criteria Coverage
 
-| # | Criterion | Satisfied By |
-|---|-----------|-------------|
-| 1 | Sandbox runtime selected and documented | Pyodide, QuickJS, esbuild-wasm — this document |
-| 2 | Supported languages defined (JS/TS, Python) | JavaScript, TypeScript, Python via `SANDBOX_LANGUAGES` constant |
-| 3 | Execution API with language/code/stdin -> stdout/stderr/exit_code/time | `sandboxManager.execute()` — same contract, client-side |
-| 4 | Execution timeout (30s) | `setTimeout` + `worker.terminate()` |
-| 5 | Resource limits (memory, CPU, disk, network) | WASM memory limits, 30s timeout, in-memory VFS, API neutralization |
-| 6 | No network access | WASM VM boundary + worker API neutralization + Pyodide package loading disabled |
-| 7 | No filesystem persistence | Fresh worker per execution |
-| 8 | UI integrated into post detail view | `CodeRunner.vue` in both single-file and multi-file layouts |
-| 9 | Run button triggers execution and displays output | `RunButton.vue` + `ExecutionOutput.vue` |
-| 10 | Streaming output | Worker `postMessage` -> composable reactive array -> real-time UI (capped at 10K lines / 1MB) |
+| #   | Criterion                                                              | Satisfied By                                                                                  |
+| --- | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| 1   | Sandbox runtime selected and documented                                | Pyodide, QuickJS, esbuild-wasm — this document                                                |
+| 2   | Supported languages defined (JS/TS, Python)                            | JavaScript, TypeScript, Python via `SANDBOX_LANGUAGES` constant                               |
+| 3   | Execution API with language/code/stdin -> stdout/stderr/exit_code/time | `sandboxManager.execute()` — same contract, client-side                                       |
+| 4   | Execution timeout (30s)                                                | `setTimeout` + `worker.terminate()`                                                           |
+| 5   | Resource limits (memory, CPU, disk, network)                           | WASM memory limits, 30s timeout, in-memory VFS, API neutralization                            |
+| 6   | No network access                                                      | WASM VM boundary + worker API neutralization + Pyodide package loading disabled               |
+| 7   | No filesystem persistence                                              | Fresh worker per execution                                                                    |
+| 8   | UI integrated into post detail view                                    | `CodeRunner.vue` in both single-file and multi-file layouts                                   |
+| 9   | Run button triggers execution and displays output                      | `RunButton.vue` + `ExecutionOutput.vue`                                                       |
+| 10  | Streaming output                                                       | Worker `postMessage` -> composable reactive array -> real-time UI (capped at 10K lines / 1MB) |
 
 ## File Scope
 
 ### New Files
+
 ```
 packages/client/src/lib/sandbox/languages.ts             — SANDBOX_LANGUAGES constant, isSandboxLanguage guard, extension map
 packages/client/src/lib/sandbox/manager.ts               — SandboxManager with injectable WorkerFactory
@@ -457,11 +491,13 @@ packages/client/src/components/post/ExecutionOutput.vue   — Output display pan
 ```
 
 ### Modified Files
+
 ```
 packages/client/src/components/post/PostDetail.vue        — Add CodeRunner to both layouts
 ```
 
 ### Unchanged
+
 ```
 packages/client/src/components/post/CodeViewer.vue        — No changes
 packages/client/src/components/post/FilePreview.vue       — No changes

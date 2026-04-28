@@ -107,16 +107,7 @@ describe('post file queries', () => {
       });
       expect(mockQuery).toHaveBeenCalledWith(
         `INSERT INTO post_files (post_id, revision_id, filename, content, storage_key, mime_type, sort_order, file_size) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-        [
-          stagedFile.post_id,
-          null,
-          'staged.ts',
-          'const x = 1;',
-          null,
-          'text/typescript',
-          0,
-          42,
-        ],
+        [stagedFile.post_id, null, 'staged.ts', 'const x = 1;', null, 'text/typescript', 0, 42],
       );
       expect(result).toEqual(stagedFile);
     });
@@ -222,10 +213,7 @@ describe('post file queries', () => {
         revision_id: '880e8400-e29b-41d4-a716-446655440000',
       };
       mockQuery.mockResolvedValue({ rows: [carriedFile], rowCount: 1 });
-      const result = await carryForwardFile(
-        sampleFile,
-        '880e8400-e29b-41d4-a716-446655440000',
-      );
+      const result = await carryForwardFile(sampleFile, '880e8400-e29b-41d4-a716-446655440000');
       expect(mockQuery).toHaveBeenCalledWith(
         `INSERT INTO post_files (post_id, revision_id, filename, content, storage_key, mime_type, sort_order, file_size) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
         [

@@ -174,7 +174,11 @@ describe('CodeRunner', () => {
       await flushPromises();
 
       expect(mockRun).toHaveBeenCalledOnce();
-      expect(mockRun).toHaveBeenCalledWith({ language: 'python', files: [{ filename: 'main.py', content: 'print("hello")' }], entryFile: 'main.py' });
+      expect(mockRun).toHaveBeenCalledWith({
+        language: 'python',
+        files: [{ filename: 'main.py', content: 'print("hello")' }],
+        entryFile: 'main.py',
+      });
     });
 
     it('uses correct extension for javascript', async () => {
@@ -190,7 +194,11 @@ describe('CodeRunner', () => {
       await runButton.vm.$emit('run');
       await flushPromises();
 
-      expect(mockRun).toHaveBeenCalledWith({ language: 'javascript', files: [{ filename: 'main.js', content: 'console.log("hi")' }], entryFile: 'main.js' });
+      expect(mockRun).toHaveBeenCalledWith({
+        language: 'javascript',
+        files: [{ filename: 'main.js', content: 'console.log("hi")' }],
+        entryFile: 'main.js',
+      });
     });
 
     it('uses correct extension for typescript', async () => {
@@ -206,7 +214,11 @@ describe('CodeRunner', () => {
       await runButton.vm.$emit('run');
       await flushPromises();
 
-      expect(mockRun).toHaveBeenCalledWith({ language: 'typescript', files: [{ filename: 'main.ts', content: 'const x: number = 1' }], entryFile: 'main.ts' });
+      expect(mockRun).toHaveBeenCalledWith({
+        language: 'typescript',
+        files: [{ filename: 'main.ts', content: 'const x: number = 1' }],
+        entryFile: 'main.ts',
+      });
     });
 
     it('defaults to empty string when singleFileContent is undefined', async () => {
@@ -221,7 +233,11 @@ describe('CodeRunner', () => {
       await runButton.vm.$emit('run');
       await flushPromises();
 
-      expect(mockRun).toHaveBeenCalledWith({ language: 'python', files: [{ filename: 'main.py', content: '' }], entryFile: 'main.py' });
+      expect(mockRun).toHaveBeenCalledWith({
+        language: 'python',
+        files: [{ filename: 'main.py', content: '' }],
+        entryFile: 'main.py',
+      });
     });
   });
 
@@ -292,13 +308,15 @@ describe('CodeRunner', () => {
       expect(mockApiFetch).toHaveBeenCalledTimes(1);
       expect(mockApiFetch).toHaveBeenCalledWith('/api/posts/post-1/files/f1');
 
-      expect(mockRun).toHaveBeenCalledWith({ language: 'python', files: [{ filename: 'main.py', content: 'code1' }], entryFile: 'main.py' });
+      expect(mockRun).toHaveBeenCalledWith({
+        language: 'python',
+        files: [{ filename: 'main.py', content: 'code1' }],
+        entryFile: 'main.py',
+      });
     });
 
     it('treats null mimeType as text (fetches the file)', async () => {
-      const files: PostFile[] = [
-        makeFile({ id: 'f1', filename: 'script.py', mimeType: null }),
-      ];
+      const files: PostFile[] = [makeFile({ id: 'f1', filename: 'script.py', mimeType: null })];
 
       mockApiFetch.mockResolvedValue({ text: () => Promise.resolve('null-mime') });
 
@@ -315,7 +333,11 @@ describe('CodeRunner', () => {
       await flushPromises();
 
       expect(mockApiFetch).toHaveBeenCalledTimes(1);
-      expect(mockRun).toHaveBeenCalledWith({ language: 'python', files: [{ filename: 'script.py', content: 'null-mime' }], entryFile: 'script.py' });
+      expect(mockRun).toHaveBeenCalledWith({
+        language: 'python',
+        files: [{ filename: 'script.py', content: 'null-mime' }],
+        entryFile: 'script.py',
+      });
     });
 
     it('treats application/json as text', async () => {
@@ -338,7 +360,11 @@ describe('CodeRunner', () => {
       await flushPromises();
 
       expect(mockApiFetch).toHaveBeenCalledTimes(1);
-      expect(mockRun).toHaveBeenCalledWith({ language: 'javascript', files: [{ filename: 'data.json', content: '{"a":1}' }], entryFile: 'data.json' });
+      expect(mockRun).toHaveBeenCalledWith({
+        language: 'javascript',
+        files: [{ filename: 'data.json', content: '{"a":1}' }],
+        entryFile: 'data.json',
+      });
     });
 
     it('treats application/javascript as text', async () => {
@@ -361,7 +387,11 @@ describe('CodeRunner', () => {
       await flushPromises();
 
       expect(mockApiFetch).toHaveBeenCalledTimes(1);
-      expect(mockRun).toHaveBeenCalledWith({ language: 'javascript', files: [{ filename: 'lib.js', content: 'var x = 1;' }], entryFile: 'lib.js' });
+      expect(mockRun).toHaveBeenCalledWith({
+        language: 'javascript',
+        files: [{ filename: 'lib.js', content: 'var x = 1;' }],
+        entryFile: 'lib.js',
+      });
     });
 
     it('uses Promise.all for parallel fetches', async () => {
@@ -376,9 +406,7 @@ describe('CodeRunner', () => {
       mockApiFetch.mockImplementation(
         () =>
           new Promise((resolve) => {
-            resolvers.push((content: string) =>
-              resolve({ text: () => Promise.resolve(content) }),
-            );
+            resolvers.push((content: string) => resolve({ text: () => Promise.resolve(content) }));
           }),
       );
 
@@ -460,7 +488,11 @@ describe('CodeRunner', () => {
 
       // Should use multi-file, not single-file
       expect(mockApiFetch).toHaveBeenCalledTimes(1);
-      expect(mockRun).toHaveBeenCalledWith({ language: 'python', files: [{ filename: 'main.py', content: 'file-content' }], entryFile: 'main.py' });
+      expect(mockRun).toHaveBeenCalledWith({
+        language: 'python',
+        files: [{ filename: 'main.py', content: 'file-content' }],
+        entryFile: 'main.py',
+      });
     });
 
     it('uses activeFilename as entryFile when provided', async () => {
@@ -504,7 +536,11 @@ describe('CodeRunner', () => {
       await runButton.vm.$emit('run');
       await flushPromises();
 
-      expect(mockRun).toHaveBeenCalledWith({ language: 'javascript', files: [], entryFile: 'main.js' });
+      expect(mockRun).toHaveBeenCalledWith({
+        language: 'javascript',
+        files: [],
+        entryFile: 'main.js',
+      });
     });
   });
 

@@ -35,9 +35,21 @@ script:pre-request {
   }
 }
 
+assert {
+  res.status: eq 200
+}
+
 script:post-response {
-  // SSE returns text/event-stream; Bruno captures raw body as res.body (string).
-  if (typeof res.body === 'string' && res.body.indexOf('event: done') === -1) {
+  // CI runs with LLM_PROVIDER=mock — ChatMock streams the deterministic
+  // default script ['Hello', ' world', '[done]'] and the SSE handler emits
+  // an `event: done` terminator. Verify both pieces of the wire format.
+  if (typeof res.body !== 'string') {
+    throw new Error('Expected SSE body to be a string, got: ' + typeof res.body);
+  }
+  if (res.body.indexOf('Hello') === -1) {
+    throw new Error('Expected mock-provider SSE to contain "Hello"');
+  }
+  if (res.body.indexOf('event: done') === -1) {
     throw new Error('Expected SSE stream to contain a done event');
   }
 }

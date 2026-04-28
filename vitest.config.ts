@@ -2,6 +2,7 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
+    exclude: ['e2e/**', 'node_modules/**', 'dist/**'],
     coverage: {
       provider: 'v8',
       include: [
@@ -24,6 +25,7 @@ export default defineConfig({
         'packages/shared/src/types/tag.ts',
         'packages/shared/src/types/comment.ts',
         'packages/shared/src/types/file.ts',
+        'packages/shared/src/types/mock-script-keys.ts',
         'packages/shared/src/types/profile.ts',
         'packages/shared/src/validators/index.ts',
         '**/*.config.*',

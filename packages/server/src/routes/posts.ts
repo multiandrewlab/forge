@@ -60,7 +60,7 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
 
     // For link posts, content is optional — default to linkUrl for the revision.
     // After validation: non-link posts always have content, link posts always have linkUrl.
-    const revisionContent = content || parsed.data.linkUrl as string;
+    const revisionContent = content || (parsed.data.linkUrl as string);
 
     const postRow = await createPost({
       authorId: userId,
@@ -269,10 +269,11 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
 
     const feedRow = await findFeedPostById(id);
     if (feedRow) {
-      app.websocket.channels.broadcast(
-        'feed',
-        { type: 'post:updated', channel: 'feed', data: toPostWithAuthor(feedRow) },
-      );
+      app.websocket.channels.broadcast('feed', {
+        type: 'post:updated',
+        channel: 'feed',
+        data: toPostWithAuthor(feedRow),
+      });
     }
 
     return reply.send({ post: toPost(updatedRow) });

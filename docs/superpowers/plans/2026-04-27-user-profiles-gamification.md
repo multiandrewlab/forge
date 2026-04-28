@@ -14,45 +14,46 @@
 
 ### New Files
 
-| File | Responsibility |
-|------|---------------|
-| `packages/shared/src/types/profile.ts` | UserProfile, UserStats, UserBadge TypeScript interfaces |
-| `packages/server/src/db/queries/user-profiles.ts` | SQL queries: post count, total votes, top tags, top contributors, tag experts |
-| `packages/server/src/services/user-profiles.ts` | Transform DB rows → DTOs, assemble badge list |
-| `packages/server/src/routes/user-profiles.ts` | `GET /api/users/:id` endpoint |
-| `packages/client/src/composables/useUserProfile.ts` | Data-fetching composable for user profiles |
-| `packages/client/src/components/user/UserBadge.vue` | Badge pill with icon + tooltip |
-| `packages/client/src/components/user/UserStats.vue` | Three stat cards (posts, votes, top tags) |
-| `packages/client/src/pages/UserProfilePage.vue` | Full profile page layout |
-| `packages/server/src/__tests__/db/queries/user-profiles.test.ts` | Query unit tests |
-| `packages/server/src/__tests__/services/user-profiles.test.ts` | Service unit tests |
-| `packages/server/src/__tests__/routes/user-profiles.test.ts` | Route integration tests |
-| `packages/client/src/__tests__/composables/useUserProfile.test.ts` | Composable tests |
-| `packages/client/src/__tests__/components/user/UserBadge.test.ts` | Badge component tests |
-| `packages/client/src/__tests__/components/user/UserStats.test.ts` | Stats component tests |
-| `packages/client/src/__tests__/pages/UserProfilePage.test.ts` | Profile page tests |
-| `bruno/users/get-user-profile.bru` | Bruno API test for GET /api/users/:id |
-| `bruno/users/get-user-profile-not-found.bru` | Bruno API test for 404 case |
+| File                                                               | Responsibility                                                                |
+| ------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| `packages/shared/src/types/profile.ts`                             | UserProfile, UserStats, UserBadge TypeScript interfaces                       |
+| `packages/server/src/db/queries/user-profiles.ts`                  | SQL queries: post count, total votes, top tags, top contributors, tag experts |
+| `packages/server/src/services/user-profiles.ts`                    | Transform DB rows → DTOs, assemble badge list                                 |
+| `packages/server/src/routes/user-profiles.ts`                      | `GET /api/users/:id` endpoint                                                 |
+| `packages/client/src/composables/useUserProfile.ts`                | Data-fetching composable for user profiles                                    |
+| `packages/client/src/components/user/UserBadge.vue`                | Badge pill with icon + tooltip                                                |
+| `packages/client/src/components/user/UserStats.vue`                | Three stat cards (posts, votes, top tags)                                     |
+| `packages/client/src/pages/UserProfilePage.vue`                    | Full profile page layout                                                      |
+| `packages/server/src/__tests__/db/queries/user-profiles.test.ts`   | Query unit tests                                                              |
+| `packages/server/src/__tests__/services/user-profiles.test.ts`     | Service unit tests                                                            |
+| `packages/server/src/__tests__/routes/user-profiles.test.ts`       | Route integration tests                                                       |
+| `packages/client/src/__tests__/composables/useUserProfile.test.ts` | Composable tests                                                              |
+| `packages/client/src/__tests__/components/user/UserBadge.test.ts`  | Badge component tests                                                         |
+| `packages/client/src/__tests__/components/user/UserStats.test.ts`  | Stats component tests                                                         |
+| `packages/client/src/__tests__/pages/UserProfilePage.test.ts`      | Profile page tests                                                            |
+| `bruno/users/get-user-profile.bru`                                 | Bruno API test for GET /api/users/:id                                         |
+| `bruno/users/get-user-profile-not-found.bru`                       | Bruno API test for 404 case                                                   |
 
 ### Modified Files
 
-| File | Change |
-|------|--------|
-| `packages/shared/src/types/index.ts` | Export new profile types |
-| `packages/server/src/db/queries/index.ts` | Export user-profiles queries |
-| `packages/server/src/app.ts` | Register userProfileRoutes at `/api/users` |
-| `packages/client/src/plugins/router.ts` | Add `user/:id` child route under AppLayout |
-| `packages/client/src/components/post/PostListItem.vue` | Wrap author avatar+name in `RouterLink` to `/user/:id` |
-| `packages/client/src/components/post/PostMetaHeader.vue` | Wrap author avatar+name in `RouterLink` to `/user/:id` |
-| `packages/client/src/components/post/CommentThread.vue` | Wrap author name in `RouterLink` to `/user/:id` |
+| File                                                          | Change                                                 |
+| ------------------------------------------------------------- | ------------------------------------------------------ |
+| `packages/shared/src/types/index.ts`                          | Export new profile types                               |
+| `packages/server/src/db/queries/index.ts`                     | Export user-profiles queries                           |
+| `packages/server/src/app.ts`                                  | Register userProfileRoutes at `/api/users`             |
+| `packages/client/src/plugins/router.ts`                       | Add `user/:id` child route under AppLayout             |
+| `packages/client/src/components/post/PostListItem.vue`        | Wrap author avatar+name in `RouterLink` to `/user/:id` |
+| `packages/client/src/components/post/PostMetaHeader.vue`      | Wrap author avatar+name in `RouterLink` to `/user/:id` |
+| `packages/client/src/components/post/CommentThread.vue`       | Wrap author name in `RouterLink` to `/user/:id`        |
 | `packages/client/src/components/history/RevisionTimeline.vue` | Wrap author avatar+name in `RouterLink` to `/user/:id` |
-| `bruno/environments/local.bru` | Add `testuser` variable with seeded UUID |
+| `bruno/environments/local.bru`                                | Add `testuser` variable with seeded UUID               |
 
 ---
 
 ## Task 1: Shared Types
 
 **Files:**
+
 - Create: `packages/shared/src/types/profile.ts`
 - Modify: `packages/shared/src/types/index.ts`
 
@@ -127,6 +128,7 @@ git commit -m "feat: add shared types for user profile, stats, and badges"
 ## Task 2: Database Queries
 
 **Files:**
+
 - Create: `packages/server/src/db/queries/user-profiles.ts`
 - Create: `packages/server/src/__tests__/db/queries/user-profiles.test.ts`
 - Modify: `packages/server/src/db/queries/index.ts`
@@ -163,10 +165,7 @@ describe('user-profiles queries', () => {
       mockQuery.mockResolvedValue({ rows: [{ count: '5' }] });
       const result = await getUserPostCount(userId);
       expect(result).toBe(5);
-      expect(mockQuery).toHaveBeenCalledWith(
-        expect.stringContaining('visibility'),
-        [userId],
-      );
+      expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining('visibility'), [userId]);
     });
 
     it('returns 0 when user has no posts', async () => {
@@ -233,9 +232,7 @@ describe('user-profiles queries', () => {
       mockQuery.mockResolvedValue({ rows: [] });
       const result = await getTopContributors();
       expect(result).toEqual([]);
-      expect(mockQuery).toHaveBeenCalledWith(
-        expect.stringContaining('HAVING'),
-      );
+      expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining('HAVING'));
     });
   });
 
@@ -245,10 +242,7 @@ describe('user-profiles queries', () => {
         rows: [{ tag_name: 'typescript' }, { tag_name: 'node' }],
       });
       const result = await getTagExperts(userId);
-      expect(result).toEqual([
-        { tag_name: 'typescript' },
-        { tag_name: 'node' },
-      ]);
+      expect(result).toEqual([{ tag_name: 'typescript' }, { tag_name: 'node' }]);
     });
 
     it('returns empty array when user has no expert tags', async () => {
@@ -467,6 +461,7 @@ git commit -m "feat: add database queries for user profile stats and badges"
 ## Task 3: User Profile Service
 
 **Files:**
+
 - Create: `packages/server/src/services/user-profiles.ts`
 - Create: `packages/server/src/__tests__/services/user-profiles.test.ts`
 
@@ -484,10 +479,7 @@ import {
   getUserPublicPosts,
 } from '../../db/queries/user-profiles.js';
 import { findUserById } from '../../db/queries/users.js';
-import {
-  buildUserProfile,
-  toUserProfilePost,
-} from '../../services/user-profiles.js';
+import { buildUserProfile, toUserProfilePost } from '../../services/user-profiles.js';
 import type { UserRow } from '../../db/queries/types.js';
 import type { UserPublicPostRow } from '../../db/queries/user-profiles.js';
 
@@ -579,9 +571,7 @@ describe('user-profiles service', () => {
       mockFindUserById.mockResolvedValue(sampleUserRow);
       mockGetUserPostCount.mockResolvedValue(10);
       mockGetUserTotalVotes.mockResolvedValue(42);
-      mockGetUserTopTags.mockResolvedValue([
-        { tag_name: 'typescript', vote_sum: 20 },
-      ]);
+      mockGetUserTopTags.mockResolvedValue([{ tag_name: 'typescript', vote_sum: 20 }]);
       mockGetTopContributors.mockResolvedValue([
         { author_id: userId, total_votes: 100 },
         { author_id: 'other-1', total_votes: 80 },
@@ -607,9 +597,7 @@ describe('user-profiles service', () => {
       expect(result!.user.avatarUrl).toBe('https://example.com/alice.jpg');
       expect(result!.stats.postCount).toBe(10);
       expect(result!.stats.totalVotes).toBe(42);
-      expect(result!.stats.topTags).toEqual([
-        { tagName: 'typescript', voteSum: 20 },
-      ]);
+      expect(result!.stats.topTags).toEqual([{ tagName: 'typescript', voteSum: 20 }]);
       expect(result!.badges).toEqual([
         { type: 'top_contributor', label: '#1 Contributor', rank: 1 },
         { type: 'tag_expert', label: 'Expert in typescript' },
@@ -735,11 +723,7 @@ import {
   getUserPublicPosts,
 } from '../db/queries/user-profiles.js';
 import type { UserPublicPostRow } from '../db/queries/user-profiles.js';
-import type {
-  UserProfileResponse,
-  UserProfileBadge,
-  UserProfilePost,
-} from '@forge/shared';
+import type { UserProfileResponse, UserProfileBadge, UserProfilePost } from '@forge/shared';
 
 export function toUserProfilePost(row: UserPublicPostRow): UserProfilePost {
   return {
@@ -834,6 +818,7 @@ git commit -m "feat: add user profile service with stats and badge computation"
 ## Task 4: User Profile Route
 
 **Files:**
+
 - Create: `packages/server/src/routes/user-profiles.ts`
 - Create: `packages/server/src/__tests__/routes/user-profiles.test.ts`
 - Modify: `packages/server/src/app.ts`
@@ -1047,13 +1032,15 @@ export async function userProfileRoutes(app: FastifyInstance): Promise<void> {
 Add import and registration to `packages/server/src/app.ts`:
 
 Import line (add after existing route imports):
+
 ```typescript
 import { userProfileRoutes } from './routes/user-profiles.js';
 ```
 
 Registration (add after existing route registrations, before the `onReady` hook):
+
 ```typescript
-  await app.register(userProfileRoutes, { prefix: '/api/users' });
+await app.register(userProfileRoutes, { prefix: '/api/users' });
 ```
 
 - [ ] **Step 5: Run tests to verify they pass**
@@ -1078,6 +1065,7 @@ git commit -m "feat: add GET /api/users/:id endpoint with stats and badges"
 ## Task 5: UserBadge Component
 
 **Files:**
+
 - Create: `packages/client/src/components/user/UserBadge.vue`
 - Create: `packages/client/src/__tests__/components/user/UserBadge.test.ts`
 
@@ -1203,7 +1191,7 @@ const rankColors: Record<number, string> = {
 
 const iconColor = computed(() =>
   props.badge.type === 'top_contributor' && props.badge.rank
-    ? rankColors[props.badge.rank] ?? 'text-yellow-400'
+    ? (rankColors[props.badge.rank] ?? 'text-yellow-400')
     : '',
 );
 
@@ -1238,6 +1226,7 @@ git commit -m "feat: add UserBadge component with rank colors and tooltips"
 ## Task 6: UserStats Component
 
 **Files:**
+
 - Create: `packages/client/src/components/user/UserStats.vue`
 - Create: `packages/client/src/__tests__/components/user/UserStats.test.ts`
 
@@ -1385,6 +1374,7 @@ git commit -m "feat: add UserStats component with post count, votes, and top tag
 ## Task 7: useUserProfile Composable + UserProfilePage
 
 **Files:**
+
 - Create: `packages/client/src/composables/useUserProfile.ts`
 - Create: `packages/client/src/__tests__/composables/useUserProfile.test.ts`
 - Create: `packages/client/src/pages/UserProfilePage.vue`
@@ -1576,9 +1566,7 @@ export function useUserProfile() {
     error.value = null;
     try {
       const cursor = encodeURIComponent(profile.value.cursor);
-      const response = await apiFetch(
-        `/api/users/${currentUserId}?limit=20&cursor=${cursor}`,
-      );
+      const response = await apiFetch(`/api/users/${currentUserId}?limit=20&cursor=${cursor}`);
       if (!response.ok) {
         const data = (await response.json().catch(() => ({}))) as { error?: string };
         error.value = data.error ?? 'Failed to load more posts';
@@ -1962,6 +1950,7 @@ git commit -m "feat: add UserProfilePage with composable and routing"
 ## Task 8: Clickable Avatars
 
 **Files:**
+
 - Modify: `packages/client/src/components/post/PostListItem.vue`
 - Modify: `packages/client/src/components/post/PostMetaHeader.vue`
 - Modify: `packages/client/src/components/post/CommentThread.vue`
@@ -1975,11 +1964,11 @@ In `packages/client/src/components/post/PostListItem.vue`, the avatar and author
 Replace the avatar+name `div` in the template (lines 8-14):
 
 ```vue
-      <RouterLink
-        :to="{ name: 'user-profile', params: { id: post.author.id } }"
-        class="flex items-center gap-2"
-        @click.stop
-      >
+<RouterLink
+  :to="{ name: 'user-profile', params: { id: post.author.id } }"
+  class="flex items-center gap-2"
+  @click.stop
+>
         <div
           class="flex h-6 w-6 items-center justify-center rounded-full bg-primary/20 text-xs text-primary"
         >
@@ -2000,10 +1989,10 @@ import { RouterLink, useRouter } from 'vue-router';
 In `packages/client/src/components/post/PostMetaHeader.vue`, wrap the avatar and author name section (lines 4-13) in a `RouterLink`:
 
 ```vue
-    <RouterLink
-      :to="{ name: 'user-profile', params: { id: post.author.id } }"
-      class="flex items-center gap-3"
-    >
+<RouterLink
+  :to="{ name: 'user-profile', params: { id: post.author.id } }"
+  class="flex items-center gap-3"
+>
       <div
         class="flex h-8 w-8 items-center justify-center rounded-full bg-primary/20 text-sm font-bold text-primary"
       >
@@ -2025,14 +2014,14 @@ In `packages/client/src/components/post/PostMetaHeader.vue`, wrap the avatar and
 In `packages/client/src/components/post/CommentThread.vue`, wrap the author display name (line 7) in a `RouterLink`:
 
 ```vue
-          <RouterLink
-            v-if="node.author"
-            :to="{ name: 'user-profile', params: { id: node.author.id } }"
-            class="font-medium text-gray-300 hover:text-white"
-          >
+<RouterLink
+  v-if="node.author"
+  :to="{ name: 'user-profile', params: { id: node.author.id } }"
+  class="font-medium text-gray-300 hover:text-white"
+>
             {{ node.author.displayName }}
           </RouterLink>
-          <span v-else class="font-medium text-gray-300">Deleted user</span>
+<span v-else class="font-medium text-gray-300">Deleted user</span>
 ```
 
 Add `RouterLink` import:
@@ -2048,12 +2037,12 @@ In `packages/client/src/components/history/RevisionTimeline.vue`, wrap the autho
 Replace the author avatar `div` (lines 19-30) with:
 
 ```vue
-      <RouterLink
-        v-if="rev.authorId"
-        :to="{ name: 'user-profile', params: { id: rev.authorId } }"
-        class="flex-shrink-0"
-        @click.stop
-      >
+<RouterLink
+  v-if="rev.authorId"
+  :to="{ name: 'user-profile', params: { id: rev.authorId } }"
+  class="flex-shrink-0"
+  @click.stop
+>
         <div
           data-testid="author-avatar"
           class="flex h-7 w-7 items-center justify-center rounded-full bg-gray-600 text-xs text-gray-200"
@@ -2067,11 +2056,11 @@ Replace the author avatar `div` (lines 19-30) with:
           <template v-else>{{ getInitials(rev.authorDisplayName) }}</template>
         </div>
       </RouterLink>
-      <div
-        v-else
-        data-testid="author-avatar"
-        class="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-gray-600 text-xs text-gray-200"
-      >
+<div
+  v-else
+  data-testid="author-avatar"
+  class="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-gray-600 text-xs text-gray-200"
+>
         {{ getInitials(rev.authorDisplayName) }}
       </div>
 ```
@@ -2079,15 +2068,15 @@ Replace the author avatar `div` (lines 19-30) with:
 Replace the author name paragraph (line 49) with:
 
 ```vue
-        <RouterLink
-          v-if="rev.authorId"
-          :to="{ name: 'user-profile', params: { id: rev.authorId } }"
-          class="mt-0.5 text-xs text-gray-400 hover:text-gray-200"
-          @click.stop
-        >
+<RouterLink
+  v-if="rev.authorId"
+  :to="{ name: 'user-profile', params: { id: rev.authorId } }"
+  class="mt-0.5 text-xs text-gray-400 hover:text-gray-200"
+  @click.stop
+>
           {{ rev.authorDisplayName ?? 'Unknown' }}
         </RouterLink>
-        <p v-else class="mt-0.5 text-xs text-gray-400">
+<p v-else class="mt-0.5 text-xs text-gray-400">
           {{ rev.authorDisplayName ?? 'Unknown' }}
         </p>
 ```
@@ -2109,7 +2098,11 @@ Tests for PostListItem, PostMetaHeader, CommentThread, and RevisionTimeline that
 Or stub `RouterLink` for tests that don't need navigation:
 
 ```typescript
-global: { stubs: { RouterLink: true } }
+global: {
+  stubs: {
+    RouterLink: true;
+  }
+}
 ```
 
 - [ ] **Step 6: Run affected component tests**
@@ -2130,6 +2123,7 @@ git commit -m "feat: make user avatars clickable links to profile page"
 ## Task 9: Bruno API Tests
 
 **Files:**
+
 - Create: `bruno/users/get-user-profile.bru`
 - Create: `bruno/users/get-user-profile-not-found.bru`
 
@@ -2233,6 +2227,7 @@ Expected: 100% lines, branches, functions, statements (matches `.coverage-thresh
 - [ ] **Step 3: Fix any coverage gaps**
 
 If any uncovered branches or lines are found, add targeted tests. Common gaps:
+
 - Unreachable default branches (remove if unreachable)
 - Error handling paths (add tests that trigger them)
 - Edge cases in date formatting or null handling

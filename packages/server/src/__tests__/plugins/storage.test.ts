@@ -222,11 +222,9 @@ describe('MinioStorage', () => {
         Bucket: 'test-bucket',
         Key: 'my/file.txt',
       });
-      expect(getSignedUrlMock).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.any(Object),
-        { expiresIn: 3600 },
-      );
+      expect(getSignedUrlMock).toHaveBeenCalledWith(expect.anything(), expect.any(Object), {
+        expiresIn: 3600,
+      });
       expect(url).toBe('https://signed-url.example.com/file');
     });
 
@@ -235,11 +233,9 @@ describe('MinioStorage', () => {
 
       await storage.getSignedUrl('another/file.txt', 600);
 
-      expect(getSignedUrlMock).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.any(Object),
-        { expiresIn: 600 },
-      );
+      expect(getSignedUrlMock).toHaveBeenCalledWith(expect.anything(), expect.any(Object), {
+        expiresIn: 600,
+      });
     });
   });
 

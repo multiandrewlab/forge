@@ -1,7 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import Fastify from 'fastify';
 import fp from 'fastify-plugin';
 import { langchainPlugin } from '../../../plugins/langchain/index.js';
+import { mockScriptStorage } from '../../../plugins/langchain/mock-provider.js';
 
 // Dummy authenticate that attaches a fixed user
 const fakeAuth = async (req: { user?: unknown }) => {
@@ -146,6 +147,76 @@ describe('langchainPlugin', () => {
 
     // Clean up remaining stashed slots
     for (const s of stashedSlots) s.release();
+    await app.close();
+  });
+});
+
+describe('mockScriptHeaderHook', () => {
+  const originalProvider = process.env.LLM_PROVIDER;
+  const originalNodeEnv = process.env.NODE_ENV;
+
+  afterEach(() => {
+    if (originalProvider === undefined) {
+      delete process.env.LLM_PROVIDER;
+    } else {
+      process.env.LLM_PROVIDER = originalProvider;
+    }
+    if (originalNodeEnv === undefined) {
+      delete process.env.NODE_ENV;
+    } else {
+      process.env.NODE_ENV = originalNodeEnv;
+    }
+    // Clear any AsyncLocalStorage state that leaked from enterWith() in test handlers
+    mockScriptStorage.disable();
+  });
+
+  it('threads X-Mock-Script header through mockScriptStorage when LLM_PROVIDER=mock', async () => {
+    process.env.LLM_PROVIDER = 'mock';
+    process.env.NODE_ENV = 'test';
+
+    const app = Fastify();
+    await app.register(fakeAuthPlugin);
+    await app.register(langchainPlugin);
+
+    let observed: string | undefined;
+    app.get('/__test_observe', async () => {
+      observed = mockScriptStorage.getStore();
+      return { ok: true };
+    });
+
+    await app.ready();
+    const res = await app.inject({
+      method: 'GET',
+      url: '/__test_observe',
+      headers: { 'x-mock-script': 'autocomplete-typescript-react' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(observed).toBe('autocomplete-typescript-react');
+    await app.close();
+  });
+
+  it('does not register the hook when LLM_PROVIDER is not mock', async () => {
+    process.env.LLM_PROVIDER = 'openai';
+    process.env.NODE_ENV = 'test';
+
+    const app = Fastify();
+    await app.register(fakeAuthPlugin);
+    await app.register(langchainPlugin);
+
+    let observed: string | undefined = 'sentinel';
+    app.get('/__test_observe', async () => {
+      observed = mockScriptStorage.getStore();
+      return { ok: true };
+    });
+
+    await app.ready();
+    const res = await app.inject({
+      method: 'GET',
+      url: '/__test_observe',
+      headers: { 'x-mock-script': 'autocomplete-typescript-react' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(observed).toBeUndefined();
     await app.close();
   });
 });

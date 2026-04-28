@@ -76,9 +76,7 @@ export function parseOpenGraph(html: string): LinkPreview | null {
   const $ = cheerio.load(html);
 
   const title =
-    $('meta[property="og:title"]').attr('content')?.trim() ||
-    $('title').text().trim() ||
-    null;
+    $('meta[property="og:title"]').attr('content')?.trim() || $('title').text().trim() || null;
 
   if (!title) return null;
 
@@ -187,7 +185,10 @@ export async function fetchLinkPreview(url: string): Promise<LinkPreview | null>
 
         // Re-check DNS for the redirect target
         if (!(await dnsCheck(nextUrl.hostname))) {
-          console.warn('[link-preview]', `DNS check failed for redirect target ${nextUrl.hostname}`);
+          console.warn(
+            '[link-preview]',
+            `DNS check failed for redirect target ${nextUrl.hostname}`,
+          );
           return null;
         }
 

@@ -31,10 +31,7 @@ interface QuickJSHandle {
 interface QuickJSContext {
   runtime: QuickJSRuntime;
   newString(value: string): QuickJSHandle;
-  newFunction(
-    name: string,
-    fn: (...args: QuickJSHandle[]) => void,
-  ): QuickJSHandle;
+  newFunction(name: string, fn: (...args: QuickJSHandle[]) => void): QuickJSHandle;
   getString(handle: QuickJSHandle): string;
   getProp(handle: QuickJSHandle, key: string): QuickJSHandle;
   setProp(handle: QuickJSHandle, key: string, value: QuickJSHandle): void;
@@ -67,10 +64,7 @@ async function transpileTypeScript(code: string): Promise<string> {
     'esbuild-wasm'
   )) as {
     initialize: (opts: { wasmURL: string }) => Promise<void>;
-    transform: (
-      code: string,
-      opts: { loader: string },
-    ) => Promise<{ code: string }>;
+    transform: (code: string, opts: { loader: string }) => Promise<{ code: string }>;
   };
 
   await esbuild.initialize({
@@ -81,10 +75,7 @@ async function transpileTypeScript(code: string): Promise<string> {
   return result.code;
 }
 
-function formatHandleArgs(
-  ctx: QuickJSContext,
-  args: QuickJSHandle[],
-): string {
+function formatHandleArgs(ctx: QuickJSContext, args: QuickJSHandle[]): string {
   const parts = args.map((a) => {
     try {
       return JSON.stringify(ctx.dump(a));
@@ -151,9 +142,7 @@ self.onmessage = async (event: MessageEvent<ExecuteMessage>) => {
     // Mount VFS files via module loader
     // Files are made available as global __files for require()-like access
     const filesJson = ctx.newString(
-      JSON.stringify(
-        Object.fromEntries(files.map((f) => [f.name, f.content])),
-      ),
+      JSON.stringify(Object.fromEntries(files.map((f) => [f.name, f.content]))),
     );
     ctx.setProp(ctx.global, '__filesJson', filesJson);
     filesJson.dispose();

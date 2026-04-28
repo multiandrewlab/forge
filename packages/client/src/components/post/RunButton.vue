@@ -26,13 +26,7 @@
       viewBox="0 0 24 24"
       stroke="currentColor"
     >
-      <circle
-        cx="12"
-        cy="12"
-        r="10"
-        stroke-width="4"
-        class="opacity-25"
-      />
+      <circle cx="12" cy="12" r="10" stroke-width="4" class="opacity-25" />
       <path
         class="opacity-75"
         fill="currentColor"
@@ -48,13 +42,7 @@
       fill="currentColor"
       viewBox="0 0 24 24"
     >
-      <rect
-        x="6"
-        y="6"
-        width="12"
-        height="12"
-        rx="1"
-      />
+      <rect x="6" y="6" width="12" height="12" rx="1" />
     </svg>
   </button>
 </template>

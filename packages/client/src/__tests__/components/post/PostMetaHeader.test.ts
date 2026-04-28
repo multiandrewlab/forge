@@ -83,8 +83,7 @@ describe('PostMetaHeader', () => {
     function findAuthorLink(wrapper: ReturnType<typeof mount>) {
       const links = wrapper.findAllComponents(RouterLinkStub);
       const found = links.find(
-        (l) =>
-          (l.props('to') as { name: string; params: { id: string } }).name === 'user-profile',
+        (l) => (l.props('to') as { name: string; params: { id: string } }).name === 'user-profile',
       );
       if (!found) throw new Error('Author RouterLink not found');
       return found;
@@ -164,8 +163,7 @@ describe('PostMetaHeader', () => {
 
       const links = wrapper.findAllComponents(RouterLinkStub);
       const forkLink = links.find(
-        (l) =>
-          (l.props('to') as { name: string; params: { id: string } }).name === 'post-view',
+        (l) => (l.props('to') as { name: string; params: { id: string } }).name === 'post-view',
       );
       if (!forkLink) throw new Error('Fork RouterLink not found');
       expect(forkLink.props('to')).toEqual({
@@ -183,8 +181,7 @@ describe('PostMetaHeader', () => {
 
       const links = wrapper.findAllComponents(RouterLinkStub);
       const forkLink = links.find(
-        (l) =>
-          (l.props('to') as { name: string; params: { id: string } }).name === 'post-view',
+        (l) => (l.props('to') as { name: string; params: { id: string } }).name === 'post-view',
       );
       expect(forkLink).toBeUndefined();
     });

@@ -115,9 +115,8 @@ export async function findStaleStagedFiles(): Promise<PostFileRow[]> {
 
 export async function deleteStagedFilesByIds(ids: string[]): Promise<number> {
   if (ids.length === 0) return 0;
-  const result = await query(
-    'DELETE FROM post_files WHERE id = ANY($1) AND revision_id IS NULL',
-    [ids],
-  );
+  const result = await query('DELETE FROM post_files WHERE id = ANY($1) AND revision_id IS NULL', [
+    ids,
+  ]);
   return result.rowCount ?? 0;
 }

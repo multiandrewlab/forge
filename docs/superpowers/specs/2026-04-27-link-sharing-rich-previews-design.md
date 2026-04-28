@@ -10,13 +10,13 @@ When a user creates a post with `content_type='link'`, the server synchronously 
 
 ## Design Decisions
 
-| Decision | Choice | Rationale |
-|---|---|---|
-| Fetch timing | Synchronous on create | Simplest for MVP; 5s worst-case only hits creator once |
-| Manual refresh | `POST /api/posts/:id/refresh-preview` | Clean dedicated endpoint, author-only |
-| HTML parsing | `cheerio` | Industry standard, handles malformed HTML, focused API |
-| SSRF approach | DNS pre-check (no TOCTOU closure) | Pragmatic for internal tool; TOCTOU gap is tiny and requires attacker-controlled DNS |
-| Service structure | Single `link-preview.ts` file | Linear pipeline; splitting adds indirection without benefit at this scale |
+| Decision          | Choice                                | Rationale                                                                            |
+| ----------------- | ------------------------------------- | ------------------------------------------------------------------------------------ |
+| Fetch timing      | Synchronous on create                 | Simplest for MVP; 5s worst-case only hits creator once                               |
+| Manual refresh    | `POST /api/posts/:id/refresh-preview` | Clean dedicated endpoint, author-only                                                |
+| HTML parsing      | `cheerio`                             | Industry standard, handles malformed HTML, focused API                               |
+| SSRF approach     | DNS pre-check (no TOCTOU closure)     | Pragmatic for internal tool; TOCTOU gap is tiny and requires attacker-controlled DNS |
+| Service structure | Single `link-preview.ts` file         | Linear pipeline; splitting adds indirection without benefit at this scale            |
 
 ## Section 1: Link Preview Service
 
@@ -53,12 +53,12 @@ fe80::/10         IPv6 link-local
 
 ### OG Tag Extraction
 
-| OG Tag | Fallback | Notes |
-|---|---|---|
-| `og:title` | `<title>` tag | Required for non-null preview |
-| `og:description` | `meta[name="description"]` | Optional |
-| `og:image` | None | Must be `https://`; set to `null` if not |
-| Reading time | Computed | Strip HTML → count words → `Math.ceil(words / 200)` |
+| OG Tag           | Fallback                   | Notes                                               |
+| ---------------- | -------------------------- | --------------------------------------------------- |
+| `og:title`       | `<title>` tag              | Required for non-null preview                       |
+| `og:description` | `meta[name="description"]` | Optional                                            |
+| `og:image`       | None                       | Must be `https://`; set to `null` if not            |
+| Reading time     | Computed                   | Strip HTML → count words → `Math.ceil(words / 200)` |
 
 ### Fetch Constraints
 
@@ -81,6 +81,7 @@ DNS is resolved before `fetch()` connects. A DNS rebinding attack could theoreti
 ### Modify `POST /api/posts`
 
 When `contentType === 'link'`:
+
 1. Require `linkUrl` in request body (Zod: `z.string().url()` conditional on content type)
 2. Call `fetchLinkPreview(linkUrl)` before inserting
 3. Insert post row with `link_preview` populated (single INSERT, not insert-then-update)
@@ -105,12 +106,14 @@ Add conditional validation: when `contentType === 'link'`, `linkUrl` is required
 ### LinkPreviewCard (`packages/client/src/components/post/LinkPreviewCard.vue`)
 
 **With OG data — horizontal card layout:**
+
 - Left: thumbnail image (120px wide, lazy-loaded, gradient placeholder on error)
 - Right: title (single line, ellipsis), description (2-line clamp), reading time + domain
 - Entire card clickable → opens `link_url` in new tab (`target="_blank" rel="noopener"`)
 - Post author sees a refresh button that calls `POST /api/posts/:id/refresh-preview`
 
 **Fallback (linkPreview is null):**
+
 - Simple clickable URL text with external link icon
 - Styled as a subtle bordered row
 
@@ -161,6 +164,7 @@ All tests must achieve 100% coverage (lines, branches, functions, statements) pe
 ### Bruno API Tests
 
 New `.bru` files in `bruno/posts/`:
+
 - Create link post (happy path) — assert 201
 - Create link post missing `linkUrl` — assert 400
 - Refresh link preview (author) — assert 200
@@ -170,18 +174,18 @@ New `.bru` files in `bruno/posts/`:
 
 **Principle:** The link preview is an enhancement, never a gate. Every failure results in the post being created with `linkPreview: null`.
 
-| Scenario | Result |
-|---|---|
-| Non-https URL submitted | Zod validation rejects at request level (400) |
-| DNS resolution fails | `linkPreview = null`, post created |
-| IP resolves to blocked range | `linkPreview = null`, post created |
-| Fetch times out (>5s) | `linkPreview = null`, post created |
-| Response body >1MB | Abort read, `linkPreview = null`, post created |
-| >3 redirects | Abort, `linkPreview = null`, post created |
-| Redirect to blocked IP | Abort, `linkPreview = null`, post created |
-| HTML has no OG tags | Fallback to `<title>` / `meta[name="description"]`; if none, `linkPreview = null` |
-| `og:image` is non-https | `image = null`, rest of preview still populated |
-| Cheerio fails to parse | `linkPreview = null`, post created |
+| Scenario                     | Result                                                                            |
+| ---------------------------- | --------------------------------------------------------------------------------- |
+| Non-https URL submitted      | Zod validation rejects at request level (400)                                     |
+| DNS resolution fails         | `linkPreview = null`, post created                                                |
+| IP resolves to blocked range | `linkPreview = null`, post created                                                |
+| Fetch times out (>5s)        | `linkPreview = null`, post created                                                |
+| Response body >1MB           | Abort read, `linkPreview = null`, post created                                    |
+| >3 redirects                 | Abort, `linkPreview = null`, post created                                         |
+| Redirect to blocked IP       | Abort, `linkPreview = null`, post created                                         |
+| HTML has no OG tags          | Fallback to `<title>` / `meta[name="description"]`; if none, `linkPreview = null` |
+| `og:image` is non-https      | `image = null`, rest of preview still populated                                   |
+| Cheerio fails to parse       | `linkPreview = null`, post created                                                |
 
 **Logging:** All failures logged server-side at `warn` level with URL and reason. No response bodies logged.
 
@@ -189,15 +193,15 @@ New `.bru` files in `bruno/posts/`:
 
 ## File Scope
 
-| File | Action |
-|---|---|
-| `packages/server/src/services/link-preview.ts` | New — OG fetch + SSRF protection |
-| `packages/server/src/routes/posts.ts` | Modify — integrate link preview on create, add refresh endpoint |
-| `packages/client/src/components/post/LinkPreviewCard.vue` | New — preview card component |
-| `packages/client/src/components/post/PostListItem.vue` | Modify — link icon for link posts |
-| `packages/shared/src/validators/post.ts` | Modify — conditional `linkUrl` requirement |
-| `packages/server/src/__tests__/services/link-preview.test.ts` | New — service unit tests |
-| `packages/server/src/__tests__/routes/posts.test.ts` | Modify — add link post route tests |
-| `packages/client/src/components/post/__tests__/LinkPreviewCard.test.ts` | New — component tests |
-| `packages/client/src/components/post/__tests__/PostListItem.test.ts` | Modify — link icon test |
-| `bruno/posts/` | New — Bruno API tests for link endpoints |
+| File                                                                    | Action                                                          |
+| ----------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `packages/server/src/services/link-preview.ts`                          | New — OG fetch + SSRF protection                                |
+| `packages/server/src/routes/posts.ts`                                   | Modify — integrate link preview on create, add refresh endpoint |
+| `packages/client/src/components/post/LinkPreviewCard.vue`               | New — preview card component                                    |
+| `packages/client/src/components/post/PostListItem.vue`                  | Modify — link icon for link posts                               |
+| `packages/shared/src/validators/post.ts`                                | Modify — conditional `linkUrl` requirement                      |
+| `packages/server/src/__tests__/services/link-preview.test.ts`           | New — service unit tests                                        |
+| `packages/server/src/__tests__/routes/posts.test.ts`                    | Modify — add link post route tests                              |
+| `packages/client/src/components/post/__tests__/LinkPreviewCard.test.ts` | New — component tests                                           |
+| `packages/client/src/components/post/__tests__/PostListItem.test.ts`    | Modify — link icon test                                         |
+| `bruno/posts/`                                                          | New — Bruno API tests for link endpoints                        |

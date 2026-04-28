@@ -36,8 +36,7 @@ type LoadPyodideFn = (options: {
   stderr: (text: string) => void;
 }) => Promise<PyodideInterface>;
 
-const PYODIDE_CDN_URL =
-  'https://cdn.jsdelivr.net/pyodide/v0.27.1/full/pyodide.mjs';
+const PYODIDE_CDN_URL = 'https://cdn.jsdelivr.net/pyodide/v0.27.1/full/pyodide.mjs';
 
 async function loadPyodideRuntime(): Promise<{
   loadPyodide: LoadPyodideFn;
@@ -45,7 +44,9 @@ async function loadPyodideRuntime(): Promise<{
   // Dynamic import from CDN -- Vite-ignored to avoid bundling
   // SAFETY: URL is a trusted CDN constant defined above
   const mod: { loadPyodide: LoadPyodideFn } = await (
-    Function('url', 'return import(url)') as (url: string) => Promise<{ loadPyodide: LoadPyodideFn }>
+    Function('url', 'return import(url)') as (
+      url: string,
+    ) => Promise<{ loadPyodide: LoadPyodideFn }>
   )(PYODIDE_CDN_URL);
   return mod;
 }

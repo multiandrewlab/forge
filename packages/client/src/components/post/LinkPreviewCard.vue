@@ -17,7 +17,7 @@
           loading="lazy"
           class="h-full w-full object-cover"
           @error="imageError = true"
-        >
+        />
         <div
           v-else
           data-testid="image-placeholder"
@@ -34,7 +34,9 @@
           {{ linkPreview.description }}
         </p>
         <p class="mt-1 text-xs text-gray-500">
-          <span v-if="linkPreview.readingTime">{{ linkPreview.readingTime }} min read &middot; </span>
+          <span v-if="linkPreview.readingTime"
+            >{{ linkPreview.readingTime }} min read &middot;
+          </span>
           {{ domain }}
         </p>
       </div>
@@ -47,12 +49,7 @@
       class="mt-1 text-xs text-gray-500 hover:text-gray-300"
       @click="$emit('refresh')"
     >
-      <svg
-        class="mr-1 inline-block h-3 w-3"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-      >
+      <svg class="mr-1 inline-block h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path
           stroke-linecap="round"
           stroke-linejoin="round"
@@ -65,10 +62,7 @@
   </div>
 
   <!-- Fallback: no link preview -->
-  <div
-    v-else
-    class="flex items-center gap-2 rounded-lg border border-gray-700 px-3 py-2"
-  >
+  <div v-else class="flex items-center gap-2 rounded-lg border border-gray-700 px-3 py-2">
     <svg
       class="h-4 w-4 shrink-0 text-gray-500"
       fill="none"

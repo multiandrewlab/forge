@@ -84,9 +84,7 @@ function createTopTagRow(overrides: Partial<TopTagRow> = {}): TopTagRow {
   };
 }
 
-function createTopContributorRow(
-  overrides: Partial<TopContributorRow> = {},
-): TopContributorRow {
+function createTopContributorRow(overrides: Partial<TopContributorRow> = {}): TopContributorRow {
   return {
     author_id: USER_ID,
     display_name: 'Test User',
@@ -376,12 +374,8 @@ describe('user-profiles service', () => {
 
       it('combines top_contributor and tag_expert badges', async () => {
         setupDefaultMocks();
-        mockGetTopContributors.mockResolvedValue([
-          createTopContributorRow({ author_id: USER_ID }),
-        ]);
-        mockGetTagExperts.mockResolvedValue([
-          createTagExpertRow({ tag_name: 'typescript' }),
-        ]);
+        mockGetTopContributors.mockResolvedValue([createTopContributorRow({ author_id: USER_ID })]);
+        mockGetTagExperts.mockResolvedValue([createTagExpertRow({ tag_name: 'typescript' })]);
 
         const profile = assertProfile(await buildUserProfile(USER_ID, LIMIT));
 

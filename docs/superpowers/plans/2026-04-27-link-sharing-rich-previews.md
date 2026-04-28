@@ -16,28 +16,29 @@
 
 ## File Structure
 
-| File | Action | Responsibility |
-|---|---|---|
-| `packages/server/src/services/link-preview.ts` | Create | OG fetch pipeline: URL validation, SSRF IP check, fetch with safety limits, HTML parsing, reading time |
-| `packages/server/src/__tests__/services/link-preview.test.ts` | Create | Unit tests for all link-preview service functions |
-| `packages/shared/src/validators/post.ts` | Modify | Conditional `linkUrl` required + `content` optional when `contentType === 'link'` |
-| `packages/server/src/db/queries/posts.ts` | Modify | Extend `CreatePostInput` and `createPost()` to accept `linkUrl` / `linkPreview`; add `updateLinkPreview()` |
-| `packages/server/src/routes/posts.ts` | Modify | Call link-preview service on link post create; add `POST /:id/refresh-preview` endpoint |
-| `packages/server/src/__tests__/routes/posts.test.ts` | Modify | Add tests for link post creation and refresh endpoint |
-| `packages/client/src/components/post/LinkPreviewCard.vue` | Create | Preview card with OG data display + fallback |
-| `packages/client/src/components/post/__tests__/LinkPreviewCard.test.ts` | Create | Component tests for both states + image error + author refresh |
-| `packages/client/src/components/post/PostListItem.vue` | Modify | Link icon badge for link-type posts |
-| `packages/client/src/components/post/__tests__/PostListItem.test.ts` | Modify | Test link icon renders for link content type |
-| `bruno/posts/create-link-post.bru` | Create | Happy-path link post creation |
-| `bruno/posts/create-link-post-missing-url.bru` | Create | Validation error: missing linkUrl |
-| `bruno/posts/refresh-link-preview.bru` | Create | Author refreshes preview |
-| `bruno/posts/refresh-link-preview-forbidden.bru` | Create | Non-author refresh → 403 |
+| File                                                                    | Action | Responsibility                                                                                             |
+| ----------------------------------------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------- |
+| `packages/server/src/services/link-preview.ts`                          | Create | OG fetch pipeline: URL validation, SSRF IP check, fetch with safety limits, HTML parsing, reading time     |
+| `packages/server/src/__tests__/services/link-preview.test.ts`           | Create | Unit tests for all link-preview service functions                                                          |
+| `packages/shared/src/validators/post.ts`                                | Modify | Conditional `linkUrl` required + `content` optional when `contentType === 'link'`                          |
+| `packages/server/src/db/queries/posts.ts`                               | Modify | Extend `CreatePostInput` and `createPost()` to accept `linkUrl` / `linkPreview`; add `updateLinkPreview()` |
+| `packages/server/src/routes/posts.ts`                                   | Modify | Call link-preview service on link post create; add `POST /:id/refresh-preview` endpoint                    |
+| `packages/server/src/__tests__/routes/posts.test.ts`                    | Modify | Add tests for link post creation and refresh endpoint                                                      |
+| `packages/client/src/components/post/LinkPreviewCard.vue`               | Create | Preview card with OG data display + fallback                                                               |
+| `packages/client/src/components/post/__tests__/LinkPreviewCard.test.ts` | Create | Component tests for both states + image error + author refresh                                             |
+| `packages/client/src/components/post/PostListItem.vue`                  | Modify | Link icon badge for link-type posts                                                                        |
+| `packages/client/src/components/post/__tests__/PostListItem.test.ts`    | Modify | Test link icon renders for link content type                                                               |
+| `bruno/posts/create-link-post.bru`                                      | Create | Happy-path link post creation                                                                              |
+| `bruno/posts/create-link-post-missing-url.bru`                          | Create | Validation error: missing linkUrl                                                                          |
+| `bruno/posts/refresh-link-preview.bru`                                  | Create | Author refreshes preview                                                                                   |
+| `bruno/posts/refresh-link-preview-forbidden.bru`                        | Create | Non-author refresh → 403                                                                                   |
 
 ---
 
 ### Task 1: Install Dependencies
 
 **Files:**
+
 - Modify: `packages/server/package.json`
 
 - [ ] **Step 1: Install cheerio and ipaddr.js**
@@ -66,6 +67,7 @@ git commit -m "chore: add cheerio and ipaddr.js for link preview service"
 ### Task 2: Extend Shared Validators
 
 **Files:**
+
 - Modify: `packages/shared/src/validators/post.ts`
 - Test: `packages/shared/src/__tests__/validators/post.test.ts` (create if needed)
 
@@ -173,9 +175,7 @@ export const createPostSchema = z
       ContentType.Link,
     ]),
     language: z.string().nullable().optional(),
-    visibility: z
-      .enum([Visibility.Public, Visibility.Private])
-      .default(Visibility.Public),
+    visibility: z.enum([Visibility.Public, Visibility.Private]).default(Visibility.Public),
     isDraft: z.boolean().default(true),
     content: z.string().min(1).optional(),
     linkUrl: z.string().url().optional(),
@@ -208,17 +208,10 @@ export type CreatePostInput = z.infer<typeof createPostSchema>;
 export const updatePostSchema = z.object({
   title: z.string().min(1).max(500).optional(),
   contentType: z
-    .enum([
-      ContentType.Snippet,
-      ContentType.Prompt,
-      ContentType.Document,
-      ContentType.Link,
-    ])
+    .enum([ContentType.Snippet, ContentType.Prompt, ContentType.Document, ContentType.Link])
     .optional(),
   language: z.string().nullable().optional(),
-  visibility: z
-    .enum([Visibility.Public, Visibility.Private])
-    .optional(),
+  visibility: z.enum([Visibility.Public, Visibility.Private]).optional(),
 });
 
 export type UpdatePostInput = z.infer<typeof updatePostSchema>;
@@ -261,6 +254,7 @@ git commit -m "feat: add conditional linkUrl validation for link posts"
 ### Task 3: Extend DB Queries
 
 **Files:**
+
 - Modify: `packages/server/src/db/queries/posts.ts`
 - Test: `packages/server/src/__tests__/db/queries/posts.test.ts` (create if needed)
 
@@ -425,7 +419,12 @@ export interface CreatePostInput {
   visibility: string;
   isDraft: boolean;
   linkUrl?: string;
-  linkPreview?: { title: string; description: string; image: string | null; readingTime: number | null };
+  linkPreview?: {
+    title: string;
+    description: string;
+    image: string | null;
+    readingTime: number | null;
+  };
 }
 ```
 
@@ -457,7 +456,12 @@ Add `updateLinkPreview()`:
 ```typescript
 export async function updateLinkPreview(
   postId: string,
-  preview: { title: string; description: string; image: string | null; readingTime: number | null } | null,
+  preview: {
+    title: string;
+    description: string;
+    image: string | null;
+    readingTime: number | null;
+  } | null,
 ): Promise<PostRow> {
   const result = await query<PostRow>(
     `UPDATE posts SET link_preview = $1, updated_at = NOW()
@@ -489,6 +493,7 @@ git commit -m "feat: extend createPost query with linkUrl/linkPreview, add updat
 ### Task 4: Link Preview Service
 
 **Files:**
+
 - Create: `packages/server/src/services/link-preview.ts`
 - Create: `packages/server/src/__tests__/services/link-preview.test.ts`
 
@@ -861,19 +866,19 @@ const USER_AGENT = 'ForgeBot/1.0 (+https://forge.internal)';
 // SSRF IP blocklist — see design spec for rationale
 const BLOCKED_RANGES: [ipaddr.IPv4 | ipaddr.IPv6, number][] = [
   ...parseCidrs([
-    '127.0.0.0/8',     // Loopback
-    '10.0.0.0/8',      // RFC-1918
-    '172.16.0.0/12',   // RFC-1918
-    '192.168.0.0/16',  // RFC-1918
-    '169.254.0.0/16',  // Link-local
-    '0.0.0.0/8',       // Current network
-    '100.64.0.0/10',   // Carrier-Grade NAT (RFC 6598)
-    '192.0.0.0/24',    // IETF Protocol Assignments
+    '127.0.0.0/8', // Loopback
+    '10.0.0.0/8', // RFC-1918
+    '172.16.0.0/12', // RFC-1918
+    '192.168.0.0/16', // RFC-1918
+    '169.254.0.0/16', // Link-local
+    '0.0.0.0/8', // Current network
+    '100.64.0.0/10', // Carrier-Grade NAT (RFC 6598)
+    '192.0.0.0/24', // IETF Protocol Assignments
   ]),
   ...parseCidrs([
-    '::1/128',         // IPv6 loopback
-    'fc00::/7',        // IPv6 ULA
-    'fe80::/10',       // IPv6 link-local
+    '::1/128', // IPv6 loopback
+    'fc00::/7', // IPv6 ULA
+    'fe80::/10', // IPv6 link-local
   ]),
 ];
 
@@ -1073,6 +1078,7 @@ git commit -m "feat: add link-preview service with SSRF protection and OG parsin
 ### Task 5: Route Integration — Link Post Creation & Refresh Endpoint
 
 **Files:**
+
 - Modify: `packages/server/src/routes/posts.ts`
 - Modify: `packages/server/src/__tests__/routes/posts.test.ts`
 
@@ -1114,7 +1120,16 @@ describe('POST /api/posts (link type)', () => {
     // createRevision returns revision row
     mockQuery.mockResolvedValueOnce({ rows: [sampleRevisionRow] });
     // findFeedPostById for broadcast
-    mockQuery.mockResolvedValueOnce({ rows: [{ ...sampleFeedRow, content_type: 'link', link_url: 'https://example.com', link_preview: linkPreview }] });
+    mockQuery.mockResolvedValueOnce({
+      rows: [
+        {
+          ...sampleFeedRow,
+          content_type: 'link',
+          link_url: 'https://example.com',
+          link_preview: linkPreview,
+        },
+      ],
+    });
 
     const response = await app.inject({
       method: 'POST',
@@ -1146,7 +1161,16 @@ describe('POST /api/posts (link type)', () => {
 
     mockQuery.mockResolvedValueOnce({ rows: [postRow] });
     mockQuery.mockResolvedValueOnce({ rows: [sampleRevisionRow] });
-    mockQuery.mockResolvedValueOnce({ rows: [{ ...sampleFeedRow, content_type: 'link', link_url: 'https://example.com', link_preview: null }] });
+    mockQuery.mockResolvedValueOnce({
+      rows: [
+        {
+          ...sampleFeedRow,
+          content_type: 'link',
+          link_url: 'https://example.com',
+          link_preview: null,
+        },
+      ],
+    });
 
     const response = await app.inject({
       method: 'POST',
@@ -1201,7 +1225,16 @@ describe('POST /api/posts/:id/refresh-preview', () => {
     // updateLinkPreview
     mockQuery.mockResolvedValueOnce({ rows: [{ ...existingPost, link_preview: newPreview }] });
     // findFeedPostById for broadcast
-    mockQuery.mockResolvedValueOnce({ rows: [{ ...sampleFeedRow, content_type: 'link', link_url: 'https://example.com', link_preview: newPreview }] });
+    mockQuery.mockResolvedValueOnce({
+      rows: [
+        {
+          ...sampleFeedRow,
+          content_type: 'link',
+          link_url: 'https://example.com',
+          link_preview: newPreview,
+        },
+      ],
+    });
 
     const response = await app.inject({
       method: 'POST',
@@ -1366,6 +1399,7 @@ git commit -m "feat: integrate link preview into post creation, add refresh-prev
 ### Task 6: LinkPreviewCard Component
 
 **Files:**
+
 - Create: `packages/client/src/components/post/LinkPreviewCard.vue`
 - Create: `packages/client/src/components/post/__tests__/LinkPreviewCard.test.ts`
 
@@ -1501,10 +1535,7 @@ Create `packages/client/src/components/post/LinkPreviewCard.vue`:
       class="flex transition-colors hover:border-primary"
     >
       <!-- Thumbnail -->
-      <div
-        v-if="linkPreview.image && !imageError"
-        class="w-[120px] flex-shrink-0"
-      >
+      <div v-if="linkPreview.image && !imageError" class="w-[120px] flex-shrink-0">
         <img
           :src="linkPreview.image"
           :alt="linkPreview.title"
@@ -1519,7 +1550,12 @@ Create `packages/client/src/components/post/LinkPreviewCard.vue`:
         class="flex w-[120px] flex-shrink-0 items-center justify-center bg-gradient-to-br from-primary/30 to-purple-500/30"
       >
         <svg class="h-8 w-8 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m9.86-2.51a4.5 4.5 0 00-6.364-6.364L4.5 8.257" />
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="1.5"
+            d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m9.86-2.51a4.5 4.5 0 00-6.364-6.364L4.5 8.257"
+          />
         </svg>
       </div>
 
@@ -1528,10 +1564,7 @@ Create `packages/client/src/components/post/LinkPreviewCard.vue`:
         <div class="truncate text-sm font-semibold text-gray-100">
           {{ linkPreview.title }}
         </div>
-        <div
-          v-if="linkPreview.description"
-          class="mt-1 line-clamp-2 text-xs text-gray-400"
-        >
+        <div v-if="linkPreview.description" class="mt-1 line-clamp-2 text-xs text-gray-400">
           {{ linkPreview.description }}
         </div>
         <div class="mt-2 flex items-center gap-3 text-xs text-gray-500">
@@ -1544,7 +1577,12 @@ Create `packages/client/src/components/post/LinkPreviewCard.vue`:
           </span>
           <span class="flex items-center gap-1">
             <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              <path
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+              />
             </svg>
             {{ domain }}
           </span>
@@ -1572,7 +1610,12 @@ Create `packages/client/src/components/post/LinkPreviewCard.vue`:
       class="flex items-center gap-2 text-sm text-blue-400 hover:text-blue-300"
     >
       <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+        <path
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+        />
       </svg>
       <span class="truncate">{{ linkUrl }}</span>
     </a>
@@ -1623,6 +1666,7 @@ git commit -m "feat: add LinkPreviewCard component with OG data display and fall
 ### Task 7: PostListItem Link Icon
 
 **Files:**
+
 - Modify: `packages/client/src/components/post/PostListItem.vue`
 - Modify or create: `packages/client/src/components/post/__tests__/PostListItem.test.ts`
 
@@ -1700,9 +1744,7 @@ Expected: FAIL — no element with `data-testid="link-icon"`.
 Modify `packages/client/src/components/post/PostListItem.vue`. Replace the content type badge `<span>` (around line 60):
 
 ```vue
-      <span
-        class="flex items-center gap-1 rounded bg-gray-700 px-1.5 py-0.5 text-xs"
-      >
+<span class="flex items-center gap-1 rounded bg-gray-700 px-1.5 py-0.5 text-xs">
         <svg
           v-if="post.contentType === 'link'"
           data-testid="link-icon"
@@ -1742,6 +1784,7 @@ git commit -m "feat: add link icon badge to PostListItem for link-type posts"
 ### Task 8: Bruno API Tests
 
 **Files:**
+
 - Create: `bruno/posts/create-link-post.bru`
 - Create: `bruno/posts/create-link-post-missing-url.bru`
 - Create: `bruno/posts/refresh-link-preview.bru`
@@ -1901,6 +1944,7 @@ git commit -m "test(bruno): add API tests for link post creation and preview ref
 ### Task 9: Coverage Verification & Cleanup
 
 **Files:**
+
 - All test files from previous tasks
 
 - [ ] **Step 1: Run full test suite with coverage**
@@ -1914,6 +1958,7 @@ Expected: ALL PASS with coverage meeting `.coverage-thresholds.json` thresholds 
 - [ ] **Step 2: Fix any coverage gaps**
 
 If any lines/branches are uncovered, add targeted tests to cover them. Common gaps:
+
 - Error paths in `fetchWithSafety` (redirect handling edge cases)
 - The `catch` block in `domain` computed property in `LinkPreviewCard.vue`
 
@@ -1959,14 +2004,14 @@ git commit -m "test: achieve 100% coverage for link preview feature"
 
 ## Summary
 
-| Task | Description | Key Files |
-|---|---|---|
-| 1 | Install dependencies | `packages/server/package.json` |
-| 2 | Extend shared validators | `packages/shared/src/validators/post.ts` |
-| 3 | Extend DB queries | `packages/server/src/db/queries/posts.ts` |
-| 4 | Link preview service (SSRF + OG) | `packages/server/src/services/link-preview.ts` |
-| 5 | Route integration + refresh endpoint | `packages/server/src/routes/posts.ts` |
-| 6 | LinkPreviewCard component | `packages/client/src/components/post/LinkPreviewCard.vue` |
-| 7 | PostListItem link icon | `packages/client/src/components/post/PostListItem.vue` |
-| 8 | Bruno API tests | `bruno/posts/*.bru` |
-| 9 | Coverage verification & cleanup | All test files |
+| Task | Description                          | Key Files                                                 |
+| ---- | ------------------------------------ | --------------------------------------------------------- |
+| 1    | Install dependencies                 | `packages/server/package.json`                            |
+| 2    | Extend shared validators             | `packages/shared/src/validators/post.ts`                  |
+| 3    | Extend DB queries                    | `packages/server/src/db/queries/posts.ts`                 |
+| 4    | Link preview service (SSRF + OG)     | `packages/server/src/services/link-preview.ts`            |
+| 5    | Route integration + refresh endpoint | `packages/server/src/routes/posts.ts`                     |
+| 6    | LinkPreviewCard component            | `packages/client/src/components/post/LinkPreviewCard.vue` |
+| 7    | PostListItem link icon               | `packages/client/src/components/post/PostListItem.vue`    |
+| 8    | Bruno API tests                      | `bruno/posts/*.bru`                                       |
+| 9    | Coverage verification & cleanup      | All test files                                            |

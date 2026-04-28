@@ -99,7 +99,11 @@ describe('SandboxManager', () => {
     });
 
     it('sends files and language to the worker via postMessage', () => {
-      const opts = baseOptions({ files: [{ filename: 'main.js', content: 'console.log(1)' }], entryFile: 'main.js', language: 'javascript' as SandboxLanguage });
+      const opts = baseOptions({
+        files: [{ filename: 'main.js', content: 'console.log(1)' }],
+        entryFile: 'main.js',
+        language: 'javascript' as SandboxLanguage,
+      });
       manager.execute(opts);
       expect(mockWorker.postMessage).toHaveBeenCalledWith({
         type: 'execute',
@@ -363,7 +367,10 @@ describe('SandboxManager', () => {
       const firstOpts = baseOptions();
       mgr.execute(firstOpts);
 
-      const secondOpts = baseOptions({ files: [{ filename: 'main.py', content: 'print("second")' }], entryFile: 'main.py' });
+      const secondOpts = baseOptions({
+        files: [{ filename: 'main.py', content: 'print("second")' }],
+        entryFile: 'main.py',
+      });
       mgr.execute(secondOpts);
 
       // First worker should be terminated
@@ -384,7 +391,10 @@ describe('SandboxManager', () => {
 
       mgr.execute(baseOptions());
 
-      const secondOpts = baseOptions({ files: [{ filename: 'main.py', content: 'print("second")' }], entryFile: 'main.py' });
+      const secondOpts = baseOptions({
+        files: [{ filename: 'main.py', content: 'print("second")' }],
+        entryFile: 'main.py',
+      });
       mgr.execute(secondOpts);
 
       // Second worker receives messages normally
@@ -409,7 +419,10 @@ describe('SandboxManager', () => {
       const firstOpts = baseOptions();
       mgr.execute(firstOpts);
 
-      const secondOpts = baseOptions({ files: [{ filename: 'main.py', content: 'print("second")' }], entryFile: 'main.py' });
+      const secondOpts = baseOptions({
+        files: [{ filename: 'main.py', content: 'print("second")' }],
+        entryFile: 'main.py',
+      });
       mgr.execute(secondOpts);
 
       // Reset mock to only count calls after restart
@@ -437,7 +450,10 @@ describe('SandboxManager', () => {
       const firstOpts = baseOptions();
       mgr.execute(firstOpts);
 
-      const secondOpts = baseOptions({ files: [{ filename: 'main.py', content: 'print("second")' }], entryFile: 'main.py' });
+      const secondOpts = baseOptions({
+        files: [{ filename: 'main.py', content: 'print("second")' }],
+        entryFile: 'main.py',
+      });
       mgr.execute(secondOpts);
 
       // Advance past original timeout

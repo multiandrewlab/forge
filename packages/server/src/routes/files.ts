@@ -42,7 +42,10 @@ export async function fileRoutes(app: FastifyInstance): Promise<void> {
 
       // 3. Validate MIME type against allowlist
       if (!isAllowedMimeType(data.mimetype)) {
-        request.log.info({ event: 'file.upload.rejected', postId: id, reason: 'mime', mimeType: data.mimetype }, 'file upload rejected');
+        request.log.info(
+          { event: 'file.upload.rejected', postId: id, reason: 'mime', mimeType: data.mimetype },
+          'file upload rejected',
+        );
         return reply.status(415).send({ error: 'Unsupported media type' });
       }
 
@@ -51,7 +54,10 @@ export async function fileRoutes(app: FastifyInstance): Promise<void> {
 
       // 5. Check if the stream was truncated (file too large)
       if (data.file.truncated) {
-        request.log.info({ event: 'file.upload.rejected', postId: id, reason: 'size' }, 'file upload rejected');
+        request.log.info(
+          { event: 'file.upload.rejected', postId: id, reason: 'size' },
+          'file upload rejected',
+        );
         return reply.status(413).send({ error: 'File too large' });
       }
 
@@ -99,7 +105,16 @@ export async function fileRoutes(app: FastifyInstance): Promise<void> {
         }
       }
 
-      request.log.info({ event: 'file.upload', postId: id, fileId: row.id, mimeType: data.mimetype, fileSize: buffer.length }, 'file uploaded');
+      request.log.info(
+        {
+          event: 'file.upload',
+          postId: id,
+          fileId: row.id,
+          mimeType: data.mimetype,
+          fileSize: buffer.length,
+        },
+        'file uploaded',
+      );
       return reply.status(201).send({ file: toPostFile(row) });
     },
   );

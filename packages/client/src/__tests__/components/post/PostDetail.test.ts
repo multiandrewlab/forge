@@ -586,8 +586,7 @@ describe('PostDetail', () => {
       await flushPromises();
 
       const filesCalls = mockApiFetch.mock.calls.filter(
-        (call: unknown[]) =>
-          typeof call[0] === 'string' && call[0].includes('/files?revisionId='),
+        (call: unknown[]) => typeof call[0] === 'string' && call[0].includes('/files?revisionId='),
       );
       expect(filesCalls.length).toBe(1);
       expect(filesCalls[0][0]).toBe('/api/posts/post-1/files?revisionId=rev-1');
@@ -693,7 +692,10 @@ describe('PostDetail', () => {
 
     it('does not render CodeRunner in multi-file layout when contentType is not snippet', async () => {
       const docPost: PostWithAuthor = { ...mockPost, contentType: 'document' };
-      const docPostWithRevision: PostWithRevision = { ...mockPostWithRevision, contentType: 'document' };
+      const docPostWithRevision: PostWithRevision = {
+        ...mockPostWithRevision,
+        contentType: 'document',
+      };
       setupUrlAwareMockWithFiles(docPostWithRevision, mockFiles);
 
       const wrapper = mount(PostDetail, { props: { post: docPost } });
@@ -717,7 +719,10 @@ describe('PostDetail', () => {
 
     it('does not render CodeRunner in single-file layout for non-snippet posts', async () => {
       const promptPost: PostWithAuthor = { ...mockPost, contentType: 'prompt' };
-      const promptPostWithRevision: PostWithRevision = { ...mockPostWithRevision, contentType: 'prompt' };
+      const promptPostWithRevision: PostWithRevision = {
+        ...mockPostWithRevision,
+        contentType: 'prompt',
+      };
       setupUrlAwareMock(promptPostWithRevision);
 
       const wrapper = mount(PostDetail, { props: { post: promptPost } });
