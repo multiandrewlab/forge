@@ -115,6 +115,35 @@ describe('rate-limit plugin', () => {
     });
   });
 
+  describe('global rate limit ceiling', () => {
+    afterAll(() => {
+      delete process.env.E2E_MODE;
+    });
+
+    it('uses the 100/min default when E2E_MODE is unset', async () => {
+      delete process.env.E2E_MODE;
+      const freshApp = await buildApp();
+      await freshApp.ready();
+
+      const response = await freshApp.inject({ method: 'GET', url: '/api/health' });
+      expect(response.headers['x-ratelimit-limit']).toBe('100');
+
+      await freshApp.close();
+    });
+
+    it('raises the global ceiling to 10,000/min when E2E_MODE=1', async () => {
+      process.env.E2E_MODE = '1';
+      const freshApp = await buildApp();
+      await freshApp.ready();
+
+      const response = await freshApp.inject({ method: 'GET', url: '/api/health' });
+      expect(response.headers['x-ratelimit-limit']).toBe('10000');
+
+      await freshApp.close();
+      delete process.env.E2E_MODE;
+    });
+  });
+
   describe('GET /api/auth/google/callback rate limit', () => {
     it('returns 429 after exceeding 10 requests per minute', async () => {
       const freshApp = await buildApp();

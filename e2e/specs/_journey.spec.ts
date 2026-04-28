@@ -185,7 +185,13 @@ test.describe.serial('Phase 5 — fork', () => {
 });
 
 test.describe.serial('Phase 6 — permission', () => {
-  test.skip('TODO: alice cannot edit testuser snippet', () => {});
+  test('alice cannot reach the edit page for a post she does not own', async ({ alice }) => {
+    // The SPA does not redirect — it renders a Forbidden message in-place
+    // (PostEditPage.vue tags the error block with data-testid="forbidden-page"
+    // when the API returns a 403 on the fetchPost call).
+    await alice.goto(`/posts/${SEEDED_POST_ID}/edit`);
+    await expect(shell.forbiddenPage(alice)).toBeVisible();
+  });
 });
 
 // keep `withMockScript` referenced so unused-import lint doesn't trip on the

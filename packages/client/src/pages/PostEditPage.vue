@@ -98,6 +98,7 @@ async function handlePublish(): Promise<void> {
 
       <div
         v-if="error"
+        :data-testid="/forbidden/i.test(error) ? 'forbidden-page' : undefined"
         class="mb-4 p-3 bg-red-900/30 border border-red-500 rounded text-red-400 text-sm"
       >
         {{ error }}

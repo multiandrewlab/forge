@@ -106,7 +106,19 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
   // POST /login
   app.post(
     '/login',
-    { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } },
+    {
+      config: {
+        // The E2E journey logs in three seeded users per worker on every run;
+        // workers=4 × 3 logins blows past the 5/min cap before a single test
+        // runs. Lift the per-route cap when E2E_MODE=1 so global-setup can
+        // hydrate storage state without flaking on cold-cache reruns. Tests
+        // for the strict default cap still cover the production branch.
+        rateLimit:
+          process.env.E2E_MODE === '1'
+            ? { max: 10_000, timeWindow: '1 minute' }
+            : { max: 5, timeWindow: '1 minute' },
+      },
+    },
     async (request, reply) => {
       const parsed = loginSchema.safeParse(request.body);
       if (!parsed.success) {
@@ -120,12 +132,10 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       // Check account lockout BEFORE any other logic
       const lockout = lockoutService.checkLockout(email);
       if (lockout.locked) {
-        return reply
-          .status(423)
-          .send({
-            error: 'Account locked due to too many failed attempts. Try again later.',
-            retryAfter: lockout.remainingMs,
-          });
+        return reply.status(423).send({
+          error: 'Account locked due to too many failed attempts. Try again later.',
+          retryAfter: lockout.remainingMs,
+        });
       }
 
       const row = await findUserByEmail(email);
