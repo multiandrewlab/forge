@@ -87,7 +87,8 @@ const restoring = ref(false);
 
 const isLatestSelected = computed(() => {
   if (revisions.value.length === 0 || selectedIds.value.length !== 1) return false;
-  return selectedIds.value[0] === revisions.value[0].id;
+  const firstRev = revisions.value[0] as PostRevision;
+  return selectedIds.value[0] === firstRev.id;
 });
 
 const selectedRevisionNumber = computed(() => {
@@ -121,8 +122,10 @@ function handleSelect(revisionId: string): void {
   } else if (selectedIds.value.length < 2) {
     selectedIds.value = [...selectedIds.value, revisionId];
   } else {
-    // Replace the oldest selection
-    selectedIds.value = [selectedIds.value[1], revisionId];
+    // Replace the oldest selection. length === 2 here, so [1] is defined;
+    // the `as string` satisfies noUncheckedIndexedAccess without adding
+    // an unreachable defensive branch.
+    selectedIds.value = [selectedIds.value[1] as string, revisionId];
   }
 }
 

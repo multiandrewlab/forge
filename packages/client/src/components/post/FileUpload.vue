@@ -16,17 +16,8 @@
       <span class="text-lg font-bold">+</span>
       <span class="text-xs">Drop or browse</span>
     </button>
-    <input
-      ref="fileInputRef"
-      type="file"
-      multiple
-      class="hidden"
-      @change="handleFileSelect"
-    >
-    <p
-      v-if="errorMessage"
-      class="mt-1 text-xs text-red-400"
-    >
+    <input ref="fileInputRef" type="file" multiple class="hidden" @change="handleFileSelect" />
+    <p v-if="errorMessage" class="mt-1 text-xs text-red-400">
       {{ errorMessage }}
     </p>
   </div>
@@ -53,14 +44,14 @@ function openFilePicker(): void {
 function validateAndEmit(files: FileList | File[]): void {
   errorMessage.value = '';
 
-  for (const file of files) {
+  for (const file of Array.from(files)) {
     if (file.size > MAX_FILE_SIZE) {
       errorMessage.value = `File "${file.name}" exceeds 10MB limit`;
       return;
     }
   }
 
-  for (const file of files) {
+  for (const file of Array.from(files)) {
     emit('upload', file);
   }
 }
