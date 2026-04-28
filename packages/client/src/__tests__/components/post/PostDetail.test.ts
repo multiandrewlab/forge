@@ -40,6 +40,19 @@ vi.mock('dompurify', () => ({
   default: { sanitize: vi.fn((html: string) => html) },
 }));
 
+vi.mock('../../../composables/useCodeRunner.js', () => ({
+  useCodeRunner: () => ({
+    output: { value: [] },
+    status: { value: 'idle' },
+    executionTime: { value: null },
+    exitCode: { value: null },
+    truncated: { value: false },
+    run: vi.fn(),
+    abort: vi.fn(),
+    clear: vi.fn(),
+  }),
+}));
+
 import { apiFetch } from '../../../lib/api.js';
 import PostDetail from '../../../components/post/PostDetail.vue';
 import { useCommentsStore } from '../../../stores/comments.js';
@@ -676,6 +689,42 @@ describe('PostDetail', () => {
       await flushPromises();
 
       expect(filesStore.activeFileId).toBeNull();
+    });
+
+    it('does not render CodeRunner in multi-file layout when contentType is not snippet', async () => {
+      const docPost: PostWithAuthor = { ...mockPost, contentType: 'document' };
+      const docPostWithRevision: PostWithRevision = { ...mockPostWithRevision, contentType: 'document' };
+      setupUrlAwareMockWithFiles(docPostWithRevision, mockFiles);
+
+      const wrapper = mount(PostDetail, { props: { post: docPost } });
+      await flushPromises();
+
+      const codeRunner = wrapper.findComponent({ name: 'CodeRunner' });
+      expect(codeRunner.exists()).toBe(false);
+    });
+  });
+
+  describe('CodeRunner integration', () => {
+    it('renders CodeRunner in single-file layout for snippet posts', async () => {
+      setupUrlAwareMock(mockPostWithRevision);
+
+      const wrapper = mount(PostDetail, { props: { post: mockPost } });
+      await flushPromises();
+
+      const codeRunner = wrapper.findComponent({ name: 'CodeRunner' });
+      expect(codeRunner.exists()).toBe(true);
+    });
+
+    it('does not render CodeRunner in single-file layout for non-snippet posts', async () => {
+      const promptPost: PostWithAuthor = { ...mockPost, contentType: 'prompt' };
+      const promptPostWithRevision: PostWithRevision = { ...mockPostWithRevision, contentType: 'prompt' };
+      setupUrlAwareMock(promptPostWithRevision);
+
+      const wrapper = mount(PostDetail, { props: { post: promptPost } });
+      await flushPromises();
+
+      const codeRunner = wrapper.findComponent({ name: 'CodeRunner' });
+      expect(codeRunner.exists()).toBe(false);
     });
   });
 });
