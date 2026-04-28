@@ -217,9 +217,40 @@ describe('PostViewPage', () => {
       await flushPromises();
 
       expect(wrapper.text()).toContain('Test Post');
+      const titleEl = wrapper.find('[data-testid="post-title"]');
+      expect(titleEl.exists()).toBe(true);
+      expect(titleEl.text()).toContain('Test Post');
       const codeViewer = wrapper.find('[data-testid="code-viewer"]');
       expect(codeViewer.exists()).toBe(true);
       expect(codeViewer.text()).toContain('const x = 1;');
+    });
+
+    it('should render draft-badge when post.isDraft is true', async () => {
+      const post = createMockPost({ isDraft: true });
+      mockFetchPost.mockImplementation(async () => {
+        mockCurrentPost.value = post;
+      });
+      mockUser.value = createMockUser({ id: 'user-1' });
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      const badge = wrapper.find('[data-testid="draft-badge"]');
+      expect(badge.exists()).toBe(true);
+      expect(badge.text()).toContain('Draft');
+    });
+
+    it('should NOT render draft-badge when post.isDraft is false', async () => {
+      const post = createMockPost({ isDraft: false });
+      mockFetchPost.mockImplementation(async () => {
+        mockCurrentPost.value = post;
+      });
+      mockUser.value = createMockUser({ id: 'user-1' });
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid="draft-badge"]').exists()).toBe(false);
     });
 
     it('should show Edit and Delete buttons for the author', async () => {

@@ -1,5 +1,6 @@
 import { test, expect } from '../fixtures/reset.js';
 import { auth } from '../fixtures/selectors/auth.js';
+import { posts } from '../fixtures/selectors/posts.js';
 import { shell } from '../fixtures/selectors/shell.js';
 import { withMockScript } from '../fixtures/mock-llm.js';
 
@@ -49,7 +50,15 @@ test.describe.serial('Phase 1 — auth: register, login, logout, relogin', () =>
 });
 
 test.describe.serial('Phase 2 — draft', () => {
-  test.skip('TODO: create a draft post', () => {});
+  test('create a draft post and land on its view page', async ({ testuser }) => {
+    await testuser.goto('/posts/new');
+    await posts.newPostTitle(testuser).fill('Journey draft');
+    await posts.newPostBody(testuser).fill('Draft body content for the journey smoke.');
+    await posts.newPostSaveDraft(testuser).click();
+    await expect(testuser).toHaveURL(/\/posts\/[^/]+/);
+    await expect(posts.postTitle(testuser)).toContainText('Journey draft');
+    await expect(posts.draftBadge(testuser)).toBeVisible();
+  });
 });
 
 test.describe.serial('Phase 3 — publish (AI autocomplete + upload + publish)', () => {

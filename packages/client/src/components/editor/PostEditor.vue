@@ -35,6 +35,7 @@ const emit = defineEmits<{
   'update:contentType': [value: ContentType];
   'update:tags': [value: string[]];
   publish: [];
+  'save-draft': [];
 }>();
 
 const filesStore = useFilesStore();
@@ -90,7 +91,7 @@ const isAiGenerateContentType = computed(() => AI_GENERATE_CONTENT_TYPES.has(pro
   <div class="flex h-full flex-col rounded-lg border border-surface-500 bg-surface">
     <div class="flex items-center gap-3 border-b border-surface-500 px-4 py-3">
       <input
-        data-testid="title-input"
+        data-testid="new-post-title-input"
         :value="title"
         type="text"
         placeholder="Snippet title..."
@@ -99,7 +100,14 @@ const isAiGenerateContentType = computed(() => AI_GENERATE_CONTENT_TYPES.has(pro
       />
       <DraftStatus :status="saveStatus" :last-saved-at="lastSavedAt" />
       <button
-        data-testid="publish-button"
+        data-testid="new-post-save-draft-btn"
+        class="rounded border border-surface-500 px-4 py-1.5 text-sm font-medium text-gray-200 hover:bg-surface-600"
+        @click="emit('save-draft')"
+      >
+        Save Draft
+      </button>
+      <button
+        data-testid="new-post-publish-btn"
         class="rounded bg-primary px-4 py-1.5 text-sm font-medium text-white hover:bg-primary-600"
         @click="emit('publish')"
       >
@@ -139,7 +147,7 @@ const isAiGenerateContentType = computed(() => AI_GENERATE_CONTENT_TYPES.has(pro
           <FileUpload @upload="handleFileUpload" />
         </template>
       </FileSidebar>
-      <div class="flex-1 relative">
+      <div data-testid="new-post-body-editor" class="flex-1 relative">
         <CodeEditor
           ref="editorRef"
           :model-value="modelValue"

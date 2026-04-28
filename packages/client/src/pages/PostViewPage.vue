@@ -74,7 +74,16 @@ async function handleDelete(): Promise<void> {
         <div class="flex items-start justify-between mb-4">
           <div>
             <div class="flex items-center gap-3">
-              <h1 class="text-2xl font-bold text-white">{{ currentPost.title }}</h1>
+              <h1 data-testid="post-title" class="text-2xl font-bold text-white">
+                {{ currentPost.title }}
+              </h1>
+              <span
+                v-if="currentPost.isDraft"
+                data-testid="draft-badge"
+                class="rounded bg-yellow-600/20 px-2 py-1 text-xs text-yellow-400"
+              >
+                Draft
+              </span>
               <PresenceIndicator :post-id="currentPost.id" />
             </div>
             <div class="flex items-center gap-2 mt-1 text-sm text-gray-400">

@@ -147,6 +147,23 @@ describe('usePosts', () => {
       });
     });
 
+    it('should extract id from wrapped {post, revision} response', async () => {
+      const mockPost = createMockPost();
+      const wrapped = { post: mockPost, revision: { id: 'rev-x' } };
+      mockApiFetch.mockResolvedValue(new Response(JSON.stringify(wrapped), { status: 201 }));
+
+      const { createPost } = usePosts();
+      const id = await createPost({
+        title: 'Test Post',
+        contentType: ContentType.Snippet,
+        language: 'typescript',
+        visibility: Visibility.Public,
+        content: 'hello',
+      });
+
+      expect(id).toBe('post-1');
+    });
+
     it('should return null and set error on failure', async () => {
       mockApiFetch.mockResolvedValue(
         new Response(JSON.stringify({ error: 'Validation failed' }), { status: 400 }),
@@ -270,6 +287,19 @@ describe('usePosts', () => {
       await fetchPost('post-1');
 
       expect(mockApiFetch).toHaveBeenCalledWith('/api/posts/post-1');
+
+      const store = usePostsStore();
+      expect(store.currentPost).toEqual(jsonRoundTrip(mockPost));
+    });
+
+    it('should unwrap a {post: ...} response and store the post', async () => {
+      const mockPost = createMockPost();
+      mockApiFetch.mockResolvedValue(
+        new Response(JSON.stringify({ post: mockPost }), { status: 200 }),
+      );
+
+      const { fetchPost } = usePosts();
+      await fetchPost('post-1');
 
       const store = usePostsStore();
       expect(store.currentPost).toEqual(jsonRoundTrip(mockPost));
@@ -490,6 +520,20 @@ describe('usePosts', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: 'updated content', message: 'revision message' }),
+      });
+    });
+
+    it('should omit message field from body when message is null', async () => {
+      const mockRevision = createMockRevision();
+      mockApiFetch.mockResolvedValue(new Response(JSON.stringify(mockRevision), { status: 201 }));
+
+      const { saveRevision } = usePosts();
+      await saveRevision('post-1', 'updated content', null);
+
+      expect(mockApiFetch).toHaveBeenCalledWith('/api/posts/post-1/revisions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: 'updated content' }),
       });
     });
 
