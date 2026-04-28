@@ -17,10 +17,10 @@
           :post-id="fullPost!.id"
         />
         <CodeRunner
-          v-if="fullPost?.contentType === 'snippet'"
+          v-if="fullPost?.contentType === 'snippet' && revision"
           :post-id="fullPost.id"
-          :revision-id="revision?.id ?? ''"
-          :language="fullPost.language ?? null"
+          :revision-id="revision.id"
+          :language="fullPost.language"
           :files="files"
           :active-filename="activeFile?.filename"
         />
@@ -62,11 +62,11 @@
         </button>
       </div>
       <CodeRunner
-        v-if="fullPost?.contentType === 'snippet'"
+        v-if="fullPost?.contentType === 'snippet' && revision"
         :post-id="fullPost.id"
-        :revision-id="revision?.id ?? ''"
-        :language="fullPost.language ?? null"
-        :single-file-content="revision?.content ?? ''"
+        :revision-id="revision.id"
+        :language="fullPost.language"
+        :single-file-content="revision.content"
       />
     </div>
     <div class="mt-6 border-t border-gray-700 pt-4">

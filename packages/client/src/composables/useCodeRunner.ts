@@ -26,6 +26,7 @@ export type CodeRunnerStatus = 'idle' | 'loading' | 'running' | 'done' | 'error'
 // Worker factory — exported for testability
 // ---------------------------------------------------------------------------
 
+/* v8 ignore start — Worker constructor unavailable in jsdom */
 export function createWorker(language: SandboxLanguage): Worker {
   const url =
     language === 'python'
@@ -33,6 +34,7 @@ export function createWorker(language: SandboxLanguage): Worker {
       : new URL('../lib/sandbox/workers/js-worker.ts', import.meta.url);
   return new Worker(url, { type: 'module' });
 }
+/* v8 ignore stop */
 
 // ---------------------------------------------------------------------------
 // Module-level SandboxManager (shared across all instances)

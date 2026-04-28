@@ -690,5 +690,41 @@ describe('PostDetail', () => {
 
       expect(filesStore.activeFileId).toBeNull();
     });
+
+    it('does not render CodeRunner in multi-file layout when contentType is not snippet', async () => {
+      const docPost: PostWithAuthor = { ...mockPost, contentType: 'document' };
+      const docPostWithRevision: PostWithRevision = { ...mockPostWithRevision, contentType: 'document' };
+      setupUrlAwareMockWithFiles(docPostWithRevision, mockFiles);
+
+      const wrapper = mount(PostDetail, { props: { post: docPost } });
+      await flushPromises();
+
+      const codeRunner = wrapper.findComponent({ name: 'CodeRunner' });
+      expect(codeRunner.exists()).toBe(false);
+    });
+  });
+
+  describe('CodeRunner integration', () => {
+    it('renders CodeRunner in single-file layout for snippet posts', async () => {
+      setupUrlAwareMock(mockPostWithRevision);
+
+      const wrapper = mount(PostDetail, { props: { post: mockPost } });
+      await flushPromises();
+
+      const codeRunner = wrapper.findComponent({ name: 'CodeRunner' });
+      expect(codeRunner.exists()).toBe(true);
+    });
+
+    it('does not render CodeRunner in single-file layout for non-snippet posts', async () => {
+      const promptPost: PostWithAuthor = { ...mockPost, contentType: 'prompt' };
+      const promptPostWithRevision: PostWithRevision = { ...mockPostWithRevision, contentType: 'prompt' };
+      setupUrlAwareMock(promptPostWithRevision);
+
+      const wrapper = mount(PostDetail, { props: { post: promptPost } });
+      await flushPromises();
+
+      const codeRunner = wrapper.findComponent({ name: 'CodeRunner' });
+      expect(codeRunner.exists()).toBe(false);
+    });
   });
 });

@@ -462,6 +462,50 @@ describe('CodeRunner', () => {
       expect(mockApiFetch).toHaveBeenCalledTimes(1);
       expect(mockRun).toHaveBeenCalledWith({ language: 'python', files: [{ filename: 'main.py', content: 'file-content' }], entryFile: 'main.py' });
     });
+
+    it('uses activeFilename as entryFile when provided', async () => {
+      const files: PostFile[] = [
+        makeFile({ id: 'f1', filename: 'main.py', mimeType: 'text/x-python' }),
+        makeFile({ id: 'f2', filename: 'utils.py', mimeType: 'text/x-python' }),
+      ];
+
+      mockApiFetch.mockResolvedValue({ text: () => Promise.resolve('code') });
+
+      const wrapper = mount(CodeRunner, {
+        props: {
+          ...defaultProps,
+          language: 'python',
+          files,
+          activeFilename: 'utils.py',
+        },
+      });
+
+      const runButton = wrapper.findComponent({ name: 'RunButton' });
+      await runButton.vm.$emit('run');
+      await flushPromises();
+
+      expect(mockRun).toHaveBeenCalledWith(expect.objectContaining({ entryFile: 'utils.py' }));
+    });
+
+    it('falls back to main.js entryFile when all files are binary', async () => {
+      const files: PostFile[] = [
+        makeFile({ id: 'f1', filename: 'photo.png', mimeType: 'image/png' }),
+      ];
+
+      const wrapper = mount(CodeRunner, {
+        props: {
+          ...defaultProps,
+          language: 'javascript',
+          files,
+        },
+      });
+
+      const runButton = wrapper.findComponent({ name: 'RunButton' });
+      await runButton.vm.$emit('run');
+      await flushPromises();
+
+      expect(mockRun).toHaveBeenCalledWith({ language: 'javascript', files: [], entryFile: 'main.js' });
+    });
   });
 
   // -------------------------------------------------------------------------
