@@ -15,19 +15,25 @@
       ]"
       @click="$emit('select', rev.id)"
     >
-      <!-- Author avatar -->
-      <div
-        data-testid="author-avatar"
-        class="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-gray-600 text-xs text-gray-200"
+      <!-- Author avatar + name wrapped in profile link -->
+      <RouterLink
+        :to="{ name: 'user-profile', params: { id: rev.authorId } }"
+        class="flex flex-shrink-0 flex-col items-center gap-1"
+        @click.stop
       >
-        <img
-          v-if="rev.authorAvatarUrl"
-          :src="rev.authorAvatarUrl"
-          :alt="rev.authorDisplayName ?? 'Author'"
-          class="h-full w-full rounded-full object-cover"
-        />
-        <template v-else>{{ getInitials(rev.authorDisplayName) }}</template>
-      </div>
+        <div
+          data-testid="author-avatar"
+          class="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-gray-600 text-xs text-gray-200"
+        >
+          <img
+            v-if="rev.authorAvatarUrl"
+            :src="rev.authorAvatarUrl"
+            :alt="rev.authorDisplayName ?? 'Author'"
+            class="h-full w-full rounded-full object-cover"
+          />
+          <template v-else>{{ getInitials(rev.authorDisplayName) }}</template>
+        </div>
+      </RouterLink>
 
       <div class="flex-1 min-w-0">
         <div class="flex items-center gap-2">
@@ -45,9 +51,13 @@
             Restored
           </span>
         </div>
-        <p class="mt-0.5 text-xs text-gray-400">
+        <RouterLink
+          :to="{ name: 'user-profile', params: { id: rev.authorId } }"
+          class="mt-0.5 text-xs text-gray-400"
+          @click.stop
+        >
           {{ rev.authorDisplayName ?? 'Unknown' }}
-        </p>
+        </RouterLink>
         <p v-if="rev.message" class="mt-0.5 truncate text-gray-400">
           {{ rev.message }}
         </p>
@@ -60,6 +70,7 @@
 </template>
 
 <script setup lang="ts">
+import { RouterLink } from 'vue-router';
 import type { PostRevision } from '@forge/shared';
 
 defineProps<{

@@ -25,6 +25,8 @@ const mockPost: PostWithAuthor = {
   forkedFromTitle: null,
 };
 
+const defaultGlobal = { stubs: { RouterLink: RouterLinkStub } };
+
 describe('PostMetaHeader', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -35,31 +37,81 @@ describe('PostMetaHeader', () => {
   });
 
   it('renders post title', () => {
-    const wrapper = mount(PostMetaHeader, { props: { post: mockPost } });
+    const wrapper = mount(PostMetaHeader, {
+      props: { post: mockPost },
+      global: defaultGlobal,
+    });
     expect(wrapper.text()).toContain('Test Post');
   });
 
   it('renders author name', () => {
-    const wrapper = mount(PostMetaHeader, { props: { post: mockPost } });
+    const wrapper = mount(PostMetaHeader, {
+      props: { post: mockPost },
+      global: defaultGlobal,
+    });
     expect(wrapper.text()).toContain('Test User');
   });
 
   it('renders tag chips', () => {
-    const wrapper = mount(PostMetaHeader, { props: { post: mockPost } });
+    const wrapper = mount(PostMetaHeader, {
+      props: { post: mockPost },
+      global: defaultGlobal,
+    });
     expect(wrapper.text()).toContain('#frontend');
     expect(wrapper.text()).toContain('#vue');
   });
 
   it('does not render tags section when tags is empty', () => {
     const noTagsPost = { ...mockPost, tags: [] };
-    const wrapper = mount(PostMetaHeader, { props: { post: noTagsPost } });
+    const wrapper = mount(PostMetaHeader, {
+      props: { post: noTagsPost },
+      global: defaultGlobal,
+    });
     expect(wrapper.text()).not.toContain('#');
   });
 
   it('renders draft badge when isDraft is true', () => {
     const draftPost = { ...mockPost, isDraft: true };
-    const wrapper = mount(PostMetaHeader, { props: { post: draftPost } });
+    const wrapper = mount(PostMetaHeader, {
+      props: { post: draftPost },
+      global: defaultGlobal,
+    });
     expect(wrapper.text()).toContain('Draft');
+  });
+
+  describe('author profile link', () => {
+    function findAuthorLink(wrapper: ReturnType<typeof mount>) {
+      const links = wrapper.findAllComponents(RouterLinkStub);
+      const found = links.find(
+        (l) =>
+          (l.props('to') as { name: string; params: { id: string } }).name === 'user-profile',
+      );
+      if (!found) throw new Error('Author RouterLink not found');
+      return found;
+    }
+
+    it('wraps author avatar and name in a RouterLink to user profile', () => {
+      const wrapper = mount(PostMetaHeader, {
+        props: { post: mockPost },
+        global: defaultGlobal,
+      });
+
+      const authorLink = findAuthorLink(wrapper);
+      expect(authorLink.props('to')).toEqual({
+        name: 'user-profile',
+        params: { id: 'u1' },
+      });
+    });
+
+    it('renders author display name inside the profile link', () => {
+      const wrapper = mount(PostMetaHeader, {
+        props: { post: mockPost },
+        global: defaultGlobal,
+      });
+
+      const authorLink = findAuthorLink(wrapper);
+      expect(authorLink.text()).toContain('Test User');
+    });
   });
 
   describe('fork attribution', () => {
@@ -71,7 +123,7 @@ describe('PostMetaHeader', () => {
       };
       const wrapper = mount(PostMetaHeader, {
         props: { post: forkedPost },
-        global: { stubs: { RouterLink: RouterLinkStub } },
+        global: defaultGlobal,
       });
 
       expect(wrapper.text()).toContain('Forked from');
@@ -83,7 +135,7 @@ describe('PostMetaHeader', () => {
       const forkedPost = { ...mockPost, forkedFromId: 'source-123', forkedFromTitle: null };
       const wrapper = mount(PostMetaHeader, {
         props: { post: forkedPost },
-        global: { stubs: { RouterLink: RouterLinkStub } },
+        global: defaultGlobal,
       });
 
       expect(wrapper.text()).toContain('Forked from');
@@ -91,7 +143,10 @@ describe('PostMetaHeader', () => {
     });
 
     it('does not show fork attribution when forkedFromId is null', () => {
-      const wrapper = mount(PostMetaHeader, { props: { post: mockPost } });
+      const wrapper = mount(PostMetaHeader, {
+        props: { post: mockPost },
+        global: defaultGlobal,
+      });
 
       expect(wrapper.find('[data-testid="fork-attribution"]').exists()).toBe(false);
     });
@@ -104,26 +159,34 @@ describe('PostMetaHeader', () => {
       };
       const wrapper = mount(PostMetaHeader, {
         props: { post: forkedPost },
-        global: { stubs: { RouterLink: RouterLinkStub } },
+        global: defaultGlobal,
       });
 
-      const link = wrapper.findComponent(RouterLinkStub);
-      expect(link.exists()).toBe(true);
-      expect(link.props('to')).toEqual({
+      const links = wrapper.findAllComponents(RouterLinkStub);
+      const forkLink = links.find(
+        (l) =>
+          (l.props('to') as { name: string; params: { id: string } }).name === 'post-view',
+      );
+      if (!forkLink) throw new Error('Fork RouterLink not found');
+      expect(forkLink.props('to')).toEqual({
         name: 'post-view',
         params: { id: 'source-123' },
       });
     });
 
-    it('does not render a link when forkedFromTitle is null', () => {
+    it('does not render a fork link when forkedFromTitle is null', () => {
       const forkedPost = { ...mockPost, forkedFromId: 'source-123', forkedFromTitle: null };
       const wrapper = mount(PostMetaHeader, {
         props: { post: forkedPost },
-        global: { stubs: { RouterLink: RouterLinkStub } },
+        global: defaultGlobal,
       });
 
-      const link = wrapper.findComponent(RouterLinkStub);
-      expect(link.exists()).toBe(false);
+      const links = wrapper.findAllComponents(RouterLinkStub);
+      const forkLink = links.find(
+        (l) =>
+          (l.props('to') as { name: string; params: { id: string } }).name === 'post-view',
+      );
+      expect(forkLink).toBeUndefined();
     });
   });
 
@@ -132,7 +195,10 @@ describe('PostMetaHeader', () => {
       const now = new Date('2026-01-15T12:00:00Z');
       vi.setSystemTime(now);
       const post = { ...mockPost, updatedAt: new Date('2026-01-15T11:59:30Z') };
-      const wrapper = mount(PostMetaHeader, { props: { post } });
+      const wrapper = mount(PostMetaHeader, {
+        props: { post },
+        global: defaultGlobal,
+      });
       expect(wrapper.text()).toContain('just now');
     });
 
@@ -140,7 +206,10 @@ describe('PostMetaHeader', () => {
       const now = new Date('2026-01-15T12:00:00Z');
       vi.setSystemTime(now);
       const post = { ...mockPost, updatedAt: new Date('2026-01-15T11:45:00Z') };
-      const wrapper = mount(PostMetaHeader, { props: { post } });
+      const wrapper = mount(PostMetaHeader, {
+        props: { post },
+        global: defaultGlobal,
+      });
       expect(wrapper.text()).toContain('15m ago');
     });
 
@@ -148,7 +217,10 @@ describe('PostMetaHeader', () => {
       const now = new Date('2026-01-15T12:00:00Z');
       vi.setSystemTime(now);
       const post = { ...mockPost, updatedAt: new Date('2026-01-15T09:00:00Z') };
-      const wrapper = mount(PostMetaHeader, { props: { post } });
+      const wrapper = mount(PostMetaHeader, {
+        props: { post },
+        global: defaultGlobal,
+      });
       expect(wrapper.text()).toContain('3h ago');
     });
 
@@ -156,7 +228,10 @@ describe('PostMetaHeader', () => {
       const now = new Date('2026-01-15T12:00:00Z');
       vi.setSystemTime(now);
       const post = { ...mockPost, updatedAt: new Date('2026-01-13T12:00:00Z') };
-      const wrapper = mount(PostMetaHeader, { props: { post } });
+      const wrapper = mount(PostMetaHeader, {
+        props: { post },
+        global: defaultGlobal,
+      });
       expect(wrapper.text()).toContain('2d ago');
     });
   });

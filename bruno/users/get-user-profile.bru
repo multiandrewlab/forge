@@ -1,0 +1,27 @@
+meta {
+  name: Get User Profile
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/users/{{testuser}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.user.id: eq {{testuser}}
+  res.body.stats.postCount: isNumber
+  res.body.posts: isArray
+}
+
+docs {
+  Fetch the public profile for the seeded test user.
+  Returns user info, stats, badges, and paginated posts.
+}

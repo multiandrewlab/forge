@@ -26,6 +26,7 @@ const mockRoute = { params: { id: 'post-1' } };
 vi.mock('vue-router', () => ({
   useRoute: () => mockRoute,
   useRouter: () => ({ push: vi.fn() }),
+  RouterLink: { template: '<a><slot /></a>', props: ['to'] },
 }));
 
 function makeRevision(overrides: Partial<PostRevision> = {}): PostRevision {
