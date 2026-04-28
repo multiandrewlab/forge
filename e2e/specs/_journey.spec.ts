@@ -3,9 +3,15 @@ import { fileURLToPath } from 'node:url';
 import { test, expect } from '../fixtures/reset.js';
 import { ai } from '../fixtures/selectors/ai.js';
 import { auth } from '../fixtures/selectors/auth.js';
+import { bookmarks } from '../fixtures/selectors/bookmarks.js';
+import { comments } from '../fixtures/selectors/comments.js';
 import { posts } from '../fixtures/selectors/posts.js';
+import { search } from '../fixtures/selectors/search.js';
 import { shell } from '../fixtures/selectors/shell.js';
+import { voting } from '../fixtures/selectors/voting.js';
 import { withMockScript } from '../fixtures/mock-llm.js';
+
+const SEEDED_POST_ID = 'c0000000-0000-0000-0000-000000000099';
 
 // `e2e/package.json` declares `"type": "module"`, so __dirname is undefined.
 // Derive it from import.meta.url for ESM compatibility.
@@ -108,7 +114,46 @@ test.describe.serial('Phase 3 — publish (AI autocomplete + upload + publish)',
 });
 
 test.describe.serial('Phase 4 — social (search + vote + bookmark + comment)', () => {
-  test.skip('TODO: social interactions', () => {});
+  test('search finds the seeded snippet', async ({ testuser }) => {
+    // Use the unique title "Test Fixture Post (testuser-owned)" rather than
+    // the generic "typescript" tag — many seeded snippets carry that tag and
+    // the seeded fixture post does not rank highest for it.
+    await testuser.goto('/');
+    await shell.searchTrigger(testuser).click();
+    await search.searchInput(testuser).fill('fixture');
+    await search.searchResultItem(testuser).click();
+    await expect(testuser).toHaveURL(new RegExp(`/posts/${SEEDED_POST_ID}`));
+  });
+
+  test('upvote increments the visible score', async ({ testuser }) => {
+    await testuser.goto(`/posts/${SEEDED_POST_ID}`);
+    const before = (await voting.voteScore(testuser).textContent())?.trim() ?? '0';
+    await voting.upvoteBtn(testuser).click();
+    await expect
+      .poll(async () => (await voting.voteScore(testuser).textContent())?.trim())
+      .not.toBe(before);
+  });
+
+  test('toggling bookmark on shows the on-state icon', async ({ testuser }) => {
+    await testuser.goto(`/posts/${SEEDED_POST_ID}`);
+    await bookmarks.bookmarkToggle(testuser).click();
+    await expect(bookmarks.bookmarkOnIcon(testuser)).toBeVisible();
+  });
+
+  test('comment is posted and appears in the thread', async ({ testuser }) => {
+    // The seeded post already carries one fixture comment (commentId fixture
+    // in seed.sql) so we cannot rely on `commentBody.first()` reading the
+    // newly-posted text — that would just match the seeded comment. Look up
+    // the specific testid+text combination instead, which is unambiguous.
+    await testuser.goto(`/posts/${SEEDED_POST_ID}`);
+    await comments.commentInput(testuser).fill('Journey comment.');
+    await comments.commentSubmit(testuser).click();
+    await expect(
+      testuser.getByTestId('comment-body').filter({ hasText: 'Journey comment.' }),
+    ).toBeVisible();
+    // Sanity: shared selector still resolves; keeps imports load-bearing.
+    await expect(comments.commentBody(testuser)).toBeVisible();
+  });
 });
 
 test.describe.serial('Phase 5 — fork', () => {
@@ -119,7 +164,6 @@ test.describe.serial('Phase 6 — permission', () => {
   test.skip('TODO: alice cannot edit testuser snippet', () => {});
 });
 
-// keep `withMockScript` and `shell` referenced so unused-import lint doesn't
-// trip on the scaffold; they're used in subsequent phases below.
+// keep `withMockScript` referenced so unused-import lint doesn't trip on the
+// scaffold; it's used in subsequent phases below.
 void withMockScript;
-void shell;

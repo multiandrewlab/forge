@@ -17,6 +17,7 @@
         <input
           ref="inputRef"
           v-model="inputValue"
+          data-testid="search-input"
           type="text"
           placeholder="Search snippets, people, actions..."
           class="flex-1 bg-transparent text-sm text-gray-900 placeholder-gray-400 outline-none dark:text-gray-100"

@@ -2,6 +2,7 @@
   <div class="flex items-center gap-4 border-b border-gray-700 py-3">
     <!-- Upvote -->
     <button
+      data-testid="upvote-btn"
       class="flex items-center gap-1 text-sm"
       :class="currentVote === 1 ? 'text-primary' : 'text-gray-400'"
       aria-label="Upvote"
@@ -10,7 +11,7 @@
       <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
       </svg>
-      {{ post.voteCount }}
+      <span data-testid="vote-score">{{ post.voteCount }}</span>
     </button>
 
     <!-- Downvote -->
@@ -27,17 +28,28 @@
 
     <!-- Bookmark -->
     <button
+      data-testid="bookmark-toggle-btn"
       class="flex items-center gap-1 text-sm"
       :class="isBookmarked ? 'text-yellow-400' : 'text-gray-400'"
       aria-label="Bookmark"
       @click="handleBookmark"
     >
       <svg
+        v-if="isBookmarked"
+        data-testid="bookmark-on-icon"
         class="h-4 w-4"
         viewBox="0 0 24 24"
         stroke="currentColor"
-        :fill="isBookmarked ? 'currentColor' : 'none'"
+        fill="currentColor"
       >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
+        />
+      </svg>
+      <svg v-else class="h-4 w-4" viewBox="0 0 24 24" stroke="currentColor" fill="none">
         <path
           stroke-linecap="round"
           stroke-linejoin="round"

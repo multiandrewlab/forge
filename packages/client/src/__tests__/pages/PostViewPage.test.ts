@@ -69,6 +69,24 @@ vi.mock('@/components/post/PresenceIndicator.vue', () => ({
   },
 }));
 
+// --- Mock PostActions (Phase-4 social bar) ---
+vi.mock('@/components/post/PostActions.vue', () => ({
+  default: {
+    name: 'PostActions',
+    props: ['post'],
+    template: '<div data-testid="post-actions">vc:{{ post?.voteCount }}</div>',
+  },
+}));
+
+// --- Mock CommentSection ---
+vi.mock('@/components/post/CommentSection.vue', () => ({
+  default: {
+    name: 'CommentSection',
+    props: ['postId', 'currentUserId'],
+    template: '<div data-testid="comment-section">{{ postId }}|{{ currentUserId }}</div>',
+  },
+}));
+
 // --- Mock useComments composable (subscribeRealtime) ---
 const mockCommentsSubscribeCleanup = vi.fn();
 const mockCommentsSubscribeRealtime = vi.fn().mockReturnValue(mockCommentsSubscribeCleanup);
@@ -524,6 +542,119 @@ describe('PostViewPage', () => {
       await flushPromises();
 
       expect(wrapper.find('[data-testid="presence-indicator"]').exists()).toBe(true);
+    });
+  });
+
+  describe('PostActions + CommentSection wiring', () => {
+    it('renders PostActions with the synthesised PostWithAuthor adapter', async () => {
+      const post = createMockPost({ voteCount: 42 });
+      mockFetchPost.mockImplementation(async () => {
+        mockCurrentPost.value = post;
+      });
+      mockUser.value = createMockUser({ id: post.authorId });
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      const actions = wrapper.find('[data-testid="post-actions"]');
+      expect(actions.exists()).toBe(true);
+      expect(actions.text()).toContain('vc:42');
+    });
+
+    it('does NOT render PostActions when currentPost becomes null', async () => {
+      const post = createMockPost();
+      mockFetchPost.mockImplementation(async () => {
+        mockCurrentPost.value = post;
+      });
+      mockUser.value = createMockUser({ id: post.authorId });
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      // Sanity: PostActions is rendered while the post is present.
+      expect(wrapper.find('[data-testid="post-actions"]').exists()).toBe(true);
+
+      // Clear currentPost — the surrounding v-if unmounts the whole block.
+      mockCurrentPost.value = null;
+      await wrapper.vm.$nextTick();
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid="post-actions"]').exists()).toBe(false);
+    });
+
+    it('renders CommentSection wired to postId + currentUserId', async () => {
+      const post = createMockPost({ id: 'pv-id' });
+      mockFetchPost.mockImplementation(async () => {
+        mockCurrentPost.value = post;
+      });
+      mockUser.value = createMockUser({ id: 'viewer-id' });
+
+      const wrapper = await mountPage('pv-id');
+      await flushPromises();
+
+      const section = wrapper.find('[data-testid="comment-section"]');
+      expect(section.exists()).toBe(true);
+      expect(section.text()).toContain('pv-id');
+      expect(section.text()).toContain('viewer-id');
+    });
+
+    it('passes empty currentUserId to CommentSection when user is null', async () => {
+      const post = createMockPost({ id: 'pv-id' });
+      mockFetchPost.mockImplementation(async () => {
+        mockCurrentPost.value = post;
+      });
+      mockUser.value = null;
+
+      const wrapper = await mountPage('pv-id');
+      await flushPromises();
+
+      const section = wrapper.find('[data-testid="comment-section"]');
+      expect(section.exists()).toBe(true);
+      expect(section.text()).toContain('pv-id');
+    });
+
+    it('synthesises author fields from the latest revision (covers rev-present branch)', async () => {
+      type RevWithMeta = NonNullable<PostWithRevision['revisions']>[number] & {
+        authorDisplayName?: string | null;
+        authorAvatarUrl?: string | null;
+      };
+      const rev: RevWithMeta = {
+        id: 'rev-x',
+        postId: 'post-1',
+        content: 'x',
+        message: null,
+        revisionNumber: 1,
+        createdAt: new Date(),
+        authorDisplayName: 'Display',
+        authorAvatarUrl: 'https://avatar.example/x.png',
+      };
+      const post = createMockPost({
+        revisions: [rev as PostWithRevision['revisions'][number]],
+      });
+      mockFetchPost.mockImplementation(async () => {
+        mockCurrentPost.value = post;
+      });
+      mockUser.value = createMockUser({ id: post.authorId });
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      // With the revision present, postForActions resolves successfully.
+      expect(wrapper.find('[data-testid="post-actions"]').exists()).toBe(true);
+    });
+
+    it('handles no-revision case in postForActions adapter (rev?.field fallback)', async () => {
+      const post = createMockPost({ revisions: [] });
+      mockFetchPost.mockImplementation(async () => {
+        mockCurrentPost.value = post;
+      });
+      mockUser.value = createMockUser({ id: post.authorId });
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      // Even with no revision, postForActions must still resolve (uses ?? fallbacks).
+      expect(wrapper.find('[data-testid="post-actions"]').exists()).toBe(true);
     });
   });
 });

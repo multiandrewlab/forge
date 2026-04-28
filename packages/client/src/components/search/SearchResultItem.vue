@@ -1,5 +1,6 @@
 <template>
   <div
+    data-testid="search-result-item"
     role="option"
     :aria-selected="active"
     :class="[
