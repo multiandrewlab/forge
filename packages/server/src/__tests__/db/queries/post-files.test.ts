@@ -14,7 +14,8 @@ import {
   setStagedFileRevision,
   carryForwardFile,
   deleteFileById,
-  cleanupStagedFiles,
+  findStaleStagedFiles,
+  deleteStagedFilesByIds,
 } from '../../../db/queries/post-files.js';
 import type { PostFileRow } from '../../../db/queries/types.js';
 
@@ -266,26 +267,46 @@ describe('post file queries', () => {
     });
   });
 
-  describe('cleanupStagedFiles', () => {
-    it('deletes staged files older than 24 hours and returns count', async () => {
-      mockQuery.mockResolvedValue({ rows: [], rowCount: 5 });
-      const result = await cleanupStagedFiles();
+  describe('findStaleStagedFiles', () => {
+    it('returns staged files older than 24 hours', async () => {
+      const staleFile: PostFileRow = { ...stagedFile, created_at: new Date('2025-01-01') };
+      mockQuery.mockResolvedValue({ rows: [staleFile], rowCount: 1 });
+      const result = await findStaleStagedFiles();
       expect(mockQuery).toHaveBeenCalledWith(
-        "DELETE FROM post_files WHERE revision_id IS NULL AND created_at < NOW() - INTERVAL '24 hours'",
+        "SELECT * FROM post_files WHERE revision_id IS NULL AND created_at < NOW() - INTERVAL '24 hours'",
         [],
       );
-      expect(result).toBe(5);
+      expect(result).toEqual([staleFile]);
     });
 
-    it('returns 0 when no stale staged files exist', async () => {
+    it('returns empty array when no stale staged files exist', async () => {
       mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });
-      const result = await cleanupStagedFiles();
+      const result = await findStaleStagedFiles();
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe('deleteStagedFilesByIds', () => {
+    it('deletes staged files by ids and returns count', async () => {
+      mockQuery.mockResolvedValue({ rows: [], rowCount: 3 });
+      const ids = ['id-1', 'id-2', 'id-3'];
+      const result = await deleteStagedFilesByIds(ids);
+      expect(mockQuery).toHaveBeenCalledWith(
+        'DELETE FROM post_files WHERE id = ANY($1) AND revision_id IS NULL',
+        [ids],
+      );
+      expect(result).toBe(3);
+    });
+
+    it('returns 0 and skips DB call when ids array is empty', async () => {
+      const result = await deleteStagedFilesByIds([]);
+      expect(mockQuery).not.toHaveBeenCalled();
       expect(result).toBe(0);
     });
 
     it('returns 0 when rowCount is null (nullish coalescing branch)', async () => {
       mockQuery.mockResolvedValue({ rows: [], rowCount: null });
-      const result = await cleanupStagedFiles();
+      const result = await deleteStagedFilesByIds(['id-1']);
       expect(result).toBe(0);
     });
   });

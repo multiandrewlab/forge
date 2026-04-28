@@ -88,9 +88,15 @@ export async function fileRoutes(app: FastifyInstance): Promise<void> {
       // 10. If object storage, upload and update storage_key
       if (storageMode === 'object') {
         const key = stagingKey(request.user.id, row.id, filename);
-        await app.storage.upload(key, buffer, data.mimetype, buffer.length);
-        await query('UPDATE post_files SET storage_key = $1 WHERE id = $2', [key, row.id]);
-        row.storage_key = key;
+        try {
+          await app.storage.upload(key, buffer, data.mimetype, buffer.length);
+          await query('UPDATE post_files SET storage_key = $1 WHERE id = $2', [key, row.id]);
+          row.storage_key = key;
+        } catch (err) {
+          // Compensate: delete the orphan DB row
+          await query('DELETE FROM post_files WHERE id = $1 AND post_id = $2', [row.id, id]);
+          throw err;
+        }
       }
 
       request.log.info({ event: 'file.upload', postId: id, fileId: row.id, mimeType: data.mimetype, fileSize: buffer.length }, 'file uploaded');

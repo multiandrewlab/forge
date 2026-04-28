@@ -228,6 +228,46 @@ describe('file routes', () => {
       expect(mockStorageUpload).toHaveBeenCalled();
     });
 
+    it('deletes orphan DB row when object storage upload fails', async () => {
+      // Create a buffer larger than 64KB to trigger object storage
+      const largeContent = Buffer.alloc(65_537, 'x');
+      const { body, boundary } = buildMultipartBody('photo.png', largeContent, 'image/png');
+
+      // Mock file-type for image magic bytes validation
+      mockFileTypeFromBuffer.mockResolvedValueOnce({ mime: 'image/png' });
+
+      // findPostById
+      mockQuery.mockResolvedValueOnce({ rows: [samplePostRow], rowCount: 1 });
+      // getNextSortOrder
+      mockQuery.mockResolvedValueOnce({ rows: [{ next: 0 }], rowCount: 1 });
+      // createPostFile — returns row with id
+      mockQuery.mockResolvedValueOnce({ rows: [sampleObjectFileRow], rowCount: 1 });
+      // DELETE orphan row (compensation)
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 1 });
+
+      // Simulate storage upload failure
+      mockStorageUpload.mockRejectedValueOnce(new Error('MinIO unreachable'));
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/posts/${postId}/files`,
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': `multipart/form-data; boundary=${boundary}`,
+        },
+        body,
+      });
+
+      // Should propagate the error (500)
+      expect(response.statusCode).toBe(500);
+      // The compensation DELETE should have been called
+      const deleteCalls = mockQuery.mock.calls.filter(
+        (call: unknown[]) => typeof call[0] === 'string' && (call[0] as string).startsWith('DELETE FROM post_files WHERE id'),
+      );
+      expect(deleteCalls).toHaveLength(1);
+      expect(deleteCalls[0][1]).toEqual([sampleObjectFileRow.id, postId]);
+    });
+
     it('returns 401 without auth', async () => {
       const { body, boundary } = buildMultipartBody('hello.ts', 'content', 'text/plain');
 

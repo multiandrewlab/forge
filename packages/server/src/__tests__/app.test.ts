@@ -2,7 +2,8 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { buildApp } from '../app.js';
 
 vi.mock('../db/queries/post-files.js', () => ({
-  cleanupStagedFiles: vi.fn().mockResolvedValue(0),
+  findStaleStagedFiles: vi.fn().mockResolvedValue([]),
+  deleteStagedFilesByIds: vi.fn().mockResolvedValue(0),
 }));
 
 describe('buildApp', () => {
@@ -46,37 +47,49 @@ describe('buildApp', () => {
   });
 
   describe('onReady staged file cleanup', () => {
-    it('calls cleanupStagedFiles on ready', async () => {
-      const { cleanupStagedFiles } = await import('../db/queries/post-files.js');
+    it('calls findStaleStagedFiles on ready', async () => {
+      const { findStaleStagedFiles } = await import('../db/queries/post-files.js');
 
       app = await buildApp();
       await app.ready();
 
-      expect(cleanupStagedFiles).toHaveBeenCalled();
+      expect(findStaleStagedFiles).toHaveBeenCalled();
     });
 
-    it('logs info when orphaned files are cleaned', async () => {
-      const { cleanupStagedFiles } = await import('../db/queries/post-files.js');
-      vi.mocked(cleanupStagedFiles).mockResolvedValue(5);
+    it('logs info and deletes DB rows when orphaned files are cleaned', async () => {
+      const { findStaleStagedFiles, deleteStagedFilesByIds } = await import('../db/queries/post-files.js');
+      const staleFile = {
+        id: 'ff000000-0000-0000-0000-000000000001',
+        post_id: 'pp000000-0000-0000-0000-000000000001',
+        revision_id: null,
+        filename: 'old.ts',
+        content: null,
+        storage_key: null,
+        mime_type: 'text/plain',
+        sort_order: 0,
+        file_size: null,
+        created_at: new Date('2025-01-01'),
+      };
+      vi.mocked(findStaleStagedFiles).mockResolvedValue([staleFile]);
+      vi.mocked(deleteStagedFilesByIds).mockResolvedValue(1);
 
       app = await buildApp();
-      // Spy on the logger before ready triggers the hook
       const infoSpy = vi.spyOn(app.log, 'info');
       await app.ready();
 
-      expect(cleanupStagedFiles).toHaveBeenCalled();
+      expect(findStaleStagedFiles).toHaveBeenCalled();
+      expect(deleteStagedFilesByIds).toHaveBeenCalledWith([staleFile.id]);
       expect(infoSpy).toHaveBeenCalledWith(
-        { count: 5 },
+        { count: 1 },
         'Cleaned up orphaned staged files',
       );
     });
 
     it('does not fail server startup if cleanup errors', async () => {
-      const { cleanupStagedFiles } = await import('../db/queries/post-files.js');
-      vi.mocked(cleanupStagedFiles).mockRejectedValue(new Error('DB down'));
+      const { findStaleStagedFiles } = await import('../db/queries/post-files.js');
+      vi.mocked(findStaleStagedFiles).mockRejectedValue(new Error('DB down'));
 
       app = await buildApp();
-      // Spy on the logger before ready triggers the hook
       const warnSpy = vi.spyOn(app.log, 'warn');
       await app.ready();
 

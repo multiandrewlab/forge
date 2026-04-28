@@ -425,6 +425,8 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
     // --- File-aware path: use withTransaction ------------------
     // Track staging keys for post-transaction cleanup
     const stagingKeysToDelete: string[] = [];
+    // Track copied permanent keys for rollback compensation
+    const copiedKeys: string[] = [];
 
     let revisionRow: PostRevisionRow;
     try {
@@ -456,6 +458,7 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
           if (file.storage_key) {
             newStorageKey = permanentKey(id, rev.id, file.filename);
             await app.storage.copy(file.storage_key, newStorageKey);
+            copiedKeys.push(newStorageKey);
             stagingKeysToDelete.push(file.storage_key);
           }
 
@@ -505,6 +508,14 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
         return rev;
       });
     } catch (err) {
+      // Compensate: delete any storage objects copied during the failed transaction
+      for (const key of copiedKeys) {
+        try {
+          await app.storage.delete(key);
+        } catch {
+          // Best-effort
+        }
+      }
       const message = err instanceof Error ? err.message : 'Transaction failed';
       if (message.startsWith('Staged file not found')) {
         return reply.status(400).send({ error: message });
