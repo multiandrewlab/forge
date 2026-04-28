@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   ALLOWED_MIME_PREFIXES,
+  ALLOWED_MIME_SAFE_TEXT,
   ALLOWED_MIME_EXACT,
   MAX_FILE_SIZE,
   INLINE_THRESHOLD,
@@ -22,8 +23,24 @@ describe('file constants', () => {
     expect(INLINE_THRESHOLD).toBe(64 * 1024);
   });
 
-  it('ALLOWED_MIME_PREFIXES should contain text/', () => {
-    expect(ALLOWED_MIME_PREFIXES).toContain('text/');
+  it('ALLOWED_MIME_SAFE_TEXT should contain safe text types', () => {
+    expect(ALLOWED_MIME_SAFE_TEXT).toContain('text/plain');
+    expect(ALLOWED_MIME_SAFE_TEXT).toContain('text/csv');
+    expect(ALLOWED_MIME_SAFE_TEXT).toContain('text/markdown');
+    expect(ALLOWED_MIME_SAFE_TEXT).toContain('text/tab-separated-values');
+  });
+
+  it('ALLOWED_MIME_SAFE_TEXT should NOT contain active-content types', () => {
+    expect(ALLOWED_MIME_SAFE_TEXT).not.toContain('text/html');
+    expect(ALLOWED_MIME_SAFE_TEXT).not.toContain('text/xml');
+  });
+
+  it('ALLOWED_MIME_PREFIXES should contain text/x-', () => {
+    expect(ALLOWED_MIME_PREFIXES).toContain('text/x-');
+  });
+
+  it('ALLOWED_MIME_PREFIXES should NOT contain text/', () => {
+    expect(ALLOWED_MIME_PREFIXES).not.toContain('text/');
   });
 
   it('ALLOWED_MIME_EXACT should contain expected MIME types', () => {
@@ -45,21 +62,30 @@ describe('file constants', () => {
 // isAllowedMimeType
 // ---------------------------------------------------------------------------
 describe('isAllowedMimeType', () => {
-  // -- prefix matches --
+  // -- safe text allowlist matches --
   it('should allow text/plain', () => {
     expect(isAllowedMimeType('text/plain')).toBe(true);
   });
 
-  it('should allow text/typescript', () => {
-    expect(isAllowedMimeType('text/typescript')).toBe(true);
+  it('should allow text/csv', () => {
+    expect(isAllowedMimeType('text/csv')).toBe(true);
   });
 
   it('should allow text/markdown', () => {
     expect(isAllowedMimeType('text/markdown')).toBe(true);
   });
 
-  it('should allow text/html', () => {
-    expect(isAllowedMimeType('text/html')).toBe(true);
+  it('should allow text/tab-separated-values', () => {
+    expect(isAllowedMimeType('text/tab-separated-values')).toBe(true);
+  });
+
+  // -- text/x- prefix matches --
+  it('should allow text/x-python', () => {
+    expect(isAllowedMimeType('text/x-python')).toBe(true);
+  });
+
+  it('should allow text/x-java-source', () => {
+    expect(isAllowedMimeType('text/x-java-source')).toBe(true);
   });
 
   // -- exact matches --
@@ -89,6 +115,15 @@ describe('isAllowedMimeType', () => {
 
   it('should allow image/webp', () => {
     expect(isAllowedMimeType('image/webp')).toBe(true);
+  });
+
+  // -- rejected active-content text types (XSS vectors) --
+  it('should reject text/html (stored XSS vector)', () => {
+    expect(isAllowedMimeType('text/html')).toBe(false);
+  });
+
+  it('should reject text/xml (active-content type)', () => {
+    expect(isAllowedMimeType('text/xml')).toBe(false);
   });
 
   // -- rejected types --
@@ -207,13 +242,13 @@ describe('fileMetadataSchema', () => {
   it('should accept valid metadata with all fields', () => {
     const result = fileMetadataSchema.safeParse({
       filename: 'main.ts',
-      mimeType: 'text/typescript',
+      mimeType: 'text/x-typescript',
       fileSize: 1024,
     });
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.filename).toBe('main.ts');
-      expect(result.data.mimeType).toBe('text/typescript');
+      expect(result.data.mimeType).toBe('text/x-typescript');
       expect(result.data.fileSize).toBe(1024);
     }
   });
