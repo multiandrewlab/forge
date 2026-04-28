@@ -21,7 +21,7 @@ import { fileRoutes } from './routes/files.js';
 import { userProfileRoutes } from './routes/user-profiles.js';
 import { websocketPlugin } from './plugins/websocket/index.js';
 import { langchainPlugin } from './plugins/langchain/index.js';
-import { cleanupStagedFiles } from './db/queries/post-files.js';
+import { findStaleStagedFiles, deleteStagedFilesByIds } from './db/queries/post-files.js';
 
 export async function buildApp() {
   const app = Fastify({
@@ -93,7 +93,24 @@ export async function buildApp() {
 
   app.addHook('onReady', async () => {
     try {
-      const cleaned = await cleanupStagedFiles();
+      const staleFiles = await findStaleStagedFiles();
+      if (staleFiles.length === 0) return;
+
+      // Delete storage objects first (best-effort)
+      if (app.storage) {
+        for (const file of staleFiles) {
+          if (file.storage_key) {
+            try {
+              await app.storage.delete(file.storage_key);
+            } catch {
+              app.log.warn({ storageKey: file.storage_key }, 'Failed to delete stale storage object');
+            }
+          }
+        }
+      }
+
+      // Then delete DB rows
+      const cleaned = await deleteStagedFilesByIds(staleFiles.map((f) => f.id));
       if (cleaned > 0) {
         app.log.info({ count: cleaned }, 'Cleaned up orphaned staged files');
       }

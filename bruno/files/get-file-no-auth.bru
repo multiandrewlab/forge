@@ -1,0 +1,28 @@
+meta {
+  name: Get Staged File Content (No Auth)
+  type: http
+  seq: 14
+}
+
+get {
+  url: {{baseUrl}}/api/posts/{{postId}}/files/{{createdFileId}}
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 401
+}
+
+docs {
+  Error-path test: get file content without authentication.
+  If the file is staged (revision_id IS NULL), authentication is
+  required regardless of post visibility. This test uses createdFileId
+  which is a staged file from the upload test.
+
+  Note: This test depends on a prior upload having set createdFileId.
+  If createdFileId is empty/unset, the server returns 404 (file not found)
+  rather than 401. In that case the assert will fail — run after upload tests.
+
+  Expected: 401 Unauthorized
+}

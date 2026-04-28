@@ -63,6 +63,18 @@ describe('sanitizeFilename', () => {
     // but forward-slash is always stripped
     expect(sanitizeFilename('C:/Users/test/file.ts')).toBe('file.ts');
   });
+
+  it('strips Windows-style backslash directory traversal on all platforms', () => {
+    expect(sanitizeFilename('..\\..\\secret.txt')).toBe('secret.txt');
+  });
+
+  it('strips mixed forward/backslash traversal', () => {
+    expect(sanitizeFilename('..\\../..\\secret.txt')).toBe('secret.txt');
+  });
+
+  it('strips UNC-style paths', () => {
+    expect(sanitizeFilename('\\\\server\\share\\file.txt')).toBe('file.txt');
+  });
 });
 
 // ---------------------------------------------------------------------------
