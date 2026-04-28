@@ -501,6 +501,43 @@ describe('POST /:id/revisions with file operations', () => {
     expect(mockStorageDelete).toHaveBeenCalledWith(expectedPermanentKey);
   });
 
+  it('still throws original error when compensation storage.delete fails', async () => {
+    // findPostById
+    mockQuery.mockResolvedValueOnce({ rows: [samplePostRow], rowCount: 1 });
+
+    const mockClient = { query: vi.fn() };
+    mockWithTransaction.mockImplementation(async (fn: (client: typeof mockClient) => unknown) => {
+      // Create revision
+      mockClient.query.mockResolvedValueOnce({ rows: [newRevisionRow], rowCount: 1 });
+      // Verify staged object file
+      mockClient.query.mockResolvedValueOnce({ rows: [stagedObjectFile], rowCount: 1 });
+      // storage.copy succeeds
+      mockStorageCopy.mockResolvedValueOnce(undefined);
+      // DB update throws (simulates failure after copy)
+      mockClient.query.mockRejectedValueOnce(new Error('DB constraint violation'));
+
+      return fn(mockClient);
+    });
+
+    // Compensation storage.delete ALSO fails (best-effort — must not mask original error)
+    mockStorageDelete.mockRejectedValueOnce(new Error('Storage unavailable'));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/posts/${postId}/revisions`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        content: 'console.log("updated");',
+        message: 'File update',
+        stagedFileIds: [fileId2],
+      },
+    });
+
+    // Original DB error should still propagate as 500, not masked by storage failure
+    expect(response.statusCode).toBe(500);
+    expect(mockStorageDelete).toHaveBeenCalled();
+  });
+
   // ─── Best-effort: staging delete failure does not fail request ──────
 
   it('succeeds even if staging delete fails (best-effort cleanup)', async () => {
