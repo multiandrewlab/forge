@@ -21,6 +21,9 @@ import { fileRoutes } from './routes/files.js';
 import { websocketPlugin } from './plugins/websocket/index.js';
 import { langchainPlugin } from './plugins/langchain/index.js';
 import { cleanupStagedFiles } from './db/queries/post-files.js';
+import { registerTestRoutes } from './routes/__test__.js';
+import { isE2EFlagSet } from './lib/env-guards.js';
+import { query } from './db/connection.js';
 
 export async function buildApp() {
   const app = Fastify({
@@ -88,6 +91,21 @@ export async function buildApp() {
   await app.register(aiRoutes, { prefix: '/api/ai' });
   await app.register(playgroundRoutes, { prefix: '/api' });
   await app.register(fileRoutes, { prefix: '/api/posts' });
+
+  if (isE2EFlagSet(process.env.ENABLE_TEST_ROUTES)) {
+    await registerTestRoutes(app, {
+      env: {
+        ENABLE_TEST_ROUTES: process.env.ENABLE_TEST_ROUTES,
+        NODE_ENV: process.env.NODE_ENV,
+      },
+      secret: process.env.E2E_SECRET ?? '',
+      isCI: process.env.CI === 'true',
+      host: process.env.HOST ?? '0.0.0.0',
+      pgQuery: async (sql) => {
+        await query(sql);
+      },
+    });
+  }
 
   app.addHook('onReady', async () => {
     try {

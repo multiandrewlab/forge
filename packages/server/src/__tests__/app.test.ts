@@ -65,10 +65,7 @@ describe('buildApp', () => {
       await app.ready();
 
       expect(cleanupStagedFiles).toHaveBeenCalled();
-      expect(infoSpy).toHaveBeenCalledWith(
-        { count: 5 },
-        'Cleaned up orphaned staged files',
-      );
+      expect(infoSpy).toHaveBeenCalledWith({ count: 5 }, 'Cleaned up orphaned staged files');
     });
 
     it('does not fail server startup if cleanup errors', async () => {
@@ -87,5 +84,99 @@ describe('buildApp', () => {
         'Failed to clean up staged files',
       );
     });
+  });
+});
+
+describe('app — test routes', () => {
+  let app: Awaited<ReturnType<typeof buildApp>> | undefined;
+  const originalEnv = { ...process.env };
+
+  afterEach(async () => {
+    if (app) {
+      await app.close();
+      app = undefined;
+    }
+    process.env = { ...originalEnv };
+    vi.resetModules();
+  });
+
+  it('registers /api/__test__/reset (returns 403 at secret gate) when ENABLE_TEST_ROUTES=1', async () => {
+    process.env.ENABLE_TEST_ROUTES = '1';
+    process.env.NODE_ENV = 'test';
+    process.env.HOST = '127.0.0.1';
+    process.env.E2E_SECRET = 'app-test-secret';
+
+    const { buildApp: buildAppFresh } = await import('../app.js');
+    app = await buildAppFresh();
+    await app.ready();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/__test__/reset',
+    });
+
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('does NOT register /api/__test__/reset (returns 404) when ENABLE_TEST_ROUTES is unset', async () => {
+    delete process.env.ENABLE_TEST_ROUTES;
+    process.env.NODE_ENV = 'test';
+
+    const { buildApp: buildAppFresh } = await import('../app.js');
+    app = await buildAppFresh();
+    await app.ready();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/__test__/reset',
+    });
+
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('registers /api/__test__/reset with default fallbacks when E2E_SECRET, HOST unset and CI=true', async () => {
+    process.env.ENABLE_TEST_ROUTES = '1';
+    process.env.NODE_ENV = 'test';
+    process.env.CI = 'true';
+    delete process.env.HOST;
+    delete process.env.E2E_SECRET;
+
+    const { buildApp: buildAppFresh } = await import('../app.js');
+    app = await buildAppFresh();
+    await app.ready();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/__test__/reset',
+    });
+
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('wires pgQuery through db/connection.query when reset succeeds', async () => {
+    process.env.ENABLE_TEST_ROUTES = '1';
+    process.env.NODE_ENV = 'test';
+    process.env.HOST = '127.0.0.1';
+    process.env.E2E_SECRET = 'app-test-secret';
+
+    vi.doMock('../db/connection.js', () => ({
+      query: vi.fn().mockResolvedValue({ rows: [] }),
+    }));
+
+    const { buildApp: buildAppFresh } = await import('../app.js');
+    const { query: mockedQuery } = await import('../db/connection.js');
+    app = await buildAppFresh();
+    await app.ready();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/__test__/reset',
+      headers: { 'X-E2E-Secret': 'app-test-secret' },
+    });
+
+    expect(res.statusCode).toBe(204);
+    // Lock + seed + unlock = 3 calls; proves the inline pgQuery callback ran.
+    expect(mockedQuery).toHaveBeenCalledTimes(3);
+    vi.doUnmock('../db/connection.js');
   });
 });
