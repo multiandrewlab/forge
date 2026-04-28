@@ -38,12 +38,14 @@ vi.mock('@/components/editor/PostEditor.vue', () => ({
 
 const mockCreatePost = vi.fn();
 const mockSaveRevision = vi.fn();
+const mockPublishPost = vi.fn();
 const mockError: Ref<string | null> = ref(null);
 
 vi.mock('@/composables/usePosts', () => ({
   usePosts: () => ({
     createPost: mockCreatePost,
     saveRevision: mockSaveRevision,
+    publishPost: mockPublishPost,
     error: mockError,
   }),
 }));
@@ -87,6 +89,7 @@ describe('PostNewPage', () => {
     router = createTestRouter();
     mockCreatePost.mockReset();
     mockSaveRevision.mockReset();
+    mockPublishPost.mockReset();
     mockDetectLanguage.mockReset();
     mockError.value = null;
   });
@@ -176,9 +179,10 @@ describe('PostNewPage', () => {
 
   // ── Publish / Create ──────────────────────────────────────────
   describe('publish', () => {
-    it('should call createPost and redirect to edit page on successful publish', async () => {
+    it('should call createPost, publishPost, and redirect to view page on successful publish', async () => {
       mockCreatePost.mockResolvedValue('post-123');
       mockSaveRevision.mockResolvedValue(undefined);
+      mockPublishPost.mockResolvedValue(undefined);
       const wrapper = await mountPage();
 
       const editor = wrapper.findComponent({ name: 'PostEditor' });
@@ -192,7 +196,8 @@ describe('PostNewPage', () => {
           visibility: 'public',
         }),
       );
-      expect(router.currentRoute.value.name).toBe('post-edit');
+      expect(mockPublishPost).toHaveBeenCalledWith('post-123');
+      expect(router.currentRoute.value.name).toBe('post-view');
       expect(router.currentRoute.value.params.id).toBe('post-123');
     });
 
@@ -210,6 +215,7 @@ describe('PostNewPage', () => {
     it('should skip saveRevision when content is empty on publish', async () => {
       mockCreatePost.mockResolvedValue('post-789');
       mockSaveRevision.mockResolvedValue(undefined);
+      mockPublishPost.mockResolvedValue(undefined);
       const wrapper = await mountPage();
 
       // Do NOT emit any content update — content stays empty string
@@ -219,7 +225,8 @@ describe('PostNewPage', () => {
 
       // saveRevision must NOT have been called because content is ''
       expect(mockSaveRevision).not.toHaveBeenCalled();
-      expect(router.currentRoute.value.name).toBe('post-edit');
+      expect(mockPublishPost).toHaveBeenCalledWith('post-789');
+      expect(router.currentRoute.value.name).toBe('post-view');
       expect(router.currentRoute.value.params.id).toBe('post-789');
     });
 

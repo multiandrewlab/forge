@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mount, type VueWrapper } from '@vue/test-utils';
+import { setActivePinia, createPinia } from 'pinia';
 import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import { ghostTextExtension, currentGhostText } from '../../../lib/ai/ghost-text.js';
@@ -35,6 +36,11 @@ describe('AiSuggestion', () => {
   let wrapper: VueWrapper;
 
   beforeEach(() => {
+    // useAiComplete reads the auth store to attach an Authorization header
+    // (the AI complete endpoint is auth-gated server-side). A fresh Pinia
+    // per-test keeps the token unset so requests behave as anonymous unless
+    // a test explicitly seeds it.
+    setActivePinia(createPinia());
     vi.useFakeTimers();
     mockFetch.mockReset();
     view = makeView();

@@ -1,8 +1,15 @@
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { test, expect } from '../fixtures/reset.js';
+import { ai } from '../fixtures/selectors/ai.js';
 import { auth } from '../fixtures/selectors/auth.js';
 import { posts } from '../fixtures/selectors/posts.js';
 import { shell } from '../fixtures/selectors/shell.js';
 import { withMockScript } from '../fixtures/mock-llm.js';
+
+// `e2e/package.json` declares `"type": "module"`, so __dirname is undefined.
+// Derive it from import.meta.url for ESM compatibility.
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const FRESH_USER = {
   email: 'journey+register@example.com',
@@ -62,7 +69,42 @@ test.describe.serial('Phase 2 — draft', () => {
 });
 
 test.describe.serial('Phase 3 — publish (AI autocomplete + upload + publish)', () => {
-  test.skip('TODO: AI autocomplete + upload + publish', () => {});
+  // The AI autocomplete suggestion is rendered as a CodeMirror widget decoration
+  // (see packages/client/src/components/editor/AiSuggestion.vue + ghost-text.ts),
+  // not a Vue-rendered popup. Attaching a stable testid to the suggestion itself
+  // requires reworking the ghost-text widget builder. The accept-side already has
+  // a screen-reader-only button with `ai-autocomplete-accept-btn`. The mock LLM
+  // wiring is verified via Bruno's `bruno/ai/complete.bru`. Tracked for a polish
+  // PR; skipped here to keep the journey deterministic.
+  test.skip('AI autocomplete inserts a suggestion', async ({ testuser }) => {
+    await withMockScript(testuser, 'autocomplete-typescript-react');
+    await testuser.goto('/posts/new');
+    await posts.newPostTitle(testuser).fill('Journey publish');
+    await posts.newPostBody(testuser).fill('export const ');
+    await expect(ai.autocompleteSuggestion(testuser)).toContainText('Button');
+    await ai.acceptSuggestion(testuser).click();
+  });
+
+  test('upload a file and see its preview', async ({ testuser }) => {
+    // Self-contained: navigate + create a fresh draft so this passes even when
+    // the autocomplete sub-test above is skipped.
+    await testuser.goto('/posts/new');
+    await posts.newPostTitle(testuser).fill('Journey publish');
+    await posts.newPostBody(testuser).fill('Body for upload phase.');
+    await posts
+      .fileUploadInput(testuser)
+      .setInputFiles(join(__dirname, '..', 'fixtures', 'journey-asset.txt'));
+    await expect(posts.fileUploadPreview(testuser)).toBeVisible();
+  });
+
+  test('publish the post', async ({ testuser }) => {
+    // Self-contained: create a fresh draft, then publish.
+    await testuser.goto('/posts/new');
+    await posts.newPostTitle(testuser).fill('Journey publish');
+    await posts.newPostBody(testuser).fill('Body for publish phase.');
+    await posts.newPostPublish(testuser).click();
+    await expect(posts.publishedBadge(testuser)).toBeVisible();
+  });
 });
 
 test.describe.serial('Phase 4 — social (search + vote + bookmark + comment)', () => {

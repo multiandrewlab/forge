@@ -622,4 +622,64 @@ describe('PostEditor', () => {
       expect(uploadSpy).toHaveBeenCalledWith('post-123', mockFile2);
     });
   });
+
+  describe('local file input (file-upload-input)', () => {
+    function setInputFiles(input: HTMLInputElement, files: File[]): void {
+      Object.defineProperty(input, 'files', {
+        value: {
+          length: files.length,
+          item: (i: number) => files[i] ?? null,
+          [Symbol.iterator]: function* () {
+            for (const f of files) yield f;
+          },
+        },
+        configurable: true,
+      });
+    }
+
+    it('returns early when no files are selected', async () => {
+      const filesStore = useFilesStore();
+      const uploadSpy = vi.spyOn(filesStore, 'uploadFile').mockResolvedValue(null);
+
+      const w = mount(PostEditor, { props: { ...defaultProps, postId: 'post-123' } });
+      await flushPromises();
+
+      const input = w.find('[data-testid="file-upload-input"]').element as HTMLInputElement;
+      setInputFiles(input, []);
+      await w.find('[data-testid="file-upload-input"]').trigger('change');
+
+      expect(uploadSpy).not.toHaveBeenCalled();
+    });
+
+    it('uploads via filesStore when postId is provided', async () => {
+      const filesStore = useFilesStore();
+      const uploadSpy = vi.spyOn(filesStore, 'uploadFile').mockResolvedValue(null);
+
+      const w = mount(PostEditor, { props: { ...defaultProps, postId: 'post-123' } });
+      await flushPromises();
+
+      const file = new File(['hi'], 'note.txt', { type: 'text/plain' });
+      const input = w.find('[data-testid="file-upload-input"]').element as HTMLInputElement;
+      setInputFiles(input, [file]);
+      await w.find('[data-testid="file-upload-input"]').trigger('change');
+
+      expect(uploadSpy).toHaveBeenCalledWith('post-123', file);
+    });
+
+    it('stages locally when postId is missing (new-post flow)', async () => {
+      const filesStore = useFilesStore();
+      const uploadSpy = vi.spyOn(filesStore, 'uploadFile').mockResolvedValue(null);
+
+      const w = mount(PostEditor, { props: { ...defaultProps } }); // no postId
+      await flushPromises();
+
+      const file = new File(['hi'], 'staged.txt', { type: 'text/plain' });
+      const input = w.find('[data-testid="file-upload-input"]').element as HTMLInputElement;
+      setInputFiles(input, [file]);
+      await w.find('[data-testid="file-upload-input"]').trigger('change');
+
+      expect(uploadSpy).not.toHaveBeenCalled();
+      expect(w.find('[data-testid="file-upload-preview"]').exists()).toBe(true);
+    });
+  });
 });

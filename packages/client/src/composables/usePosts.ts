@@ -117,7 +117,7 @@ export function usePosts() {
     error.value = null;
     try {
       const response = await apiFetch(`/api/posts/${id}/publish`, {
-        method: 'PATCH',
+        method: 'POST',
       });
 
       if (!response.ok) {

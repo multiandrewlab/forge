@@ -84,6 +84,13 @@ async function handleDelete(): Promise<void> {
               >
                 Draft
               </span>
+              <span
+                v-else
+                data-testid="published-badge"
+                class="rounded bg-green-600/20 px-2 py-1 text-xs text-green-400"
+              >
+                Published
+              </span>
               <PresenceIndicator :post-id="currentPost.id" />
             </div>
             <div class="flex items-center gap-2 mt-1 text-sm text-gray-400">

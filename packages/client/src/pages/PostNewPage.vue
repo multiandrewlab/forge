@@ -9,7 +9,7 @@ import type { SaveStatus } from '@/stores/posts';
 
 const router = useRouter();
 const route = useRoute();
-const { createPost, saveRevision, error } = usePosts();
+const { createPost, saveRevision, publishPost, error } = usePosts();
 
 const title = ref('');
 const content = ref('');
@@ -59,7 +59,11 @@ async function handlePublish(): Promise<void> {
     if (content.value) {
       await saveRevision(id, content.value, null);
     }
-    router.push({ name: 'post-edit', params: { id } });
+    // The new-post create path persists the post as a draft (server default);
+    // honour the user's "Publish" intent by flipping the draft flag before
+    // routing to the read-only view (where the published-badge surfaces).
+    await publishPost(id);
+    router.push({ name: 'post-view', params: { id } });
   }
 }
 

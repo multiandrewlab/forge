@@ -455,7 +455,7 @@ describe('usePosts', () => {
   });
 
   describe('publishPost', () => {
-    it('should PATCH /api/posts/:id/publish', async () => {
+    it('should POST /api/posts/:id/publish', async () => {
       const publishedPost = createMockPost({ isDraft: false });
       mockApiFetch.mockResolvedValue(new Response(JSON.stringify(publishedPost), { status: 200 }));
 
@@ -463,7 +463,7 @@ describe('usePosts', () => {
       await publishPost('post-1');
 
       expect(mockApiFetch).toHaveBeenCalledWith('/api/posts/post-1/publish', {
-        method: 'PATCH',
+        method: 'POST',
       });
     });
 
