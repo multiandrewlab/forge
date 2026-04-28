@@ -4,16 +4,17 @@ import type { SandboxLanguage } from './languages.js';
 // Public types
 // ---------------------------------------------------------------------------
 
-export type WorkerFactory = () => Worker;
+export type WorkerFactory = (language: SandboxLanguage) => Worker;
 
 export interface ExecuteOptions {
-  code: string;
   language: SandboxLanguage;
+  files: Array<{ filename: string; content: string }>;
+  entryFile: string;
   stdin?: string;
-  onOutput: (stream: 'stdout' | 'stderr', text: string) => void;
-  onLoading: (stage: string) => void;
-  onComplete: (exitCode: number) => void;
-  onError: (message: string) => void;
+  onOutput: (stream: 'stdout' | 'stderr', data: string) => void;
+  onLoading: (phase: 'runtime' | 'executing') => void;
+  onComplete: (result: { exitCode: number; executionTimeMs: number }) => void;
+  onError: (error: string) => void;
 }
 
 export interface ExecuteHandle {
@@ -46,7 +47,7 @@ export class SandboxManager {
       this.currentAbort = null;
     }
 
-    const worker = this.createWorker();
+    const worker = this.createWorker(options.language);
 
     // Per-execution flag: once set, all callbacks for this execution are ignored
     let finished = false;
@@ -75,57 +76,54 @@ export class SandboxManager {
     // Register as the active execution
     this.currentAbort = abort;
 
-    // Notify caller that we are booting
-    options.onLoading('booting');
-
     // Route worker messages to the appropriate callbacks
     worker.addEventListener('message', (event: MessageEvent) => {
       if (finished) return;
 
-      const data = event.data as { type: string; [key: string]: unknown };
+      const msg = event.data as { type: string; [key: string]: unknown };
 
-      switch (data.type) {
+      switch (msg.type) {
         case 'stdout':
-          options.onOutput('stdout', data.text as string);
+          options.onOutput('stdout', msg.data as string);
           break;
         case 'stderr':
-          options.onOutput('stderr', data.text as string);
+          options.onOutput('stderr', msg.data as string);
           break;
         case 'loading':
-          options.onLoading(data.stage as string);
+          options.onLoading(msg.phase as 'runtime' | 'executing');
           break;
         case 'ready':
           options.onLoading('executing');
           break;
         case 'done':
           teardown();
-          options.onComplete(data.exitCode as number);
+          options.onComplete({
+            exitCode: msg.exitCode as number,
+            executionTimeMs: msg.executionTimeMs as number,
+          });
           break;
         case 'error':
           teardown();
-          options.onError(data.message as string);
+          options.onError(msg.message as string);
           break;
         default:
-          // Unknown message types are silently ignored
           break;
       }
     });
 
-    // Send code to the worker
-    const message: Record<string, unknown> = {
-      type: 'run',
-      code: options.code,
+    // Send execute message to the worker
+    worker.postMessage({
+      type: 'execute',
       language: options.language,
-    };
-    if (options.stdin !== undefined) {
-      message.stdin = options.stdin;
-    }
-    worker.postMessage(message);
+      files: options.files,
+      entryFile: options.entryFile,
+      stdin: options.stdin,
+    });
 
     // Enforce 30-second execution timeout
     timeoutId = setTimeout(() => {
       teardown();
-      options.onError('Execution timed out');
+      options.onError('Execution timed out (30s limit)');
     }, EXECUTION_TIMEOUT_MS);
 
     return { abort };

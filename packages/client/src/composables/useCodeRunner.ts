@@ -26,11 +26,12 @@ export type CodeRunnerStatus = 'idle' | 'loading' | 'running' | 'done' | 'error'
 // Worker factory — exported for testability
 // ---------------------------------------------------------------------------
 
-export function createWorker(): Worker {
-  return new Worker(
-    new URL('../lib/sandbox/workers/js-worker.ts', import.meta.url),
-    { type: 'module' },
-  );
+export function createWorker(language: SandboxLanguage): Worker {
+  const url =
+    language === 'python'
+      ? new URL('../lib/sandbox/workers/python-worker.ts', import.meta.url)
+      : new URL('../lib/sandbox/workers/js-worker.ts', import.meta.url);
+  return new Worker(url, { type: 'module' });
 }
 
 // ---------------------------------------------------------------------------
@@ -52,11 +53,15 @@ export function useCodeRunner() {
 
   let currentHandle: ExecuteHandle | null = null;
   let totalBytes = 0;
-  let startTime = 0;
 
   const encoder = new TextEncoder();
 
-  function run(code: string, language: SandboxLanguage, stdin?: string): void {
+  function run(options: {
+    language: SandboxLanguage;
+    files: Array<{ filename: string; content: string }>;
+    entryFile: string;
+    stdin?: string;
+  }): void {
     // Reset state for new execution
     output.value = [];
     status.value = 'loading';
@@ -64,16 +69,13 @@ export function useCodeRunner() {
     exitCode.value = null;
     truncated.value = false;
     totalBytes = 0;
-    startTime = Date.now();
 
     currentHandle = manager.execute({
-      code,
-      language,
-      stdin,
-      onOutput(stream: 'stdout' | 'stderr', text: string) {
+      ...options,
+      onOutput(stream: 'stdout' | 'stderr', data: string) {
         if (truncated.value) return;
 
-        const byteLength = encoder.encode(text).length;
+        const byteLength = encoder.encode(data).length;
 
         if (output.value.length >= MAX_OUTPUT_LINES) {
           truncated.value = true;
@@ -88,19 +90,19 @@ export function useCodeRunner() {
         totalBytes += byteLength;
         output.value.push({
           stream,
-          text,
+          text: data,
           timestamp: Date.now(),
         });
       },
-      onLoading(stage: string) {
-        if (stage === 'executing') {
+      onLoading(phase: 'runtime' | 'executing') {
+        if (phase === 'executing') {
           status.value = 'running';
         }
       },
-      onComplete(code: number) {
+      onComplete(result: { exitCode: number; executionTimeMs: number }) {
         status.value = 'done';
-        exitCode.value = code;
-        executionTime.value = Date.now() - startTime;
+        exitCode.value = result.exitCode;
+        executionTime.value = result.executionTimeMs;
         currentHandle = null;
       },
       onError(message: string) {

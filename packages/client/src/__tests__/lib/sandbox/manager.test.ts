@@ -37,8 +37,9 @@ function createMockWorker(): MockWorker {
 // ---------------------------------------------------------------------------
 function baseOptions(overrides: Partial<ExecuteOptions> = {}): ExecuteOptions {
   return {
-    code: 'print("hello")',
     language: 'python' as SandboxLanguage,
+    files: [{ filename: 'main.py', content: 'print("hello")' }],
+    entryFile: 'main.py',
     onOutput: vi.fn(),
     onLoading: vi.fn(),
     onComplete: vi.fn(),
@@ -93,16 +94,19 @@ describe('SandboxManager', () => {
     it('calls onLoading when execution starts', () => {
       const opts = baseOptions();
       manager.execute(opts);
-      expect(opts.onLoading).toHaveBeenCalledWith('booting');
+      // Manager no longer calls onLoading on init — worker posts 'loading' messages
+      expect(opts.onLoading).not.toHaveBeenCalled();
     });
 
-    it('sends code and language to the worker via postMessage', () => {
-      const opts = baseOptions({ code: 'console.log(1)', language: 'javascript' as SandboxLanguage });
+    it('sends files and language to the worker via postMessage', () => {
+      const opts = baseOptions({ files: [{ filename: 'main.js', content: 'console.log(1)' }], entryFile: 'main.js', language: 'javascript' as SandboxLanguage });
       manager.execute(opts);
       expect(mockWorker.postMessage).toHaveBeenCalledWith({
-        type: 'run',
-        code: 'console.log(1)',
+        type: 'execute',
         language: 'javascript',
+        files: [{ filename: 'main.js', content: 'console.log(1)' }],
+        entryFile: 'main.js',
+        stdin: undefined,
       });
     });
 
@@ -110,9 +114,10 @@ describe('SandboxManager', () => {
       const opts = baseOptions({ stdin: 'some input' });
       manager.execute(opts);
       expect(mockWorker.postMessage).toHaveBeenCalledWith({
-        type: 'run',
-        code: opts.code,
+        type: 'execute',
         language: opts.language,
+        files: opts.files,
+        entryFile: opts.entryFile,
         stdin: 'some input',
       });
     });
@@ -126,7 +131,7 @@ describe('SandboxManager', () => {
       const opts = baseOptions();
       manager.execute(opts);
 
-      mockWorker._emit({ type: 'stdout', text: 'hello world' });
+      mockWorker._emit({ type: 'stdout', data: 'hello world' });
 
       expect(opts.onOutput).toHaveBeenCalledWith('stdout', 'hello world');
     });
@@ -135,7 +140,7 @@ describe('SandboxManager', () => {
       const opts = baseOptions();
       manager.execute(opts);
 
-      mockWorker._emit({ type: 'stderr', text: 'oops' });
+      mockWorker._emit({ type: 'stderr', data: 'oops' });
 
       expect(opts.onOutput).toHaveBeenCalledWith('stderr', 'oops');
     });
@@ -144,7 +149,7 @@ describe('SandboxManager', () => {
       const opts = baseOptions();
       manager.execute(opts);
 
-      mockWorker._emit({ type: 'loading', stage: 'installing' });
+      mockWorker._emit({ type: 'loading', phase: 'installing' });
 
       expect(opts.onLoading).toHaveBeenCalledWith('installing');
     });
@@ -162,9 +167,9 @@ describe('SandboxManager', () => {
       const opts = baseOptions();
       manager.execute(opts);
 
-      mockWorker._emit({ type: 'done', exitCode: 0 });
+      mockWorker._emit({ type: 'done', exitCode: 0, executionTimeMs: 50 });
 
-      expect(opts.onComplete).toHaveBeenCalledWith(0);
+      expect(opts.onComplete).toHaveBeenCalledWith({ exitCode: 0, executionTimeMs: 50 });
       expect(mockWorker.terminate).toHaveBeenCalledOnce();
     });
 
@@ -172,9 +177,9 @@ describe('SandboxManager', () => {
       const opts = baseOptions();
       manager.execute(opts);
 
-      mockWorker._emit({ type: 'done', exitCode: 1 });
+      mockWorker._emit({ type: 'done', exitCode: 1, executionTimeMs: 100 });
 
-      expect(opts.onComplete).toHaveBeenCalledWith(1);
+      expect(opts.onComplete).toHaveBeenCalledWith({ exitCode: 1, executionTimeMs: 100 });
       expect(mockWorker.terminate).toHaveBeenCalledOnce();
     });
 
@@ -197,8 +202,7 @@ describe('SandboxManager', () => {
       expect(opts.onOutput).not.toHaveBeenCalled();
       expect(opts.onComplete).not.toHaveBeenCalled();
       expect(opts.onError).not.toHaveBeenCalled();
-      // onLoading is called once at start with 'booting', but not again
-      expect(opts.onLoading).toHaveBeenCalledTimes(1);
+      expect(opts.onLoading).not.toHaveBeenCalled();
     });
   });
 
@@ -213,7 +217,7 @@ describe('SandboxManager', () => {
       vi.advanceTimersByTime(30_000);
 
       expect(mockWorker.terminate).toHaveBeenCalledOnce();
-      expect(opts.onError).toHaveBeenCalledWith('Execution timed out');
+      expect(opts.onError).toHaveBeenCalledWith('Execution timed out (30s limit)');
     });
 
     it('does not fire timeout if execution completes before 30s', () => {
@@ -221,7 +225,7 @@ describe('SandboxManager', () => {
       manager.execute(opts);
 
       // Complete before timeout
-      mockWorker._emit({ type: 'done', exitCode: 0 });
+      mockWorker._emit({ type: 'done', exitCode: 0, executionTimeMs: 50 });
 
       vi.advanceTimersByTime(30_000);
 
@@ -292,10 +296,10 @@ describe('SandboxManager', () => {
       const opts = baseOptions();
       manager.execute(opts);
 
-      mockWorker._emit({ type: 'done', exitCode: 0 });
+      mockWorker._emit({ type: 'done', exitCode: 0, executionTimeMs: 50 });
 
       // These should be silently ignored
-      mockWorker._emit({ type: 'stdout', text: 'late message' });
+      mockWorker._emit({ type: 'stdout', data: 'late message' });
       mockWorker._emit({ type: 'error', message: 'late error' });
 
       expect(opts.onOutput).not.toHaveBeenCalled();
@@ -308,8 +312,8 @@ describe('SandboxManager', () => {
 
       handle.abort();
 
-      mockWorker._emit({ type: 'stdout', text: 'late message' });
-      mockWorker._emit({ type: 'done', exitCode: 0 });
+      mockWorker._emit({ type: 'stdout', data: 'late message' });
+      mockWorker._emit({ type: 'done', exitCode: 0, executionTimeMs: 50 });
 
       expect(opts.onOutput).not.toHaveBeenCalled();
       expect(opts.onComplete).not.toHaveBeenCalled();
@@ -321,8 +325,8 @@ describe('SandboxManager', () => {
 
       mockWorker._emit({ type: 'error', message: 'crash' });
 
-      mockWorker._emit({ type: 'stdout', text: 'late message' });
-      mockWorker._emit({ type: 'done', exitCode: 0 });
+      mockWorker._emit({ type: 'stdout', data: 'late message' });
+      mockWorker._emit({ type: 'done', exitCode: 0, executionTimeMs: 50 });
 
       expect(opts.onOutput).not.toHaveBeenCalled();
       expect(opts.onComplete).not.toHaveBeenCalled();
@@ -334,8 +338,8 @@ describe('SandboxManager', () => {
 
       vi.advanceTimersByTime(30_000);
 
-      mockWorker._emit({ type: 'stdout', text: 'late message' });
-      mockWorker._emit({ type: 'done', exitCode: 0 });
+      mockWorker._emit({ type: 'stdout', data: 'late message' });
+      mockWorker._emit({ type: 'done', exitCode: 0, executionTimeMs: 50 });
 
       expect(opts.onOutput).not.toHaveBeenCalled();
       expect(opts.onComplete).not.toHaveBeenCalled();
@@ -359,7 +363,7 @@ describe('SandboxManager', () => {
       const firstOpts = baseOptions();
       mgr.execute(firstOpts);
 
-      const secondOpts = baseOptions({ code: 'print("second")' });
+      const secondOpts = baseOptions({ files: [{ filename: 'main.py', content: 'print("second")' }], entryFile: 'main.py' });
       mgr.execute(secondOpts);
 
       // First worker should be terminated
@@ -380,15 +384,15 @@ describe('SandboxManager', () => {
 
       mgr.execute(baseOptions());
 
-      const secondOpts = baseOptions({ code: 'print("second")' });
+      const secondOpts = baseOptions({ files: [{ filename: 'main.py', content: 'print("second")' }], entryFile: 'main.py' });
       mgr.execute(secondOpts);
 
       // Second worker receives messages normally
-      secondWorker._emit({ type: 'stdout', text: 'output from second' });
+      secondWorker._emit({ type: 'stdout', data: 'output from second' });
       expect(secondOpts.onOutput).toHaveBeenCalledWith('stdout', 'output from second');
 
-      secondWorker._emit({ type: 'done', exitCode: 0 });
-      expect(secondOpts.onComplete).toHaveBeenCalledWith(0);
+      secondWorker._emit({ type: 'done', exitCode: 0, executionTimeMs: 50 });
+      expect(secondOpts.onComplete).toHaveBeenCalledWith({ exitCode: 0, executionTimeMs: 50 });
       expect(secondWorker.terminate).toHaveBeenCalledOnce();
     });
 
@@ -405,7 +409,7 @@ describe('SandboxManager', () => {
       const firstOpts = baseOptions();
       mgr.execute(firstOpts);
 
-      const secondOpts = baseOptions({ code: 'print("second")' });
+      const secondOpts = baseOptions({ files: [{ filename: 'main.py', content: 'print("second")' }], entryFile: 'main.py' });
       mgr.execute(secondOpts);
 
       // Reset mock to only count calls after restart
@@ -413,8 +417,8 @@ describe('SandboxManager', () => {
       firstOpts.onComplete = vi.fn();
 
       // Messages from first worker should be ignored
-      firstWorker._emit({ type: 'stdout', text: 'late from first' });
-      firstWorker._emit({ type: 'done', exitCode: 0 });
+      firstWorker._emit({ type: 'stdout', data: 'late from first' });
+      firstWorker._emit({ type: 'done', exitCode: 0, executionTimeMs: 50 });
 
       expect(firstOpts.onOutput).not.toHaveBeenCalled();
       expect(firstOpts.onComplete).not.toHaveBeenCalled();
@@ -433,7 +437,7 @@ describe('SandboxManager', () => {
       const firstOpts = baseOptions();
       mgr.execute(firstOpts);
 
-      const secondOpts = baseOptions({ code: 'print("second")' });
+      const secondOpts = baseOptions({ files: [{ filename: 'main.py', content: 'print("second")' }], entryFile: 'main.py' });
       mgr.execute(secondOpts);
 
       // Advance past original timeout
@@ -444,7 +448,7 @@ describe('SandboxManager', () => {
       expect(firstOpts.onError).toHaveBeenCalledWith('Execution aborted');
 
       // Second worker's timeout fires
-      expect(secondOpts.onError).toHaveBeenCalledWith('Execution timed out');
+      expect(secondOpts.onError).toHaveBeenCalledWith('Execution timed out (30s limit)');
       expect(secondWorker.terminate).toHaveBeenCalledOnce();
     });
   });
