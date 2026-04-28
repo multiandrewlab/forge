@@ -8,6 +8,13 @@ export async function findPostById(id: string): Promise<PostRow | null> {
   return result.rows[0] ?? null;
 }
 
+export interface LinkPreview {
+  title: string;
+  description: string;
+  image: string | null;
+  readingTime: number | null;
+}
+
 export interface CreatePostInput {
   authorId: string;
   title: string;
@@ -15,11 +22,15 @@ export interface CreatePostInput {
   language: string | null;
   visibility: string;
   isDraft: boolean;
+  linkUrl?: string;
+  linkPreview?: LinkPreview;
 }
 
 export async function createPost(input: CreatePostInput): Promise<PostRow> {
   const result = await query<PostRow>(
-    `INSERT INTO posts (author_id, title, content_type, language, visibility, is_draft) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+    `INSERT INTO posts (author_id, title, content_type, language, visibility, is_draft, link_url, link_preview)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+     RETURNING *`,
     [
       input.authorId,
       input.title,
@@ -27,6 +38,8 @@ export async function createPost(input: CreatePostInput): Promise<PostRow> {
       input.language,
       input.visibility,
       input.isDraft,
+      input.linkUrl ?? null,
+      input.linkPreview ? JSON.stringify(input.linkPreview) : null,
     ],
   );
   return result.rows[0] as PostRow;
@@ -114,4 +127,17 @@ export async function publishPost(id: string): Promise<PostRow | null> {
     [id],
   );
   return result.rows[0] ?? null;
+}
+
+export async function updateLinkPreview(
+  postId: string,
+  preview: LinkPreview | null,
+): Promise<PostRow> {
+  const result = await query<PostRow>(
+    `UPDATE posts SET link_preview = $1, updated_at = NOW()
+     WHERE id = $2 AND deleted_at IS NULL
+     RETURNING *`,
+    [preview ? JSON.stringify(preview) : null, postId],
+  );
+  return result.rows[0] as PostRow;
 }

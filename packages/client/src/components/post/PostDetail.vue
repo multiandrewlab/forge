@@ -11,10 +11,14 @@
         @select="filesStore.setActiveFile"
       />
       <div class="flex-1 overflow-auto">
-        <FilePreview
-          v-if="activeFile"
-          :file="activeFile"
-          :post-id="fullPost!.id"
+        <FilePreview v-if="activeFile" :file="activeFile" :post-id="fullPost!.id" />
+        <CodeRunner
+          v-if="fullPost?.contentType === 'snippet' && revision"
+          :post-id="fullPost.id"
+          :revision-id="revision.id"
+          :language="fullPost.language"
+          :files="files"
+          :active-filename="activeFile?.filename"
         />
       </div>
     </div>
@@ -53,6 +57,13 @@
           {{ line }}
         </button>
       </div>
+      <CodeRunner
+        v-if="fullPost?.contentType === 'snippet' && revision"
+        :post-id="fullPost.id"
+        :revision-id="revision.id"
+        :language="fullPost.language"
+        :single-file-content="revision.content"
+      />
     </div>
     <div class="mt-6 border-t border-gray-700 pt-4">
       <CommentSection
@@ -79,6 +90,7 @@ import PostActions from './PostActions.vue';
 import CommentSection from './CommentSection.vue';
 import CommentInput from './CommentInput.vue';
 import InlineComment from './InlineComment.vue';
+import CodeRunner from './CodeRunner.vue';
 import { useRouter } from 'vue-router';
 import { useComments } from '../../composables/useComments.js';
 import { useCommentsStore } from '../../stores/comments.js';
@@ -102,8 +114,8 @@ const filesStore = useFilesStore();
 const { fetchComments, addComment } = useComments();
 const { forkPost } = usePosts();
 
-const activeFile = computed(() =>
-  files.value.find((f) => f.id === filesStore.activeFileId) ?? null,
+const activeFile = computed(
+  () => files.value.find((f) => f.id === filesStore.activeFileId) ?? null,
 );
 
 watch(
@@ -133,7 +145,10 @@ watch(
           files.value = filesStore.filesByRevision[rev.id] ?? [];
           if (files.value.length > 0) {
             // eslint-disable-next-line no-undef
-            console.info('[analytics] post.view.multifile', { postId: fullPost.value?.id, fileCount: files.value.length });
+            console.info('[analytics] post.view.multifile', {
+              postId: fullPost.value?.id,
+              fileCount: files.value.length,
+            });
           }
         }
       }

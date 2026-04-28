@@ -10,6 +10,7 @@ import {
   softDeletePost,
   publishPost,
   findPostWithLatestRevision,
+  updateLinkPreview,
 } from '../db/queries/posts.js';
 import {
   findRevisionsByPostId,
@@ -26,6 +27,8 @@ import { findFeedPosts, findFeedPostById } from '../db/queries/feed.js';
 import { toPostWithAuthor } from '../services/feed.js';
 import { findTagByName, createTag, addPostTag } from '../db/queries/tags.js';
 import { getExcludeWs } from '../plugins/websocket/broadcast.js';
+import { fetchLinkPreview } from '../services/link-preview.js';
+import { ContentType } from '@forge/shared';
 
 const feedQuerySchema = z.object({
   sort: z.enum(['trending', 'recent', 'top', 'personalized']).default('recent'),
@@ -49,6 +52,16 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
     const userId = request.user.id;
     const { title, contentType, language, visibility, content, isDraft } = parsed.data;
 
+    // Fetch link preview for link posts
+    let linkPreview = null;
+    if (contentType === ContentType.Link && parsed.data.linkUrl) {
+      linkPreview = await fetchLinkPreview(parsed.data.linkUrl);
+    }
+
+    // For link posts, content is optional — default to linkUrl for the revision.
+    // After validation: non-link posts always have content, link posts always have linkUrl.
+    const revisionContent = content || (parsed.data.linkUrl as string);
+
     const postRow = await createPost({
       authorId: userId,
       title,
@@ -56,12 +69,14 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
       language: language ?? null,
       visibility,
       isDraft: isDraft ?? true,
+      linkUrl: parsed.data.linkUrl,
+      linkPreview: linkPreview ?? undefined,
     });
 
     const revisionRow = await createRevision({
       postId: postRow.id,
       authorId: userId,
-      content,
+      content: revisionContent,
       message: null,
       revisionNumber: 1,
     });
@@ -231,6 +246,39 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ post: toPost(publishedRow) });
   });
 
+  // POST /:id/refresh-preview — re-fetch link preview for author
+  app.post('/:id/refresh-preview', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+
+    const existing = await findPostById(id);
+    if (!existing) {
+      return reply.status(404).send({ error: 'Post not found' });
+    }
+
+    if (existing.author_id !== request.user.id) {
+      return reply.status(403).send({ error: 'Only the author can refresh the link preview' });
+    }
+
+    if (existing.content_type !== ContentType.Link) {
+      return reply.status(400).send({ error: 'Only link posts can have their preview refreshed' });
+    }
+
+    const linkUrl = existing.link_url as string;
+    const preview = await fetchLinkPreview(linkUrl);
+    const updatedRow = await updateLinkPreview(id, preview);
+
+    const feedRow = await findFeedPostById(id);
+    if (feedRow) {
+      app.websocket.channels.broadcast('feed', {
+        type: 'post:updated',
+        channel: 'feed',
+        data: toPostWithAuthor(feedRow),
+      });
+    }
+
+    return reply.send({ post: toPost(updatedRow) });
+  });
+
   // POST /:id/fork — fork a public post
   app.post('/:id/fork', { preHandler: [app.authenticate] }, async (request, reply) => {
     const { id } = request.params as { id: string };
@@ -378,6 +426,8 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
     // --- File-aware path: use withTransaction ------------------
     // Track staging keys for post-transaction cleanup
     const stagingKeysToDelete: string[] = [];
+    // Track copied permanent keys for rollback compensation
+    const copiedKeys: string[] = [];
 
     let revisionRow: PostRevisionRow;
     try {
@@ -409,6 +459,7 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
           if (file.storage_key) {
             newStorageKey = permanentKey(id, rev.id, file.filename);
             await app.storage.copy(file.storage_key, newStorageKey);
+            copiedKeys.push(newStorageKey);
             stagingKeysToDelete.push(file.storage_key);
           }
 
@@ -458,6 +509,14 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
         return rev;
       });
     } catch (err) {
+      // Compensate: delete any storage objects copied during the failed transaction
+      for (const key of copiedKeys) {
+        try {
+          await app.storage.delete(key);
+        } catch {
+          // Best-effort
+        }
+      }
       const message = err instanceof Error ? err.message : 'Transaction failed';
       if (message.startsWith('Staged file not found')) {
         return reply.status(400).send({ error: message });

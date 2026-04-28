@@ -216,7 +216,10 @@ describe('POST /:id/revisions with file operations', () => {
       // Verify staged file (fileId1 belongs to postId and is staged)
       mockClient.query.mockResolvedValueOnce({ rows: [stagedInlineFile], rowCount: 1 });
       // Update staged file with revision_id
-      mockClient.query.mockResolvedValueOnce({ rows: [{ ...stagedInlineFile, revision_id: newRevisionId }], rowCount: 1 });
+      mockClient.query.mockResolvedValueOnce({
+        rows: [{ ...stagedInlineFile, revision_id: newRevisionId }],
+        rowCount: 1,
+      });
       // Get previous revision's files (for carry-forward) — empty since no prior revision with files
       mockClient.query.mockResolvedValueOnce({ rows: [], rowCount: 0 });
 
@@ -259,7 +262,9 @@ describe('POST /:id/revisions with file operations', () => {
       mockClient.query.mockResolvedValueOnce({ rows: [stagedObjectFile], rowCount: 1 });
       // Update staged file with revision_id and new storage_key
       mockClient.query.mockResolvedValueOnce({
-        rows: [{ ...stagedObjectFile, revision_id: newRevisionId, storage_key: expectedPermanentKey }],
+        rows: [
+          { ...stagedObjectFile, revision_id: newRevisionId, storage_key: expectedPermanentKey },
+        ],
         rowCount: 1,
       });
       // Get previous revision's files — empty
@@ -461,6 +466,81 @@ describe('POST /:id/revisions with file operations', () => {
     expect(response.statusCode).toBe(201);
     // After transaction, staging key should be deleted (best-effort)
     expect(mockStorageDelete).toHaveBeenCalledWith(stagedObjectFile.storage_key);
+  });
+
+  // ─── 5c: Transaction rollback deletes copied storage objects ────────
+
+  it('deletes copied storage objects when transaction rolls back', async () => {
+    // findPostById
+    mockQuery.mockResolvedValueOnce({ rows: [samplePostRow], rowCount: 1 });
+
+    const expectedPermanentKey = `posts/${postId}/revisions/${newRevisionId}/photo.png`;
+    const mockClient = { query: vi.fn() };
+    mockWithTransaction.mockImplementation(async (fn: (client: typeof mockClient) => unknown) => {
+      // Create revision
+      mockClient.query.mockResolvedValueOnce({ rows: [newRevisionRow], rowCount: 1 });
+      // Verify staged object file
+      mockClient.query.mockResolvedValueOnce({ rows: [stagedObjectFile], rowCount: 1 });
+      // storage.copy succeeds — but then the DB update throws
+      mockStorageCopy.mockResolvedValueOnce(undefined);
+      // DB update throws (simulates a later failure inside the transaction)
+      mockClient.query.mockRejectedValueOnce(new Error('DB constraint violation'));
+
+      return fn(mockClient);
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/posts/${postId}/revisions`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        content: 'console.log("updated");',
+        message: 'File update',
+        stagedFileIds: [fileId2],
+      },
+    });
+
+    // Transaction failure should result in a 500
+    expect(response.statusCode).toBe(500);
+    // The copied permanent key should be deleted (compensation)
+    expect(mockStorageDelete).toHaveBeenCalledWith(expectedPermanentKey);
+  });
+
+  it('still throws original error when compensation storage.delete fails', async () => {
+    // findPostById
+    mockQuery.mockResolvedValueOnce({ rows: [samplePostRow], rowCount: 1 });
+
+    const mockClient = { query: vi.fn() };
+    mockWithTransaction.mockImplementation(async (fn: (client: typeof mockClient) => unknown) => {
+      // Create revision
+      mockClient.query.mockResolvedValueOnce({ rows: [newRevisionRow], rowCount: 1 });
+      // Verify staged object file
+      mockClient.query.mockResolvedValueOnce({ rows: [stagedObjectFile], rowCount: 1 });
+      // storage.copy succeeds
+      mockStorageCopy.mockResolvedValueOnce(undefined);
+      // DB update throws (simulates failure after copy)
+      mockClient.query.mockRejectedValueOnce(new Error('DB constraint violation'));
+
+      return fn(mockClient);
+    });
+
+    // Compensation storage.delete ALSO fails (best-effort — must not mask original error)
+    mockStorageDelete.mockRejectedValueOnce(new Error('Storage unavailable'));
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/posts/${postId}/revisions`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        content: 'console.log("updated");',
+        message: 'File update',
+        stagedFileIds: [fileId2],
+      },
+    });
+
+    // Original DB error should still propagate as 500, not masked by storage failure
+    expect(response.statusCode).toBe(500);
+    expect(mockStorageDelete).toHaveBeenCalled();
   });
 
   // ─── Best-effort: staging delete failure does not fail request ──────

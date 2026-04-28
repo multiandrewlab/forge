@@ -2,15 +2,20 @@
   <div class="mb-4 border-b border-gray-700 pb-4">
     <h1 class="mb-2 text-xl font-bold text-white">{{ post.title }}</h1>
     <div class="flex items-center gap-3">
-      <div
-        class="flex h-8 w-8 items-center justify-center rounded-full bg-primary/20 text-sm font-bold text-primary"
+      <RouterLink
+        :to="{ name: 'user-profile', params: { id: post.author.id } }"
+        class="flex items-center gap-3"
       >
-        {{ post.author.displayName[0]?.toUpperCase() }}
-      </div>
-      <div>
-        <div class="text-sm font-medium text-gray-200">{{ post.author.displayName }}</div>
-        <div class="text-xs text-gray-500">Updated {{ timeAgo(post.updatedAt) }}</div>
-      </div>
+        <div
+          class="flex h-8 w-8 items-center justify-center rounded-full bg-primary/20 text-sm font-bold text-primary"
+        >
+          {{ post.author.displayName[0]?.toUpperCase() }}
+        </div>
+        <div>
+          <div class="text-sm font-medium text-gray-200">{{ post.author.displayName }}</div>
+        </div>
+      </RouterLink>
+      <div class="text-xs text-gray-500">Updated {{ timeAgo(post.updatedAt) }}</div>
     </div>
     <div v-if="post.forkedFromId" data-testid="fork-attribution" class="mt-1 text-xs text-gray-500">
       Forked from

@@ -4,8 +4,27 @@ import { z } from 'zod';
 // MIME allowlist
 // ---------------------------------------------------------------------------
 
-/** Prefix-matched MIME types (e.g. text/* matches text/plain, text/html, etc.) */
-export const ALLOWED_MIME_PREFIXES = ['text/'] as const;
+/**
+ * Safe text MIME subtypes. Active-content types (text/html, text/xml) are
+ * excluded because the file-content endpoint serves uploads inline — serving
+ * HTML under the app's origin enables stored XSS.
+ *
+ * Code-oriented text/* subtypes (text/x-python, text/x-java-source, etc.)
+ * are matched via the `text/x-` prefix below.
+ */
+export const ALLOWED_MIME_SAFE_TEXT = [
+  'text/plain',
+  'text/csv',
+  'text/markdown',
+  'text/tab-separated-values',
+] as const;
+
+/**
+ * Prefix-matched MIME types. `text/x-` covers programming-language subtypes
+ * (text/x-python, text/x-java-source, etc.) which are never rendered as
+ * active content by browsers.
+ */
+export const ALLOWED_MIME_PREFIXES = ['text/x-'] as const;
 
 /** Exact-matched MIME types. SVG is explicitly excluded (XSS vector). */
 export const ALLOWED_MIME_EXACT = [
@@ -38,6 +57,8 @@ export const INLINE_THRESHOLD = 64 * 1024;
  */
 export function isAllowedMimeType(mime: string | null | undefined): boolean {
   if (!mime) return false;
+
+  if ((ALLOWED_MIME_SAFE_TEXT as readonly string[]).includes(mime)) return true;
 
   for (const prefix of ALLOWED_MIME_PREFIXES) {
     if (mime.startsWith(prefix)) return true;

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { mount } from '@vue/test-utils';
+import { mount, RouterLinkStub } from '@vue/test-utils';
 import { setActivePinia, createPinia } from 'pinia';
 import RevisionTimeline from '@/components/history/RevisionTimeline.vue';
 import type { PostRevision } from '@forge/shared';
@@ -19,6 +19,8 @@ function makeRevision(overrides: Partial<PostRevision> = {}): PostRevision {
   };
 }
 
+const defaultGlobal = { stubs: { RouterLink: RouterLinkStub } };
+
 describe('RevisionTimeline', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
@@ -32,6 +34,7 @@ describe('RevisionTimeline', () => {
 
     const wrapper = mount(RevisionTimeline, {
       props: { revisions, selectedIds: [] },
+      global: defaultGlobal,
     });
 
     const items = wrapper.findAll('[data-testid="revision-item"]');
@@ -44,6 +47,7 @@ describe('RevisionTimeline', () => {
         revisions: [makeRevision({ revisionNumber: 3, message: 'Fix bug' })],
         selectedIds: [],
       },
+      global: defaultGlobal,
     });
 
     expect(wrapper.text()).toContain('Rev 3');
@@ -58,6 +62,7 @@ describe('RevisionTimeline', () => {
 
     const wrapper = mount(RevisionTimeline, {
       props: { revisions, selectedIds: [] },
+      global: defaultGlobal,
     });
 
     const firstItem = wrapper.find('[data-testid="revision-item"]');
@@ -68,6 +73,7 @@ describe('RevisionTimeline', () => {
     const rev = makeRevision({ id: 'rev-1' });
     const wrapper = mount(RevisionTimeline, {
       props: { revisions: [rev], selectedIds: [] },
+      global: defaultGlobal,
     });
 
     await wrapper.find('[data-testid="revision-item"]').trigger('click');
@@ -85,6 +91,7 @@ describe('RevisionTimeline', () => {
 
     const wrapper = mount(RevisionTimeline, {
       props: { revisions, selectedIds: ['rev-1'] },
+      global: defaultGlobal,
     });
 
     const items = wrapper.findAll('[data-testid="revision-item"]');
@@ -97,6 +104,7 @@ describe('RevisionTimeline', () => {
         revisions: [makeRevision({ createdAt: new Date() })],
         selectedIds: [],
       },
+      global: defaultGlobal,
     });
 
     // Should show some relative time text (e.g., "just now", "a few seconds ago")
@@ -111,6 +119,7 @@ describe('RevisionTimeline', () => {
         revisions: [makeRevision({ message: 'Restored from revision 2' })],
         selectedIds: [],
       },
+      global: defaultGlobal,
     });
 
     expect(wrapper.text()).toContain('Restored from revision 2');
@@ -122,6 +131,7 @@ describe('RevisionTimeline', () => {
         revisions: [makeRevision({ authorDisplayName: 'Alice' })],
         selectedIds: [],
       },
+      global: defaultGlobal,
     });
 
     expect(wrapper.text()).toContain('Alice');
@@ -133,6 +143,7 @@ describe('RevisionTimeline', () => {
         revisions: [makeRevision({ authorDisplayName: 'Alice Bob', authorAvatarUrl: null })],
         selectedIds: [],
       },
+      global: defaultGlobal,
     });
 
     expect(wrapper.find('[data-testid="author-avatar"]').text()).toBe('AB');
@@ -144,6 +155,7 @@ describe('RevisionTimeline', () => {
         revisions: [makeRevision({ authorAvatarUrl: 'https://example.com/a.png' })],
         selectedIds: [],
       },
+      global: defaultGlobal,
     });
 
     const img = wrapper.find('[data-testid="author-avatar"] img');
@@ -154,6 +166,7 @@ describe('RevisionTimeline', () => {
   it('renders empty state when no revisions provided', () => {
     const wrapper = mount(RevisionTimeline, {
       props: { revisions: [], selectedIds: [] },
+      global: defaultGlobal,
     });
 
     expect(wrapper.text()).toContain('No revisions');
@@ -165,6 +178,7 @@ describe('RevisionTimeline', () => {
         revisions: [makeRevision({ message: null })],
         selectedIds: [],
       },
+      global: defaultGlobal,
     });
 
     // The message paragraph has v-if="rev.message", so it should not render
@@ -180,6 +194,7 @@ describe('RevisionTimeline', () => {
         revisions: [makeRevision({ authorDisplayName: null, authorAvatarUrl: null })],
         selectedIds: [],
       },
+      global: defaultGlobal,
     });
 
     expect(wrapper.find('[data-testid="author-avatar"]').text()).toBe('?');
@@ -191,6 +206,7 @@ describe('RevisionTimeline', () => {
         revisions: [makeRevision({ authorDisplayName: null })],
         selectedIds: [],
       },
+      global: defaultGlobal,
     });
 
     expect(wrapper.text()).toContain('Unknown');
@@ -202,6 +218,7 @@ describe('RevisionTimeline', () => {
         revisions: [makeRevision({ message: 'Fixed a typo' })],
         selectedIds: [],
       },
+      global: defaultGlobal,
     });
 
     expect(wrapper.text()).not.toContain('Restored');
@@ -214,6 +231,7 @@ describe('RevisionTimeline', () => {
         revisions: [makeRevision({ message: 'Restored from revision 3' })],
         selectedIds: [],
       },
+      global: defaultGlobal,
     });
 
     expect(wrapper.text()).toContain('Restored');
@@ -226,6 +244,7 @@ describe('RevisionTimeline', () => {
         revisions: [makeRevision({ createdAt: fiveMinutesAgo })],
         selectedIds: [],
       },
+      global: defaultGlobal,
     });
 
     expect(wrapper.text()).toContain('5m ago');
@@ -238,6 +257,7 @@ describe('RevisionTimeline', () => {
         revisions: [makeRevision({ createdAt: threeHoursAgo })],
         selectedIds: [],
       },
+      global: defaultGlobal,
     });
 
     expect(wrapper.text()).toContain('3h ago');
@@ -250,6 +270,7 @@ describe('RevisionTimeline', () => {
         revisions: [makeRevision({ createdAt: twoDaysAgo })],
         selectedIds: [],
       },
+      global: defaultGlobal,
     });
 
     expect(wrapper.text()).toContain('2d ago');
@@ -262,6 +283,7 @@ describe('RevisionTimeline', () => {
         revisions: [makeRevision({ createdAt: sixtyDaysAgo })],
         selectedIds: [],
       },
+      global: defaultGlobal,
     });
 
     // Should show a localized date string, not a relative time
@@ -277,6 +299,7 @@ describe('RevisionTimeline', () => {
         revisions: [makeRevision({ createdAt: fiveMinutesAgo.toISOString() as unknown as Date })],
         selectedIds: [],
       },
+      global: defaultGlobal,
     });
 
     expect(wrapper.text()).toContain('5m ago');
@@ -290,6 +313,7 @@ describe('RevisionTimeline', () => {
 
     const wrapper = mount(RevisionTimeline, {
       props: { revisions, selectedIds: [] },
+      global: defaultGlobal,
     });
 
     const items = wrapper.findAll('[data-testid="revision-item"]');
@@ -304,6 +328,7 @@ describe('RevisionTimeline', () => {
 
     const wrapper = mount(RevisionTimeline, {
       props: { revisions, selectedIds: [] },
+      global: defaultGlobal,
     });
 
     const items = wrapper.findAll('[data-testid="revision-item"]');
@@ -319,6 +344,7 @@ describe('RevisionTimeline', () => {
         ],
         selectedIds: [],
       },
+      global: defaultGlobal,
     });
 
     const img = wrapper.find('[data-testid="author-avatar"] img');
@@ -333,9 +359,59 @@ describe('RevisionTimeline', () => {
         ],
         selectedIds: [],
       },
+      global: defaultGlobal,
     });
 
     const img = wrapper.find('[data-testid="author-avatar"] img');
     expect(img.attributes('alt')).toBe('Author');
+  });
+
+  describe('author profile link', () => {
+    it('wraps author avatar and name in a RouterLink to user profile', () => {
+      const wrapper = mount(RevisionTimeline, {
+        props: {
+          revisions: [makeRevision({ authorId: 'user-1', authorDisplayName: 'Alice' })],
+          selectedIds: [],
+        },
+        global: defaultGlobal,
+      });
+
+      const link = wrapper.findComponent(RouterLinkStub);
+      expect(link.exists()).toBe(true);
+      expect(link.props('to')).toEqual({
+        name: 'user-profile',
+        params: { id: 'user-1' },
+      });
+    });
+
+    it('renders author display name inside the profile link', () => {
+      const wrapper = mount(RevisionTimeline, {
+        props: {
+          revisions: [makeRevision({ authorId: 'user-1', authorDisplayName: 'Alice' })],
+          selectedIds: [],
+        },
+        global: defaultGlobal,
+      });
+
+      const links = wrapper.findAllComponents(RouterLinkStub);
+      const nameLink = links.find((l) => l.text().includes('Alice'));
+      expect(nameLink).toBeDefined();
+    });
+
+    it('stops click propagation so parent select handler is not triggered', async () => {
+      const wrapper = mount(RevisionTimeline, {
+        props: {
+          revisions: [makeRevision({ authorId: 'user-1' })],
+          selectedIds: [],
+        },
+        global: defaultGlobal,
+      });
+
+      const link = wrapper.findComponent(RouterLinkStub);
+      await link.trigger('click');
+
+      // The parent button click handler should NOT fire
+      expect(wrapper.emitted('select')).toBeFalsy();
+    });
   });
 });

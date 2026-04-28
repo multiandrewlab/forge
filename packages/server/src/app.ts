@@ -18,9 +18,10 @@ import { searchRoutes } from './routes/search.js';
 import { aiRoutes } from './routes/ai.js';
 import { playgroundRoutes } from './routes/playground.js';
 import { fileRoutes } from './routes/files.js';
+import { userProfileRoutes } from './routes/user-profiles.js';
 import { websocketPlugin } from './plugins/websocket/index.js';
 import { langchainPlugin } from './plugins/langchain/index.js';
-import { cleanupStagedFiles } from './db/queries/post-files.js';
+import { findStaleStagedFiles, deleteStagedFilesByIds } from './db/queries/post-files.js';
 import { registerTestRoutes } from './routes/__test__.js';
 import { isE2EFlagSet } from './lib/env-guards.js';
 import { query } from './db/connection.js';
@@ -91,6 +92,7 @@ export async function buildApp() {
   await app.register(aiRoutes, { prefix: '/api/ai' });
   await app.register(playgroundRoutes, { prefix: '/api' });
   await app.register(fileRoutes, { prefix: '/api/posts' });
+  await app.register(userProfileRoutes, { prefix: '/api/users' });
 
   if (isE2EFlagSet(process.env.ENABLE_TEST_ROUTES)) {
     await registerTestRoutes(app, {
@@ -109,7 +111,27 @@ export async function buildApp() {
 
   app.addHook('onReady', async () => {
     try {
-      const cleaned = await cleanupStagedFiles();
+      const staleFiles = await findStaleStagedFiles();
+      if (staleFiles.length === 0) return;
+
+      // Delete storage objects first (best-effort)
+      if (app.storage) {
+        for (const file of staleFiles) {
+          if (file.storage_key) {
+            try {
+              await app.storage.delete(file.storage_key);
+            } catch {
+              app.log.warn(
+                { storageKey: file.storage_key },
+                'Failed to delete stale storage object',
+              );
+            }
+          }
+        }
+      }
+
+      // Then delete DB rows
+      const cleaned = await deleteStagedFilesByIds(staleFiles.map((f) => f.id));
       if (cleaned > 0) {
         app.log.info({ count: cleaned }, 'Cleaned up orphaned staged files');
       }

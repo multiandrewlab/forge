@@ -17,7 +17,10 @@ import type { PostFileRow } from '../db/queries/types.js';
  * - Rejects empty, `.`, and `..`
  */
 export function sanitizeFilename(raw: string): string {
-  let name = path.basename(raw);
+  // Normalize Windows backslash separators to forward slash before extracting
+  // basename. path.basename() only strips the current platform's separator,
+  // so on Linux, backslash paths pass through unchanged.
+  let name = path.posix.basename(raw.replaceAll('\\', '/'));
   name = name.replaceAll('\x00', '');
   name = name.replace(/[^\w.-]/g, '_');
   name = name.slice(0, 255);

@@ -79,6 +79,7 @@ function createTestRouter() {
       { path: '/my-snippets', component: HomePage, props: { filter: 'mine' } },
       { path: '/posts/new', component: { template: '<div />' } },
       { path: '/posts/:id', component: { template: '<div />' } },
+      { path: '/user/:id', name: 'user-profile', component: { template: '<div />' } },
     ],
   });
 }

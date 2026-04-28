@@ -5,12 +5,18 @@
     @click="handleClick"
   >
     <div class="mb-1 flex items-center gap-2">
-      <div
-        class="flex h-6 w-6 items-center justify-center rounded-full bg-primary/20 text-xs text-primary"
+      <RouterLink
+        :to="{ name: 'user-profile', params: { id: post.author.id } }"
+        class="flex items-center gap-2"
+        @click.stop
       >
-        {{ post.author.displayName[0]?.toUpperCase() }}
-      </div>
-      <span class="text-xs text-gray-400">{{ post.author.displayName }}</span>
+        <div
+          class="flex h-6 w-6 items-center justify-center rounded-full bg-primary/20 text-xs text-primary"
+        >
+          {{ post.author.displayName[0]?.toUpperCase() }}
+        </div>
+        <span class="text-xs text-gray-400">{{ post.author.displayName }}</span>
+      </RouterLink>
       <span class="text-xs text-gray-500">{{ timeAgo(post.createdAt) }}</span>
       <span
         v-if="post.isDraft"
@@ -38,7 +44,24 @@
         </svg>
         {{ post.forkCount }}
       </span>
-      <span class="rounded bg-gray-700 px-1.5 py-0.5 text-xs">{{ post.contentType }}</span>
+      <span class="flex items-center gap-1 rounded bg-gray-700 px-1.5 py-0.5 text-xs">
+        <svg
+          v-if="post.contentType === 'link'"
+          data-testid="link-icon"
+          class="h-3 w-3"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+          />
+        </svg>
+        {{ post.contentType }}
+      </span>
     </div>
   </div>
 </template>
@@ -48,7 +71,7 @@
 // uses lib: ["ES2022"] without "DOM", so we declare the browser globals we need.
 declare const window: { matchMedia: (query: string) => { matches: boolean } };
 
-import { useRouter } from 'vue-router';
+import { RouterLink, useRouter } from 'vue-router';
 import type { PostWithAuthor } from '@forge/shared';
 
 const props = defineProps<{ post: PostWithAuthor; selected: boolean }>();

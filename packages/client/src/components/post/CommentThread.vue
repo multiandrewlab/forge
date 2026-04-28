@@ -3,9 +3,14 @@
     <div class="flex items-start gap-2 rounded p-2 hover:bg-surface-700">
       <div class="flex-1">
         <div class="flex items-center gap-2 text-xs text-gray-400">
-          <span class="font-medium text-gray-300">
-            {{ node.author?.displayName ?? 'Deleted user' }}
-          </span>
+          <RouterLink
+            v-if="node.author"
+            :to="{ name: 'user-profile', params: { id: node.author.id } }"
+            class="font-medium text-gray-300"
+          >
+            {{ node.author.displayName }}
+          </RouterLink>
+          <span v-else class="font-medium text-gray-300">Deleted user</span>
           <span>{{ timeAgo(node.createdAt) }}</span>
         </div>
 
@@ -74,6 +79,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
+import { RouterLink } from 'vue-router';
 import type { CommentTreeNode } from '../../stores/comments.js';
 import { useComments } from '../../composables/useComments.js';
 import CommentInput from './CommentInput.vue';

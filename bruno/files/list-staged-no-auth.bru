@@ -1,0 +1,23 @@
+meta {
+  name: List Staged Files (No Auth)
+  type: http
+  seq: 12
+}
+
+get {
+  url: {{baseUrl}}/api/posts/{{postId}}/files
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 401
+}
+
+docs {
+  Error-path test: list staged files without authentication.
+  Staged files (revision_id IS NULL) are only visible to the post owner.
+  Unauthenticated requests receive 401.
+
+  Expected: 401 Unauthorized
+}

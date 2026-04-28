@@ -13,6 +13,7 @@ import {
   updatePost,
   softDeletePost,
   publishPost,
+  updateLinkPreview,
 } from '../../../db/queries/posts.js';
 import type { PostRow, PostWithRevisionRow } from '../../../db/queries/types.js';
 
@@ -61,7 +62,7 @@ describe('post queries', () => {
   });
 
   describe('createPost', () => {
-    it('inserts a post and returns the row', async () => {
+    it('inserts a post without link fields and passes null for link_url and link_preview', async () => {
       mockQuery.mockResolvedValue({ rows: [samplePost], rowCount: 1 });
       const result = await createPost({
         authorId: samplePost.author_id,
@@ -71,11 +72,132 @@ describe('post queries', () => {
         visibility: 'public',
         isDraft: false,
       });
-      expect(mockQuery).toHaveBeenCalledWith(
-        `INSERT INTO posts (author_id, title, content_type, language, visibility, is_draft) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-        [samplePost.author_id, 'Test Post', 'snippet', 'typescript', 'public', false],
-      );
+      expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining('link_url, link_preview'), [
+        samplePost.author_id,
+        'Test Post',
+        'snippet',
+        'typescript',
+        'public',
+        false,
+        null,
+        null,
+      ]);
       expect(result).toEqual(samplePost);
+    });
+
+    it('inserts a post with linkUrl and linkPreview fields', async () => {
+      const linkPreview = {
+        title: 'Example',
+        description: 'An example page',
+        image: 'https://example.com/img.png',
+        readingTime: 5,
+      };
+      const postWithLink: PostRow = {
+        ...samplePost,
+        link_url: 'https://example.com',
+        link_preview: linkPreview,
+      };
+      mockQuery.mockResolvedValue({ rows: [postWithLink], rowCount: 1 });
+
+      const result = await createPost({
+        authorId: samplePost.author_id,
+        title: 'Link Post',
+        contentType: 'snippet',
+        language: null,
+        visibility: 'public',
+        isDraft: false,
+        linkUrl: 'https://example.com',
+        linkPreview: linkPreview,
+      });
+
+      expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining('link_url, link_preview'), [
+        samplePost.author_id,
+        'Link Post',
+        'snippet',
+        null,
+        'public',
+        false,
+        'https://example.com',
+        JSON.stringify(linkPreview),
+      ]);
+      expect(result).toEqual(postWithLink);
+    });
+
+    it('inserts a post with linkUrl but no linkPreview', async () => {
+      const postWithLinkUrl: PostRow = {
+        ...samplePost,
+        link_url: 'https://example.com',
+        link_preview: null,
+      };
+      mockQuery.mockResolvedValue({ rows: [postWithLinkUrl], rowCount: 1 });
+
+      const result = await createPost({
+        authorId: samplePost.author_id,
+        title: 'URL Only Post',
+        contentType: 'snippet',
+        language: null,
+        visibility: 'public',
+        isDraft: false,
+        linkUrl: 'https://example.com',
+      });
+
+      expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining('link_url, link_preview'), [
+        samplePost.author_id,
+        'URL Only Post',
+        'snippet',
+        null,
+        'public',
+        false,
+        'https://example.com',
+        null,
+      ]);
+      expect(result).toEqual(postWithLinkUrl);
+    });
+  });
+
+  describe('updateLinkPreview', () => {
+    it('updates link_preview and updated_at for a post', async () => {
+      const preview = {
+        title: 'Updated Title',
+        description: 'Updated desc',
+        image: null,
+        readingTime: 3,
+      };
+      const updatedPost: PostRow = {
+        ...samplePost,
+        link_preview: preview,
+        updated_at: new Date('2026-06-01'),
+      };
+      mockQuery.mockResolvedValue({ rows: [updatedPost], rowCount: 1 });
+
+      const result = await updateLinkPreview(samplePost.id, preview);
+
+      expect(mockQuery).toHaveBeenCalledWith(
+        `UPDATE posts SET link_preview = $1, updated_at = NOW()
+     WHERE id = $2 AND deleted_at IS NULL
+     RETURNING *`,
+        [JSON.stringify(preview), samplePost.id],
+      );
+      expect(result).toEqual(updatedPost);
+    });
+
+    it('clears link_preview when null is passed', async () => {
+      const clearedPost: PostRow = {
+        ...samplePost,
+        link_preview: null,
+        updated_at: new Date('2026-06-01'),
+      };
+      mockQuery.mockResolvedValue({ rows: [clearedPost], rowCount: 1 });
+
+      const result = await updateLinkPreview(samplePost.id, null);
+
+      expect(mockQuery).toHaveBeenCalledWith(
+        `UPDATE posts SET link_preview = $1, updated_at = NOW()
+     WHERE id = $2 AND deleted_at IS NULL
+     RETURNING *`,
+        [null, samplePost.id],
+      );
+      expect(result).toEqual(clearedPost);
     });
   });
 

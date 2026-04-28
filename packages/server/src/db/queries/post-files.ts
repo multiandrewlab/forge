@@ -105,10 +105,18 @@ export async function deleteFileById(fileId: string, postId: string): Promise<bo
   return (result.rowCount ?? 0) > 0;
 }
 
-export async function cleanupStagedFiles(): Promise<number> {
-  const result = await query(
-    "DELETE FROM post_files WHERE revision_id IS NULL AND created_at < NOW() - INTERVAL '24 hours'",
+export async function findStaleStagedFiles(): Promise<PostFileRow[]> {
+  const result = await query<PostFileRow>(
+    "SELECT * FROM post_files WHERE revision_id IS NULL AND created_at < NOW() - INTERVAL '24 hours'",
     [],
   );
+  return result.rows;
+}
+
+export async function deleteStagedFilesByIds(ids: string[]): Promise<number> {
+  if (ids.length === 0) return 0;
+  const result = await query('DELETE FROM post_files WHERE id = ANY($1) AND revision_id IS NULL', [
+    ids,
+  ]);
   return result.rowCount ?? 0;
 }
