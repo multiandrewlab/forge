@@ -7,7 +7,11 @@ meta {
 get {
   url: {{baseUrl}}/api/posts/{{postId}}/files/{{createdFileId}}
   body: none
-  auth: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
 }
 
 assert {
