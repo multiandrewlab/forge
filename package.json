@@ -5,7 +5,8 @@
   "workspaces": [
     "packages/shared",
     "packages/server",
-    "packages/client"
+    "packages/client",
+    "e2e"
   ],
   "scripts": {
     "build": "npm run build --workspaces --if-present",
@@ -19,6 +20,9 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "bruno": "cd bruno && npx @usebruno/cli run -r --env local",
+    "e2e": "npm run test --workspace=@forge/e2e",
+    "e2e:ui": "npm run test:ui --workspace=@forge/e2e",
+    "e2e:debug": "npm run test:debug --workspace=@forge/e2e",
     "prepare": "husky"
   },
   "repository": {
