@@ -1,39 +1,22 @@
 <template>
   <div class="h-full overflow-auto">
     <!-- Loading state -->
-    <div
-      v-if="loading"
-      class="flex h-full items-center justify-center"
-    >
+    <div v-if="loading" class="flex h-full items-center justify-center">
       <p class="text-sm text-gray-500">Loading...</p>
     </div>
 
     <!-- Error state -->
-    <div
-      v-else-if="error"
-      class="flex h-full items-center justify-center"
-    >
+    <div v-else-if="error" class="flex h-full items-center justify-center">
       <p class="text-sm text-red-400">Failed to load file</p>
     </div>
 
     <!-- Image preview -->
-    <div
-      v-else-if="isImage"
-      class="flex items-center justify-center p-4"
-    >
-      <img
-        :src="imageUrl"
-        :alt="file.filename"
-        class="max-w-full rounded"
-      >
+    <div v-else-if="isImage" class="flex items-center justify-center p-4">
+      <img :src="imageUrl" :alt="file.filename" class="max-w-full rounded" />
     </div>
 
     <!-- Syntax-highlighted code (including JSON, YAML) -->
-    <div
-      v-else-if="highlightedHtml"
-      class="rounded text-sm"
-      v-html="highlightedHtml"
-    />
+    <div v-else-if="highlightedHtml" class="rounded text-sm" v-html="highlightedHtml" />
 
     <!-- Markdown rendered -->
     <div
@@ -43,10 +26,7 @@
     />
 
     <!-- Plain text fallback -->
-    <pre
-      v-else
-      class="whitespace-pre-wrap p-4 font-mono text-sm text-gray-300"
-    >{{ content }}</pre>
+    <pre v-else class="whitespace-pre-wrap p-4 font-mono text-sm text-gray-300">{{ content }}</pre>
   </div>
 </template>
 
@@ -95,7 +75,9 @@ const CODE_EXTENSIONS: Record<string, string> = {
 function getExtension(filename: string): string {
   const parts = filename.split('.');
   if (parts.length < 2) return '';
-  return parts[parts.length - 1].toLowerCase();
+  // Length-guarded above; the `as string` satisfies noUncheckedIndexedAccess
+  // without adding a defensive branch that would be unreachable in tests.
+  return (parts[parts.length - 1] as string).toLowerCase();
 }
 
 async function highlightCode(code: string, lang: string): Promise<string> {
@@ -139,14 +121,22 @@ async function fetchAndRender(): Promise<void> {
       isImage.value = true;
       loading.value = false;
       // eslint-disable-next-line no-undef
-      console.info('[analytics] file.view', { postId: props.postId, fileId: props.file.id, mimeType: props.file.mimeType });
+      console.info('[analytics] file.view', {
+        postId: props.postId,
+        fileId: props.file.id,
+        mimeType: props.file.mimeType,
+      });
       return;
     }
 
     const text = await response.text();
     content.value = text;
     // eslint-disable-next-line no-undef
-      console.info('[analytics] file.view', { postId: props.postId, fileId: props.file.id, mimeType: props.file.mimeType });
+    console.info('[analytics] file.view', {
+      postId: props.postId,
+      fileId: props.file.id,
+      mimeType: props.file.mimeType,
+    });
 
     // JSON files
     if (ext === 'json') {
