@@ -15,7 +15,7 @@ import type { PostWithRevision } from '@forge/shared';
 
 const route = useRoute();
 const router = useRouter();
-const { fetchPost, deletePost, error } = usePosts();
+const { fetchPost, deletePost, forkPost, error } = usePosts();
 const store = usePostsStore();
 const { currentPost } = storeToRefs(store);
 const { user } = useAuth();
@@ -79,6 +79,17 @@ async function handleDelete(): Promise<void> {
   await deletePost(id);
   if (!error.value) {
     router.push('/');
+  }
+}
+
+// Wire the Fork action emitted by PostActions. The composable POSTs to
+// /api/posts/:id/fork and returns the new post id; we then redirect to the
+// edit page so the viewer can immediately work on their copy.
+async function handleFork(): Promise<void> {
+  if (!currentPost.value) return;
+  const newPostId = await forkPost(currentPost.value.id);
+  if (newPostId) {
+    router.push(`/posts/${newPostId}/edit`);
   }
 }
 </script>
@@ -151,7 +162,7 @@ async function handleDelete(): Promise<void> {
           :language="currentPost.language ?? undefined"
         />
 
-        <PostActions class="mt-4" :post="buildPostForActions(currentPost)" />
+        <PostActions class="mt-4" :post="buildPostForActions(currentPost)" @fork="handleFork" />
 
         <div class="mt-6">
           <CommentSection :post-id="currentPost.id" :current-user-id="user?.id" />

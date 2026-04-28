@@ -88,7 +88,14 @@ export function usePosts() {
         return;
       }
 
-      const updated = (await response.json()) as PostWithRevision;
+      // Server wraps the response as `{ post: PostWithRevision }`. Older test
+      // mocks return the bare post — handle both for compatibility (mirrors
+      // fetchPost). Without unwrapping, setPost would store the wrapper and
+      // currentPost.forkedFromId / .id would become undefined, breaking
+      // downstream consumers that rely on those fields (e.g. fork-attribution
+      // on the post-edit page).
+      const updatedRaw = (await response.json()) as PostWithRevision | { post: PostWithRevision };
+      const updated = 'post' in updatedRaw ? updatedRaw.post : updatedRaw;
       store.setPost(updated);
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Failed to update post';

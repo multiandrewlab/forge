@@ -370,6 +370,23 @@ describe('usePosts', () => {
       expect(store.currentPost).toEqual(jsonRoundTrip(updatedPost));
     });
 
+    it('should unwrap a `{ post }` wrapper from the server response', async () => {
+      // The Fastify routes wrap the PATCH response as `{ post: ... }` — same
+      // shape as fetchPost — but earlier versions of updatePost stored the
+      // wrapper directly. That broke fields like forkedFromId that downstream
+      // consumers (e.g. fork-attribution on PostEditPage) rely on.
+      const updatedPost = createMockPost({ title: 'Wrapped Title' });
+      mockApiFetch.mockResolvedValue(
+        new Response(JSON.stringify({ post: updatedPost }), { status: 200 }),
+      );
+
+      const { updatePost } = usePosts();
+      await updatePost('post-1', { title: 'Wrapped Title' });
+
+      const store = usePostsStore();
+      expect(store.currentPost).toEqual(jsonRoundTrip(updatedPost));
+    });
+
     it('should set error on failure', async () => {
       mockApiFetch.mockResolvedValue(
         new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403 }),

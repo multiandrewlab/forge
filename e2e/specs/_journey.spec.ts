@@ -157,7 +157,31 @@ test.describe.serial('Phase 4 — social (search + vote + bookmark + comment)', 
 });
 
 test.describe.serial('Phase 5 — fork', () => {
-  test.skip('TODO: fork + diff', () => {});
+  // Use alice (not testuser) — PostActions.vue:117 disables the Fork button
+  // when the viewer is the author. The seeded post is testuser-owned, so
+  // testuser cannot fork it. alice is a separate seeded user with no special
+  // relationship to the post.
+  test('fork the seeded post and land on the new post-edit page with attribution', async ({
+    alice,
+  }) => {
+    await alice.goto(`/posts/${SEEDED_POST_ID}`);
+    await posts.forkBtn(alice).click();
+    // Forking should redirect to a NEW post (different id) in edit mode, with
+    // a fork-attribution element pointing back to the source. The redirect
+    // target is `/posts/<newId>/edit` (PostDetail.vue:183).
+    await expect(alice).toHaveURL(
+      new RegExp(`/posts/(?!${SEEDED_POST_ID}\\b)[a-f0-9-]+(?:/edit)?$`),
+    );
+    // The fork-attribution element renders the source post's *title* as a
+    // RouterLink (PostMetaHeader.vue:20–28), not the UUID — so we relax the
+    // body assertion to visibility and verify the link's href encodes the
+    // SEEDED_POST_ID instead. That is the load-bearing back-pointer.
+    await expect(posts.forkAttribution(alice)).toBeVisible();
+    await expect(posts.forkAttribution(alice).locator('a')).toHaveAttribute(
+      'href',
+      new RegExp(SEEDED_POST_ID),
+    );
+  });
 });
 
 test.describe.serial('Phase 6 — permission', () => {

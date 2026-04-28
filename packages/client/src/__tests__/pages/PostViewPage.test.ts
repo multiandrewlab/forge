@@ -13,11 +13,13 @@ import type { User } from '@forge/shared';
 const mockFetchPost = vi.fn();
 const mockDeletePost = vi.fn();
 const mockPostError: Ref<string | null> = ref(null);
+const mockForkPost = vi.fn();
 
 vi.mock('@/composables/usePosts', () => ({
   usePosts: () => ({
     fetchPost: mockFetchPost,
     deletePost: mockDeletePost,
+    forkPost: mockForkPost,
     error: mockPostError,
   }),
 }));
@@ -70,11 +72,18 @@ vi.mock('@/components/post/PresenceIndicator.vue', () => ({
 }));
 
 // --- Mock PostActions (Phase-4 social bar) ---
+// Includes a `fork` emit so the fork-action wiring on PostViewPage can be
+// exercised without depending on the real PostActions implementation.
 vi.mock('@/components/post/PostActions.vue', () => ({
   default: {
     name: 'PostActions',
     props: ['post'],
-    template: '<div data-testid="post-actions">vc:{{ post?.voteCount }}</div>',
+    emits: ['fork'],
+    template:
+      '<div data-testid="post-actions">' +
+      '<button data-testid="post-actions-fork" @click="$emit(\'fork\')">Fork</button>' +
+      'vc:{{ post?.voteCount }}' +
+      '</div>',
   },
 }));
 
@@ -397,6 +406,74 @@ describe('PostViewPage', () => {
 
       expect(mockDeletePost).toHaveBeenCalledWith('post-1');
       expect(router.currentRoute.value.path).toBe('/');
+    });
+  });
+
+  describe('fork action', () => {
+    it('should call forkPost and redirect to the new post-edit page on success', async () => {
+      const post = createMockPost({ authorId: 'user-2' });
+      mockFetchPost.mockImplementation(async () => {
+        mockCurrentPost.value = post;
+      });
+      mockForkPost.mockResolvedValue('new-post-id');
+      mockUser.value = createMockUser({ id: 'user-1' });
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      await wrapper.find('[data-testid="post-actions-fork"]').trigger('click');
+      await flushPromises();
+
+      expect(mockForkPost).toHaveBeenCalledWith('post-1');
+      expect(router.currentRoute.value.path).toBe('/posts/new-post-id/edit');
+    });
+
+    it('should NOT navigate when forkPost returns null', async () => {
+      const post = createMockPost({ authorId: 'user-2' });
+      mockFetchPost.mockImplementation(async () => {
+        mockCurrentPost.value = post;
+      });
+      mockForkPost.mockResolvedValue(null);
+      mockUser.value = createMockUser({ id: 'user-1' });
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      const initialPath = router.currentRoute.value.path;
+      await wrapper.find('[data-testid="post-actions-fork"]').trigger('click');
+      await flushPromises();
+
+      expect(mockForkPost).toHaveBeenCalledWith('post-1');
+      expect(router.currentRoute.value.path).toBe(initialPath);
+    });
+
+    it('should NOT call forkPost when currentPost is null (early-exit guard)', async () => {
+      // Mount with a post so PostActions renders and we can capture the
+      // component instance. Then null currentPost — but the v-if branch
+      // unrenders PostActions, so to drive the `if (!currentPost.value)
+      // return;` guard we have to call handleFork via the captured handle
+      // BEFORE the v-if removes it. The captured emit triggers handleFork in
+      // the same micro-task as the value=null mutation, but Vue's reactivity
+      // is async — so by the time handleFork runs, currentPost is already
+      // null. That's the precise condition we want to assert.
+      mockFetchPost.mockImplementation(async () => {
+        mockCurrentPost.value = createMockPost({ authorId: 'user-2' });
+      });
+      mockUser.value = createMockUser({ id: 'user-1' });
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      const actions = wrapper.findComponent({ name: 'PostActions' });
+      expect(actions.exists()).toBe(true);
+      mockForkPost.mockClear();
+
+      // Emit and null in the same tick so the listener sees currentPost=null.
+      mockCurrentPost.value = null;
+      actions.vm.$emit('fork');
+      await flushPromises();
+
+      expect(mockForkPost).not.toHaveBeenCalled();
     });
   });
 

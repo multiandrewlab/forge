@@ -15,4 +15,6 @@ export const posts = {
   fileUploadInput: (page: Page): Locator => page.getByTestId('file-upload-input'),
   fileUploadPreview: (page: Page): Locator => page.getByTestId('file-upload-preview'),
   publishedBadge: (page: Page): Locator => page.getByTestId('published-badge'),
+  forkBtn: (page: Page): Locator => page.getByTestId('fork-btn'),
+  forkAttribution: (page: Page): Locator => page.getByTestId('fork-attribution'),
 };

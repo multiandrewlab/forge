@@ -256,6 +256,43 @@ describe('PostEditPage', () => {
 
       expect(wrapper.text()).toContain('Failed to fetch post');
     });
+
+    it('should render fork-attribution when the post is a fork', async () => {
+      // When a post has forkedFromId set, the edit page must render an
+      // attribution block with a router-link back to the source post. This is
+      // the surface that the e2e journey (Phase 5) asserts after a fork
+      // redirects the user to /posts/<newId>/edit.
+      const sourceId = 'c0000000-0000-0000-0000-000000000099';
+      const post = createMockPost({ forkedFromId: sourceId });
+      mockFetchPost.mockImplementation(async () => {
+        const store = usePostsStore();
+        store.setPost(post);
+      });
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      const attribution = wrapper.find('[data-testid="fork-attribution"]');
+      expect(attribution.exists()).toBe(true);
+      expect(attribution.text()).toContain('Forked from');
+      // The link target uses the named route, but the resolved href encodes
+      // the source post id — that's the load-bearing back-pointer.
+      const link = attribution.find('a');
+      expect(link.attributes('href')).toContain(sourceId);
+    });
+
+    it('should NOT render fork-attribution when the post is not a fork', async () => {
+      const post = createMockPost({ forkedFromId: null });
+      mockFetchPost.mockImplementation(async () => {
+        const store = usePostsStore();
+        store.setPost(post);
+      });
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid="fork-attribution"]').exists()).toBe(false);
+    });
   });
 
   // ── Loading guard in watchers (lines 46, 57) ──────────────────

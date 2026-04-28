@@ -61,6 +61,7 @@
 
     <!-- Fork -->
     <button
+      data-testid="fork-btn"
       class="flex items-center gap-1 text-sm"
       :class="canFork ? 'text-gray-400 hover:text-gray-200' : 'text-gray-600 cursor-not-allowed'"
       :disabled="!canFork"
