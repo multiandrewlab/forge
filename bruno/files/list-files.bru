@@ -7,7 +7,11 @@ meta {
 get {
   url: {{baseUrl}}/api/posts/{{postId}}/files
   body: none
-  auth: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
 }
 
 assert {
@@ -17,7 +21,7 @@ assert {
 docs {
   List staged files for a post (no revisionId query parameter).
   Returns files with revision_id IS NULL (staging area).
-  Public endpoint — no authentication required.
+  Requires authentication + post ownership (staged files are owner-only).
 
   Response: 200 with { files: [...] }
 }

@@ -1,0 +1,66 @@
+meta {
+  name: Upload HTML MIME Type (XSS vector)
+  type: http
+  seq: 13
+}
+
+get {
+  url: {{baseUrl}}/api/health
+  body: none
+  auth: none
+}
+
+script:pre-request {
+  const axios = require("axios");
+  const baseUrl = bru.getEnvVar("baseUrl");
+  const postId = bru.getEnvVar("postId");
+  const token = bru.getVar("accessToken");
+
+  const boundary = "----BrunoTestBoundary";
+  const fileContent = "<html><script>alert('xss')</script></html>";
+  const body =
+    "--" + boundary + "\r\n" +
+    'Content-Disposition: form-data; name="file"; filename="page.html"\r\n' +
+    "Content-Type: text/html\r\n" +
+    "\r\n" +
+    fileContent +
+    "\r\n--" + boundary + "--\r\n";
+
+  try {
+    const res = await axios.post(
+      baseUrl + "/api/posts/" + postId + "/files",
+      body,
+      {
+        headers: {
+          "content-type": "multipart/form-data; boundary=" + boundary,
+          "authorization": "Bearer " + token
+        }
+      }
+    );
+    bru.setVar("_uploadHtmlStatus", String(res.status));
+  } catch (err) {
+    const st = err.response ? String(err.response.status) : "0";
+    bru.setVar("_uploadHtmlStatus", st);
+  }
+}
+
+tests {
+  test("upload text/html returns 415 (XSS prevention)", () => {
+    const status = parseInt(bru.getVar("_uploadHtmlStatus"));
+    expect(status).to.equal(415);
+  });
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Error-path test: upload a file with text/html MIME type.
+  text/html is rejected to prevent stored XSS — serving HTML inline
+  under the app's origin would allow JavaScript execution.
+  Uses axios workaround (Bruno CLI multipart limitation).
+  The carrier request is GET /api/health.
+
+  Expected upload response: 415 { error: "Unsupported media type" }
+}
