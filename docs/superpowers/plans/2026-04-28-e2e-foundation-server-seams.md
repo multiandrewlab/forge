@@ -1,8 +1,18 @@
 # E2E Foundation Server Seams Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** Steps use checkbox (`- [ ]`) syntax for tracking. Per `CLAUDE.md`, the user picks the execution method (orchestrated / subagent-driven / parallel session) before this plan begins; do NOT auto-select. See the **Execution-method choice** section at the bottom.
 
 **Goal:** Land the server-side seams that the E2E Playwright suite depends on — mock LangChain provider, gated `__test__/reset` endpoint, env-guard helpers, seed-script production guard — and update the Bruno CI workflow + `ai/complete.bru` to use the new mock provider. No Playwright specs are added in this plan; that lives in issue #45 (1b).
+
+## Subagent discipline (mandatory, per CLAUDE.md)
+
+All agents executing this plan MUST follow these rules:
+- **TDD throughout.** Every code-creating task in this plan starts with a failing test, watches it fail, implements the minimum to pass, then commits. Do not invert this order.
+- **NEVER use `--no-verify` on `git commit`.** Pre-commit hooks exist for a reason. If a hook fails, fix the root cause, re-stage, create a NEW commit (do not amend).
+- **NEVER use `git push --force` (or `--force-with-lease` without explicit user approval).** This applies to every branch, especially main.
+- **STAY within declared file scope.** The "Files" header at the top of each task names what may be touched. If a file outside that scope appears to need changes, stop and ask.
+- **Coverage gate is BLOCKING.** Do not skip Step 13.1's `npm run test:coverage` — and do not lower thresholds in `.coverage-thresholds.json` to make a failure go away.
+- **Bruno gate is BLOCKING.** Do not skip Step 13.2.
 
 **Architecture:** Add three new files under `packages/server/src/` (env-guards lib, mock LangChain provider + scripts registry, gated test routes), modify the existing LangChain provider switch to add a `'mock'` case, wire the new test routes through `app.ts` only when `ENABLE_TEST_ROUTES=1`, and add a boot-time fail-fast in `server.ts` that refuses startup when production is paired with any test-mode flag. Six layers of defense protect the destructive reset endpoint: NODE_ENV allowlist, strict env parsing, bind-address guard, route-registration gate, per-boot `X-E2E-Secret` header, and Origin header rejection. The mock provider implements LangChain's `BaseChatModel` interface and uses `AsyncLocalStorage` to thread per-request `X-Mock-Script` script selection through the existing `cachedModel` singleton.
 
@@ -19,9 +29,11 @@
 | --- | --- | --- |
 | `packages/server/src/lib/env-guards.ts` | Create | `isE2EFlagSet`, `assertProductionGuards`, `generateE2ESecret` |
 | `packages/server/src/__tests__/lib/env-guards.test.ts` | Create | 100% coverage of the above |
+| `packages/server/src/lib/bootstrap.ts` | Create | `runBootGuards(env, hooks)` — testable wrapper used by `server.ts` so the boot fail-fast has its own Vitest test |
+| `packages/server/src/__tests__/lib/bootstrap.test.ts` | Create | 100% coverage of `runBootGuards` including the `onError` + `onExit` hook paths |
 | `packages/server/src/plugins/langchain/mock-scripts.ts` | Create | Hardcoded SSE-chunk registry + `DEFAULT_SCRIPT_KEY` |
 | `packages/server/src/__tests__/plugins/langchain/mock-scripts.test.ts` | Create | Registry-shape + default-fallback coverage |
-| `packages/shared/src/types/llm-mock.ts` | Create | Type-only export of `MockScriptKey` (excluded from coverage, mirrors existing type-file pattern) |
+| `packages/shared/src/types/mock-script-keys.ts` | Create | Type-only export of `MockScriptKey` (excluded from coverage, mirrors existing type-file pattern) |
 | `packages/server/src/plugins/langchain/mock-provider.ts` | Create | `ChatMock extends BaseChatModel` + `mockScriptStorage` AsyncLocalStorage |
 | `packages/server/src/__tests__/plugins/langchain/mock-provider.test.ts` | Create | 100% coverage including AsyncLocalStorage threading |
 | `packages/server/src/plugins/langchain/provider.ts` | Modify | Add `case 'mock':` with production-throw guard |
@@ -37,14 +49,16 @@
 | `packages/server/src/__tests__/scripts/seed-guard.test.ts` | Create | 100% coverage of URL-parsing branches |
 | `packages/server/src/__tests__/scripts/seed-sql-shape.test.ts` | Create | Asserts `scripts/seed.sql` contains no `psql` meta-commands |
 | `packages/server/package.json` | Modify | `seed` script invokes the guard wrapper |
-| `vitest.config.ts` | Modify | Add `test.exclude: ['e2e/**']` + add `packages/shared/src/types/llm-mock.ts` to coverage exclude |
+| `vitest.config.ts` | Modify | Add `test.exclude: ['e2e/**']` + add `packages/shared/src/types/mock-script-keys.ts` to coverage exclude |
 | `.github/workflows/bruno-regression.yml` | Modify | Add `LLM_PROVIDER=mock`, `ENABLE_TEST_ROUTES=1`, `E2E_MODE=1`, `NODE_ENV=test` |
 | `bruno/ai/complete.bru` | Modify | Assert deterministic mock-provider SSE output |
 | `bruno/README.md` | Modify | Replace `OPENAI_API_KEY` troubleshooting note with mock-provider note |
 
 **Decisions locked at plan-write time** (per CTO suggestion to avoid the "agent picks the path of least resistance"):
 
-1. **`packages/shared/src/types/llm-mock.ts` is `.ts` (not `.d.ts`).** Matches the existing `packages/shared/src/types/*.ts` pattern (e.g., `user.ts`, `post.ts`). Added to `vitest.config.ts` `coverage.exclude` array alongside the other type-only files. No runtime code, no Vitest test required for it.
+1. **Shared type lives at `packages/shared/src/types/mock-script-keys.ts`** (filename matches the issue body's named scope, but directory is `types/` not `llm/`). Implemented as `.ts` (not `.d.ts`) to match the existing `packages/shared/src/types/*.ts` pattern (e.g., `user.ts`, `post.ts`). Added to `vitest.config.ts` `coverage.exclude` array alongside the other type-only files. No runtime code, no Vitest test required for it.
+
+   **Issue divergence note:** issue #44's File Scope names `packages/shared/src/llm/mock-script-keys.{ts,d.ts}`. This plan places the file under `types/` instead of a new top-level `llm/` directory because the existing `packages/shared/src/` has only two top-level subdirectories (`types/`, `validators/`, `constants/`) and no `llm/`. Type-only files in this project consistently live under `types/`. The plan keeps the issue-named filename `mock-script-keys.ts` to preserve the symbolic link to the issue body. The PR description for #1a should call out the directory deviation explicitly so future readers find it.
 
 2. **`scripts/seed-guard.ts` lives at repo root** (not `packages/server/scripts/`). Co-located with `scripts/seed.sql` per architect suggestion #4. Invoked from `packages/server/package.json` via `tsx ../../scripts/seed-guard.ts`.
 
@@ -52,7 +66,7 @@
 
 4. **Postgres advisory lock key:** `0xE2E5E70n` (the hex for "E2E5E70" reads as "E2E SERV ER" — mnemonic, deterministic, exported as a named constant `E2E_RESET_LOCK_ID` from `routes/__test__.ts`).
 
-5. **Coverage configuration:** the new file `packages/shared/src/types/llm-mock.ts` is added to `vitest.config.ts` `coverage.exclude`. No other coverage-config changes needed (e2e/ is already excluded by the `coverage.include` glob).
+5. **Coverage configuration:** the new file `packages/shared/src/types/mock-script-keys.ts` is added to `vitest.config.ts` `coverage.exclude`. No other coverage-config changes needed (e2e/ is already excluded by the `coverage.include` glob).
 
 ---
 
@@ -252,11 +266,12 @@ describe('generateE2ESecret', () => {
     expect(mode).toBe(0o600);
   });
 
-  it('overwrites an existing file', () => {
+  it('regenerates unconditionally — second call returns a different secret and overwrites the file', () => {
     const path = join(scratch, 'forge-e2e-secret');
-    generateE2ESecret(path);
+    const first = generateE2ESecret(path);
     const second = generateE2ESecret(path);
-    expect(readFileSync(path, 'utf8')).toBe(second);
+    expect(second).not.toBe(first);                // proves NOT cached / NOT no-op
+    expect(readFileSync(path, 'utf8')).toBe(second); // file holds the latest value
   });
 });
 ```
@@ -301,7 +316,7 @@ git commit -m "feat(server): add env-guards lib for E2E test-mode flag handling"
 
 **Files:**
 - Create: `packages/server/src/plugins/langchain/mock-scripts.ts`
-- Create: `packages/shared/src/types/llm-mock.ts`
+- Create: `packages/shared/src/types/mock-script-keys.ts`
 - Test: `packages/server/src/__tests__/plugins/langchain/mock-scripts.test.ts`
 - Modify: `vitest.config.ts` (add the new shared types file to `coverage.exclude`)
 
@@ -310,7 +325,7 @@ git commit -m "feat(server): add env-guards lib for E2E test-mode flag handling"
 Create `packages/server/src/__tests__/plugins/langchain/mock-scripts.test.ts`:
 
 ```ts
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   mockScripts,
   DEFAULT_SCRIPT_KEY,
@@ -343,18 +358,42 @@ describe('mock-scripts registry', () => {
 });
 
 describe('resolveMockScript', () => {
-  it('returns the requested script when it exists', () => {
+  const original = { ...process.env };
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    warnSpy.mockRestore();
+    process.env = { ...original };
+  });
+
+  it('returns the requested script when it exists, no warn', () => {
+    process.env.NODE_ENV = 'test';
     expect(resolveMockScript('autocomplete-typescript-react')).toBe(
       mockScripts['autocomplete-typescript-react'],
     );
+    expect(warnSpy).not.toHaveBeenCalled();
   });
 
-  it('returns the default script when the key is missing', () => {
-    expect(resolveMockScript('nonexistent-key')).toBe(mockScripts[DEFAULT_SCRIPT_KEY]);
-  });
-
-  it('returns the default script when the key is undefined', () => {
+  it('returns the default script when the key is undefined, no warn', () => {
+    process.env.NODE_ENV = 'test';
     expect(resolveMockScript(undefined)).toBe(mockScripts[DEFAULT_SCRIPT_KEY]);
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it('emits console.warn for unknown key when NODE_ENV is not production', () => {
+    process.env.NODE_ENV = 'test';
+    expect(resolveMockScript('nonexistent-key')).toBe(mockScripts[DEFAULT_SCRIPT_KEY]);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringMatching(/unknown.*X-Mock-Script.*nonexistent-key/i));
+  });
+
+  it('does NOT emit console.warn when NODE_ENV=production (silent fallback)', () => {
+    process.env.NODE_ENV = 'production';
+    expect(resolveMockScript('nonexistent-key')).toBe(mockScripts[DEFAULT_SCRIPT_KEY]);
+    expect(warnSpy).not.toHaveBeenCalled();
   });
 });
 ```
@@ -384,7 +423,18 @@ export const mockScripts: Record<string, string[]> = {
 
 export function resolveMockScript(key: string | undefined): string[] {
   if (key === undefined) return mockScripts[DEFAULT_SCRIPT_KEY];
-  return mockScripts[key] ?? mockScripts[DEFAULT_SCRIPT_KEY];
+  const found = mockScripts[key];
+  if (found !== undefined) return found;
+  // Unknown key — silent fallback in production (defense-in-depth: mock should
+  // never run in prod, but if it does, emit no console output). Warn elsewhere
+  // so test authors notice typos.
+  if (process.env.NODE_ENV !== 'production') {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[mock-scripts] unknown X-Mock-Script key "${key}" — falling back to "${DEFAULT_SCRIPT_KEY}"`,
+    );
+  }
+  return mockScripts[DEFAULT_SCRIPT_KEY];
 }
 ```
 
@@ -392,12 +442,13 @@ Run tests: PASS.
 
 - [ ] **Step 2.3: Add the shared type file**
 
-Create `packages/shared/src/types/llm-mock.ts`:
+Create `packages/shared/src/types/mock-script-keys.ts` (filename matches issue #44 file scope; directory is `types/` per existing project pattern — see Decision #1 above for rationale):
 
 ```ts
 /**
  * Type-only export of the names of mock-LLM scripts. Lives in @forge/shared so
- * Playwright fixtures can use it for type-safety on the X-Mock-Script header.
+ * Playwright fixtures (issue #45) can use it for type-safety on the
+ * X-Mock-Script header.
  *
  * Implementation lives at packages/server/src/plugins/langchain/mock-scripts.ts.
  * Keep these in sync.
@@ -415,7 +466,7 @@ export type MockScriptKey =
 Edit `vitest.config.ts`. After the line `'packages/shared/src/types/file.ts',` add:
 
 ```ts
-        'packages/shared/src/types/llm-mock.ts',
+        'packages/shared/src/types/mock-script-keys.ts',
 ```
 
 (Maintain alphabetical-ish order matching existing entries.)
@@ -426,7 +477,7 @@ Edit `vitest.config.ts`. After the line `'packages/shared/src/types/file.ts',` a
 npm run build --workspace=packages/shared
 ```
 
-Expected: clean exit. The new type file is exported via existing barrel re-export pattern? Check `packages/shared/src/types/index.ts` — if it has explicit re-exports, add `export * from './llm-mock.js';`. If it uses a glob pattern, no change needed.
+Expected: clean exit. The new type file is exported via existing barrel re-export pattern? Check `packages/shared/src/types/index.ts` — if it has explicit re-exports, add `export type { MockScriptKey } from './mock-script-keys.js';`. If it uses a glob pattern, no change needed.
 
 - [ ] **Step 2.6: Verify 100% coverage of mock-scripts.ts**
 
@@ -441,7 +492,7 @@ Expected: 100% on `src/plugins/langchain/mock-scripts.ts`.
 ```bash
 git add packages/server/src/plugins/langchain/mock-scripts.ts \
         packages/server/src/__tests__/plugins/langchain/mock-scripts.test.ts \
-        packages/shared/src/types/llm-mock.ts \
+        packages/shared/src/types/mock-script-keys.ts \
         packages/shared/src/types/index.ts \
         vitest.config.ts
 git commit -m "feat(server): add mock-LLM script registry and shared MockScriptKey type"
@@ -488,19 +539,24 @@ Run: FAIL (module not found).
 
 - [ ] **Step 3.2: Implement ChatMock minimally**
 
-Create `packages/server/src/plugins/langchain/mock-provider.ts`:
+Create `packages/server/src/plugins/langchain/mock-provider.ts`. The signature for `_streamResponseChunks` MUST match the LangChain `BaseChatModel` base-class declaration exactly (3 parameters: `messages`, `options`, `runManager?`); narrowing the override breaks the project's TypeScript strict mode `--noImplicitOverride` checks. Verified against `node_modules/@langchain/core/dist/language_models/chat_models.d.ts`:
 
 ```ts
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { BaseChatModel, type BaseChatModelParams } from '@langchain/core/language_models/chat_models';
+import {
+  BaseChatModel,
+  type BaseChatModelCallOptions,
+  type BaseChatModelParams,
+} from '@langchain/core/language_models/chat_models';
 import type { BaseMessage } from '@langchain/core/messages';
 import { AIMessageChunk } from '@langchain/core/messages';
 import type { ChatGenerationChunk, ChatResult } from '@langchain/core/outputs';
+import type { CallbackManagerForLLMRun } from '@langchain/core/callbacks/manager';
 import { resolveMockScript } from './mock-scripts.js';
 
 export const mockScriptStorage = new AsyncLocalStorage<string>();
 
-export class ChatMock extends BaseChatModel<BaseChatModelParams> {
+export class ChatMock extends BaseChatModel<BaseChatModelCallOptions> {
   constructor(fields: BaseChatModelParams = {}) {
     super(fields);
   }
@@ -511,6 +567,8 @@ export class ChatMock extends BaseChatModel<BaseChatModelParams> {
 
   override async *_streamResponseChunks(
     _messages: BaseMessage[],
+    _options: this['ParsedCallOptions'],
+    _runManager?: CallbackManagerForLLMRun,
   ): AsyncGenerator<ChatGenerationChunk> {
     const key = mockScriptStorage.getStore();
     const chunks = resolveMockScript(key);
@@ -520,13 +578,13 @@ export class ChatMock extends BaseChatModel<BaseChatModelParams> {
     }
   }
 
-  override async _generate(): Promise<ChatResult> {
+  async _generate(): Promise<ChatResult> {
     throw new Error('ChatMock only supports streaming. Use stream() not invoke().');
   }
 }
 ```
 
-Run test: PASS.
+Run test: PASS. If TypeScript reports an error on the `override` modifier or the `this['ParsedCallOptions']` reference, run `npm run typecheck --workspace=packages/server` to surface the exact mismatch — the LangChain version installed (`@langchain/core` resolved via npm) is the authority. Adjust the import / generic to whatever that version exports; do NOT remove the `override` modifier.
 
 - [ ] **Step 3.3: Add test for default fallback when no script key in storage**
 
@@ -1035,18 +1093,21 @@ Note: imports go at the top of the file. Move `import { timingSafeEqual }` and `
 
 Run tests: 3 auth tests PASS. (The existing 3 gating tests still pass.)
 
-- [ ] **Step 6.5: Add success test — correct secret triggers seed.sql execution**
+- [ ] **Step 6.5: Add success test — correct secret triggers seed.sql execution AND emits audit log**
 
 Append:
 
 ```ts
-  it('returns 204 and runs seed.sql with advisory lock when secret matches', async () => {
+  it('returns 204, runs seed.sql with advisory lock, and emits audit log when secret matches', async () => {
     const app = await makeApp();
+    const logSpy = vi.spyOn(app.log, 'info');
+
     const res = await app.inject({
       method: 'POST',
       url: '/api/__test__/reset',
       headers: { 'X-E2E-Secret': 'expected-secret-abc' },
     });
+
     expect(res.statusCode).toBe(204);
     // Expected SQL trace: lock, seed, unlock.
     expect(pgCalls.length).toBe(3);
@@ -1054,9 +1115,21 @@ Append:
     expect(pgCalls[1]).toMatch(/^BEGIN;/);
     expect(pgCalls[1]).toMatch(/COMMIT;\s*$/);
     expect(pgCalls[2]).toMatch(/pg_advisory_unlock/);
+
+    // Audit log requirement (issue #44 adversarial-review checklist):
+    // every successful reset MUST log workerId + timestamp.
+    const auditCall = logSpy.mock.calls.find((args) => /reset completed/i.test(String(args[1] ?? '')));
+    expect(auditCall, 'expected an "E2E reset completed" log line').toBeDefined();
+    const auditPayload = auditCall![0] as { workerId: unknown; ts: unknown };
+    expect(auditPayload).toHaveProperty('workerId');
+    expect(auditPayload).toHaveProperty('ts');
+    expect(typeof auditPayload.ts).toBe('number');
+
     await app.close();
   });
 ```
+
+Make sure `vi` is imported at the top of the test file (`import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';`).
 
 Run: PASS.
 
@@ -1222,34 +1295,144 @@ git commit -m "feat(server): conditionally mount __test__ routes when ENABLE_TES
 
 ---
 
-## Task 8: Boot fail-fast in `server.ts`
+## Task 8: Boot fail-fast — extract testable wrapper, then call it from `server.ts`
 
 **Files:**
+- Create: `packages/server/src/lib/bootstrap.ts`
+- Test: `packages/server/src/__tests__/lib/bootstrap.test.ts`
 - Modify: `packages/server/src/server.ts`
 
-`server.ts` is in `vitest.config.ts` `coverage.exclude`, so the file itself does not need 100% coverage. The guard logic is in `env-guards.ts` (already covered). We only add the call site.
+`server.ts` itself is already in `vitest.config.ts` `coverage.exclude`. To satisfy the issue's adversarial-review checklist requirement that "each layer has its own failing test that proves it gates", the boot logic is extracted into `lib/bootstrap.ts` (a coverable file) and `server.ts` becomes a thin shim that calls it. The wrapper accepts injectable `onError` and `onExit` hooks so tests can drive the failure path without actually exiting the test process.
 
-- [ ] **Step 8.1: Update server.ts**
+- [ ] **Step 8.1: Write failing test for `runBootGuards` — happy path**
+
+Create `packages/server/src/__tests__/lib/bootstrap.test.ts`:
+
+```ts
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { mkdtempSync, rmSync, existsSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { runBootGuards } from '../../lib/bootstrap.js';
+
+describe('runBootGuards', () => {
+  let scratch: string;
+
+  beforeEach(() => {
+    scratch = mkdtempSync(join(tmpdir(), 'forge-bootstrap-'));
+  });
+
+  afterEach(() => {
+    rmSync(scratch, { recursive: true, force: true });
+  });
+
+  it('returns normally when env is dev/test with no flags', () => {
+    const env: NodeJS.ProcessEnv = { NODE_ENV: 'test' };
+    const onError = vi.fn();
+    const onExit = vi.fn();
+    runBootGuards(env, { onError, onExit, runnerTemp: scratch });
+    expect(onError).not.toHaveBeenCalled();
+    expect(onExit).not.toHaveBeenCalled();
+  });
+
+  it('writes a fresh E2E_SECRET to RUNNER_TEMP/forge-e2e-secret when ENABLE_TEST_ROUTES=1', () => {
+    const env: NodeJS.ProcessEnv = { NODE_ENV: 'test', ENABLE_TEST_ROUTES: '1' };
+    runBootGuards(env, { onError: vi.fn(), onExit: vi.fn(), runnerTemp: scratch });
+    expect(env.E2E_SECRET).toMatch(/^[0-9a-f]{64}$/);
+    expect(existsSync(join(scratch, 'forge-e2e-secret'))).toBe(true);
+  });
+
+  it('does NOT generate an E2E secret when ENABLE_TEST_ROUTES is unset', () => {
+    const env: NodeJS.ProcessEnv = { NODE_ENV: 'test' };
+    runBootGuards(env, { onError: vi.fn(), onExit: vi.fn(), runnerTemp: scratch });
+    expect(env.E2E_SECRET).toBeUndefined();
+    expect(existsSync(join(scratch, 'forge-e2e-secret'))).toBe(false);
+  });
+
+  it('calls onError + onExit(1) when production is paired with a test-mode flag', () => {
+    const env: NodeJS.ProcessEnv = { NODE_ENV: 'production', ENABLE_TEST_ROUTES: '1' };
+    const onError = vi.fn();
+    const onExit = vi.fn();
+    runBootGuards(env, { onError, onExit, runnerTemp: scratch });
+    expect(onError).toHaveBeenCalledWith(expect.stringMatching(/refusing to start/i));
+    expect(onExit).toHaveBeenCalledWith(1);
+  });
+
+  it('calls onError + onExit(1) when LLM_PROVIDER=mock in production', () => {
+    const env: NodeJS.ProcessEnv = { NODE_ENV: 'production', LLM_PROVIDER: 'mock' };
+    const onError = vi.fn();
+    const onExit = vi.fn();
+    runBootGuards(env, { onError, onExit, runnerTemp: scratch });
+    expect(onError).toHaveBeenCalledWith(expect.stringMatching(/llm_provider=mock/i));
+    expect(onExit).toHaveBeenCalledWith(1);
+  });
+
+  it('falls back to os.tmpdir() when runnerTemp is not provided', () => {
+    const env: NodeJS.ProcessEnv = { NODE_ENV: 'test', ENABLE_TEST_ROUTES: '1' };
+    runBootGuards(env, { onError: vi.fn(), onExit: vi.fn() });
+    expect(env.E2E_SECRET).toMatch(/^[0-9a-f]{64}$/);
+    // Cleanup: remove the file we wrote to the real tmpdir.
+    rmSync(join(tmpdir(), 'forge-e2e-secret'), { force: true });
+  });
+});
+```
+
+Run: FAIL (module not found).
+
+- [ ] **Step 8.2: Implement `runBootGuards`**
+
+Create `packages/server/src/lib/bootstrap.ts`:
+
+```ts
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { assertProductionGuards, generateE2ESecret, isE2EFlagSet } from './env-guards.js';
+
+export type BootHooks = {
+  onError?: (msg: string) => void;
+  onExit?: (code: number) => void;
+  runnerTemp?: string;
+};
+
+export function runBootGuards(env: NodeJS.ProcessEnv, hooks: BootHooks = {}): void {
+  const onError = hooks.onError ?? ((m: string) => console.error(m));
+  const onExit = hooks.onExit ?? ((c: number) => process.exit(c));
+
+  try {
+    assertProductionGuards(env);
+  } catch (err) {
+    onError(err instanceof Error ? err.message : String(err));
+    onExit(1);
+    return; // tests inject a no-op onExit; guard against continuing past
+  }
+
+  if (isE2EFlagSet(env.ENABLE_TEST_ROUTES)) {
+    const dir = hooks.runnerTemp ?? env.RUNNER_TEMP ?? tmpdir();
+    const path = join(dir, 'forge-e2e-secret');
+    env.E2E_SECRET = generateE2ESecret(path);
+  }
+}
+```
+
+Run tests: PASS (6 tests).
+
+- [ ] **Step 8.3: Verify 100% coverage on bootstrap.ts**
+
+```bash
+cd packages/server && npx vitest run --coverage __tests__/lib/bootstrap.test.ts
+```
+
+Expected: 100% on `src/lib/bootstrap.ts`.
+
+- [ ] **Step 8.4: Update server.ts to call the wrapper**
 
 Replace the contents of `packages/server/src/server.ts` with:
 
 ```ts
-import { assertProductionGuards, generateE2ESecret, isE2EFlagSet } from './lib/env-guards.js';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { runBootGuards } from './lib/bootstrap.js';
 import { buildApp } from './app.js';
 
-try {
-  assertProductionGuards(process.env);
-} catch (err) {
-  console.error(err instanceof Error ? err.message : String(err));
-  process.exit(1);
-}
-
-if (isE2EFlagSet(process.env.ENABLE_TEST_ROUTES)) {
-  const path = join(process.env.RUNNER_TEMP ?? tmpdir(), 'forge-e2e-secret');
-  process.env.E2E_SECRET = generateE2ESecret(path);
-}
+runBootGuards(process.env);
 
 const PORT = parseInt(process.env.PORT ?? '3001', 10);
 const HOST = process.env.HOST ?? '0.0.0.0';
@@ -1267,7 +1450,9 @@ async function start() {
 start();
 ```
 
-- [ ] **Step 8.2: Smoke-test server boot manually**
+`server.ts` remains in `vitest.config.ts` `coverage.exclude` (no change to that exclude list). The boot logic that we wanted covered now lives in `bootstrap.ts` and is fully tested.
+
+- [ ] **Step 8.5: Smoke-test server boot manually**
 
 ```bash
 cd /Users/andrew/Code/forge
@@ -1285,7 +1470,7 @@ kill $SERVER_PID
 
 Expected: `{"status":"ok"}` from health, and secret file exists with `-rw-------` permissions.
 
-- [ ] **Step 8.3: Smoke-test boot fail-fast**
+- [ ] **Step 8.6: Smoke-test boot fail-fast**
 
 ```bash
 NODE_ENV=production ENABLE_TEST_ROUTES=1 \
@@ -1295,10 +1480,12 @@ echo "exit code: $?"
 
 Expected: stderr contains "Refusing to start", exit code 1.
 
-- [ ] **Step 8.4: Commit**
+- [ ] **Step 8.7: Commit**
 
 ```bash
-git add packages/server/src/server.ts
+git add packages/server/src/lib/bootstrap.ts \
+        packages/server/src/__tests__/lib/bootstrap.test.ts \
+        packages/server/src/server.ts
 git commit -m "feat(server): boot fail-fast on production+test-mode flag combinations"
 ```
 
@@ -1323,11 +1510,20 @@ describe('parseSeedTarget', () => {
   it.each([
     ['postgresql://forge:pw@localhost:5432/forge', 'localhost'],
     ['postgresql://forge:pw@127.0.0.1:5432/forge', '127.0.0.1'],
+    // Node's URL.hostname returns IPv6 hosts WITH the brackets (e.g. "[::1]").
+    // parseSeedTarget MUST strip the brackets so SAFE_HOSTS lookups work
+    // against the canonical host string.
     ['postgresql://forge:pw@[::1]:5432/forge', '::1'],
     ['postgresql://forge:pw@host.docker.internal:5432/forge', 'host.docker.internal'],
     ['postgresql://forge:pw@db.example.com:5432/forge', 'db.example.com'],
   ])('extracts host from %s', (url, expected) => {
     expect(parseSeedTarget(url)).toBe(expected);
+  });
+
+  it('strips IPv6 brackets', () => {
+    // Defensive duplicate to make the bracket-stripping behavior explicit;
+    // any future change that breaks it should fail here loudly.
+    expect(parseSeedTarget('postgresql://forge:pw@[::1]:5432/forge')).toBe('::1');
   });
 
   it('throws on missing url', () => {
@@ -1393,8 +1589,13 @@ export function parseSeedTarget(url: string | undefined): string {
   } catch {
     throw new Error(`Invalid DATABASE_URL: cannot parse "${url}"`);
   }
-  // Bracketed IPv6 hosts come back without brackets from URL.hostname.
-  return parsed.hostname;
+  // Node's URL.hostname returns IPv6 hosts WITH brackets (e.g. "[::1]").
+  // Strip them so the canonical comparison against SAFE_HOSTS works.
+  const host = parsed.hostname;
+  if (host.startsWith('[') && host.endsWith(']')) {
+    return host.slice(1, -1);
+  }
+  return host;
 }
 
 export function assertSeedAllowed(host: string, override: string | undefined): void {
@@ -1590,18 +1791,38 @@ Find the top-level `env:` block (or the job-level env block).
 
 - [ ] **Step 12.2: Add the four env vars**
 
-In `bruno-regression.yml`, in the workflow's top-level `env:` block, add:
+The current workflow (verified at plan-write time) has its env at JOB level — under `jobs.bruno-regression.env:`, not at the workflow top level. Add the new vars to that existing block. The current block reads:
 
 ```yaml
-env:
-  # ... existing entries (e.g., JWT_SECRET, DATABASE_URL)
-  LLM_PROVIDER: mock
-  ENABLE_TEST_ROUTES: '1'
-  E2E_MODE: '1'
-  NODE_ENV: test
+    env:
+      DATABASE_URL: postgres://forge:forge@localhost:5432/forge
+      JWT_SECRET: ci-test-secret
+      JWT_REFRESH_SECRET: ci-test-refresh-secret
+      NODE_ENV: test
+      PORT: 3001
 ```
 
-If the existing config sets `NODE_ENV` to something else (e.g., production), reconcile — for Bruno regression, `test` is correct.
+Append (alphabetical-ish ordering, mirroring style of nearby keys):
+
+```yaml
+      ENABLE_TEST_ROUTES: '1'
+      E2E_MODE: '1'
+      LLM_PROVIDER: mock
+```
+
+`NODE_ENV: test` is already present — leave it. Resulting env block:
+
+```yaml
+    env:
+      DATABASE_URL: postgres://forge:forge@localhost:5432/forge
+      ENABLE_TEST_ROUTES: '1'
+      E2E_MODE: '1'
+      JWT_SECRET: ci-test-secret
+      JWT_REFRESH_SECRET: ci-test-refresh-secret
+      LLM_PROVIDER: mock
+      NODE_ENV: test
+      PORT: 3001
+```
 
 - [ ] **Step 12.3: Read current ai/complete.bru**
 
@@ -1854,4 +2075,21 @@ After all 13 tasks complete, the implementer reviews the plan against this spec 
 
 **Commit message style:** matches existing repo style (`feat(server):`, `ci(bruno):`, `test(server):`, `build:`). Cross-referenced against `git log --oneline -5`.
 
-**Coverage gate:** the only files added under `packages/*/src/**` that aren't directly Vitest-covered are `packages/shared/src/types/llm-mock.ts` (excluded by addition to `vitest.config.ts` exclude list) and `packages/server/src/server.ts` (already excluded). All other new files have tests at 100% coverage.
+**Coverage gate:** the only files added under `packages/*/src/**` that aren't directly Vitest-covered are `packages/shared/src/types/mock-script-keys.ts` (excluded by addition to `vitest.config.ts` exclude list) and `packages/server/src/server.ts` (already excluded — the boot logic itself lives in the covered `packages/server/src/lib/bootstrap.ts`). All other new files have tests at 100% coverage.
+
+---
+
+## Execution-method choice
+
+Per `CLAUDE.md`, the user picks the execution approach before this plan begins. Do **NOT** auto-select.
+
+Present the user with these three options (verbatim):
+
+> **How would you like to execute this plan?**
+>
+> 1. **Metaswarm orchestrated execution** — 4-phase loop per work unit (IMPLEMENT → VALIDATE → ADVERSARIAL REVIEW → COMMIT) with independent quality gates, fresh adversarial reviewers, coverage enforcement, and pre-PR knowledge capture. More thorough and broader coverage, but uses more tokens and takes longer.
+> 2. **Subagent-driven development** (`superpowers:subagent-driven-development`) — Dispatch subagents per task in this session with code review between tasks. Faster, lighter-weight, lower token cost.
+> 3. **Parallel session** (`superpowers:executing-plans`) — Execute in a separate session with batch checkpoints. Good for long-running work you want isolated.
+
+**Default recommendation for issue #44 specifically:** the issue body recommends *metaswarm orchestrated execution* (option 1) because of the multi-file scope and the security-sensitive gating logic. The user is free to pick any of the three.
+
