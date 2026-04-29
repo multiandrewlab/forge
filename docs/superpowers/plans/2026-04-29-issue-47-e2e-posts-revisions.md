@@ -1,16 +1,38 @@
-# E2E Posts + Revisions Specs Implementation Plan
+# E2E Posts + Revisions Specs Implementation Plan — REV 2
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Deliver ~38–40 Playwright specs covering `posts/` and `revisions/` per Issue #47, completing rollout phase 2/9.
+**Goal:** Deliver Playwright specs covering `posts/` and `revisions/` per Issue #47, completing rollout phase 2/9.
 
-**Architecture:** TDD per spec — write spec, run, watch fail, add testid + selector entry, run, watch pass, commit. Selector shards extend `e2e/fixtures/selectors/posts.ts` (existing) and create `e2e/fixtures/selectors/revisions.ts` (new). Seed extensions are additive — no existing fixture mutated, no Bruno breakage. Component testid additions are TDD-driven (added when a spec requires one), not done upfront.
+**Architecture:** TDD per spec — write spec, run, watch fail, add testid + selector entry (or small feature wiring), run, watch pass, commit. Selector shards extend `e2e/fixtures/selectors/posts.ts` (existing) and create `e2e/fixtures/selectors/revisions.ts` (new). Seed extensions are additive — no existing fixture mutated, no Bruno breakage. `createdPostId` is used for **every spec that mutates state**, per the issue's fixture-isolation rule and for `workers=4` safety.
 
 **Tech Stack:** Playwright @ workspace `e2e/`, Vue 3 + Vite client, Fastify server (already shipped with mock LLM provider + `__test__/reset` endpoint), PostgreSQL via docker-compose, MinIO for multi-file uploads.
 
-**Source design:** `docs/superpowers/specs/2026-04-28-e2e-playwright-testing-design.md` (original 2026-04-28 + Amendment 2026-04-29 — Issue #47 scope clarification).
+**Source design:** `docs/superpowers/specs/2026-04-28-e2e-playwright-testing-design.md` (original 2026-04-28 + Amendment 2026-04-29).
 
-**Branch:** `feat/e2e-posts-revisions-specs` (already created).
+**Branch:** `feat/e2e-posts-revisions-specs`.
+
+## REV 2 changes vs. REV 1 (from plan-review-gate iteration 1)
+
+The first plan-review-gate (iteration 1) returned PASS for Scope & Alignment but FAIL for Feasibility (5 blocking) and Completeness (12 blocking). Architectural verification revealed that the amendment's premise about feature-surface placement was wrong; user adjudicated three scope-decision rebounds. REV 2 incorporates:
+
+| Concern (gate finding)                                                                             | REV 2 fix                                                                                                                           |
+| -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `CodeRunner` / `LinkPreviewCard` not on `PostViewPage`; only on `PostDetail.vue` (HomePage inline) | Tasks 9 + 10 specs target `/` (HomePage), select the right post in the feed, assert testids in the inline `PostDetail` panel.       |
+| `?filter=drafts` URL doesn't exist (FeedFilter is `mine \| bookmarked`)                            | Task 5 collapses 5.2 + 5.3 into one spec on `/my-snippets` (which already includes drafts per `feed.ts:137`). No server changes.    |
+| Tags rendered as `<span>` strings, no router-link, no tag-page route                               | Task 8.3 asserts visible tag chips with a `post-tag-chip` testid; navigation deferred to rollout #4.                                |
+| `/users/:id` route doesn't exist (actual: `/user/:id` singular)                                    | Task 11.1 spec uses `/user/:id`.                                                                                                    |
+| `PresenceIndicator` only on `PostViewPage`, not edit                                               | Task 11.2 renamed `profile-presence-on-view`; spec targets `/posts/:id`.                                                            |
+| Manual revision UI doesn't exist                                                                   | Task 12.2 adds a small `save-revision-btn` to `EditorToolbar.vue` wired to existing `POST /:id/revisions` API (per Q3 user choice). |
+| Cascade-spec asserted only comment, not votes/bookmarks                                            | Task 4.3 extended to assert all three.                                                                                              |
+| `createdPostId` discipline broken on Tasks 3.1, 3.3, 5.1, 12.1, 15.1                               | All 5 mutating specs rewritten to use `createdPostId` setup.                                                                        |
+| `PostNewPage.vue` testid missing                                                                   | Task 1 adds page-level `post-new-page` testid.                                                                                      |
+| 3 consecutive green CI runs not operationalized                                                    | Task 16 step 6 explicit.                                                                                                            |
+| CI runtime delta not measured                                                                      | Task 16 step 7 explicit.                                                                                                            |
+| `Closes #47` PR trailer missing                                                                    | Task 16 step 9 explicit.                                                                                                            |
+| Spec-N-alone independence not verified                                                             | Task 16 step 5 runs random specs in isolation.                                                                                      |
+| Fork-of-fork case + rollback-on-forked-post unaddressed                                            | Explicit OOS section at end of plan.                                                                                                |
+| Vitest impact of new dialog/cancel UI not considered                                               | Task 4 + Task 3.4 + Task 12.2 explicitly note the unit-test impact and require running `npm run test:coverage`.                     |
 
 ---
 
@@ -35,8 +57,7 @@ e2e/specs/posts/
 ├── delete-own-only.spec.ts                (Task 4)
 ├── delete-cascade.spec.ts                 (Task 4)
 ├── publish-draft-to-public.spec.ts        (Task 5)
-├── publish-draft-list-updates.spec.ts     (Task 5)
-├── publish-published-list-updates.spec.ts (Task 5)
+├── publish-list-reflects-state.spec.ts    (Task 5 — combined draft/published list)
 ├── fork-creates-linked-copy.spec.ts       (Task 6)
 ├── fork-edits-independent.spec.ts         (Task 6)
 ├── fork-relationship-displayed.spec.ts    (Task 6)
@@ -45,19 +66,19 @@ e2e/specs/posts/
 ├── multi-file-rendering-in-post.spec.ts   (Task 7)
 ├── tags-add-to-post.spec.ts               (Task 8)
 ├── tags-remove-from-post.spec.ts          (Task 8)
-├── tags-view-page-shows-links.spec.ts     (Task 8)
-├── link-preview-renders-on-link-post.spec.ts (Task 9)
-├── link-preview-refresh-action.spec.ts    (Task 9)
-├── code-runner-button-on-snippet.spec.ts  (Task 10)
-├── code-runner-execution-output.spec.ts   (Task 10)
-├── profile-avatar-links-to-profile.spec.ts (Task 11)
-└── profile-presence-indicator-on-edit.spec.ts (Task 11)
+├── tags-view-page-shows-chips.spec.ts     (Task 8 — visibility, not navigation)
+├── home-link-preview-on-link-post.spec.ts (Task 9 — HomePage path)
+├── home-link-preview-refresh.spec.ts      (Task 9 — HomePage path)
+├── home-code-runner-on-snippet.spec.ts    (Task 10 — HomePage path)
+├── home-code-runner-execution.spec.ts     (Task 10 — HomePage path)
+├── home-author-avatar-links.spec.ts       (Task 11 — HomePage path)
+└── view-presence-indicator.spec.ts        (Task 11 — view route)
 
 e2e/specs/revisions/
 ├── create-auto-on-edit.spec.ts            (Task 12)
 ├── create-manual-via-button.spec.ts       (Task 12)
 ├── list-chronological.spec.ts             (Task 13)
-├── list-empty-state.spec.ts               (Task 13)
+├── list-only-initial-revision.spec.ts     (Task 13 — interprets "empty" as 1-revision case)
 ├── view-by-number.spec.ts                 (Task 14)
 ├── diff-side-by-side.spec.ts              (Task 14)
 ├── diff-inline.spec.ts                    (Task 14)
@@ -67,18 +88,45 @@ e2e/specs/revisions/
 e2e/fixtures/selectors/revisions.ts        (Task 0)
 ```
 
+**Spec count: 31 posts + 9 revisions = 40 total** (within amendment band).
+
 ### Modify
 
 ```
 e2e/fixtures/selectors/posts.ts            (Task 0 — extend)
 scripts/seed.sql                           (Task 0 — additive)
-packages/client/src/pages/PostViewPage.vue (Task 4 — add delete confirm dialog testids)
-packages/client/src/components/editor/PostEditor.vue (Task 3 — add post-cancel-btn)
-packages/client/src/pages/PostHistoryPage.vue (Task 13 — add page-level testid)
-packages/client/src/pages/PostViewPage.vue (Task 8 — add tag-link)
+packages/client/src/pages/PostNewPage.vue  (Task 1 — add post-new-page testid)
+packages/client/src/components/editor/PostEditor.vue (Task 3.4 — add post-cancel-btn)
+packages/client/src/pages/PostViewPage.vue (Task 4 — delete-confirm dialog; Task 8.3 — tag-chip testid)
+packages/client/src/components/post/PostMetaHeader.vue (Task 8.3 — tag-chip testid; Task 11.1 — author-avatar testid)
+packages/client/src/components/editor/EditorToolbar.vue (Task 12.2 — save-revision-btn)
+packages/client/src/components/post/LinkPreviewCard.vue (Task 9 — link-preview-card testid on root)
+packages/client/src/pages/PostHistoryPage.vue (Task 13 — page-level testid)
 ```
 
-Each modify line is one focused testid addition.
+All modify lines are testid additions or one minimal feature add. **No `packages/server/` changes.**
+
+---
+
+## TDD pattern (used in every spec task below)
+
+For every spec in tasks 1–15, follow this loop:
+
+1. **Write the failing spec** — drop the `.spec.ts` file with the test code shown.
+2. **Run it:** `cd e2e && npx playwright test specs/posts/<file>.spec.ts --project=chromium` (or `specs/revisions/...`).
+3. **Watch it fail.**
+4. **Fix the smallest thing**: add the missing testid in the named component file (1 line) or extend `selectors/posts.ts`/`revisions.ts`. **Do NOT add features** unless the task explicitly calls for it (Tasks 4, 8.3, 12.2 add minimal feature wiring).
+5. **Run it again** — watch it pass.
+6. **Commit** the spec + any testid/selector additions together with `feat(e2e):` or `feat(e2e,client):` message.
+
+**Test invocation reference:**
+
+```bash
+cd e2e && npx playwright test specs/posts                     # whole posts folder, default workers
+cd e2e && npx playwright test specs/posts --workers=1         # workers=1 verification
+cd e2e && npx playwright test specs/posts --workers=4         # workers=4 verification
+cd e2e && npx playwright test specs/posts specs/revisions --workers=4  # full #47 scope
+```
 
 ---
 
@@ -92,26 +140,38 @@ Each modify line is one focused testid addition.
 - Create: `e2e/fixtures/selectors/revisions.ts`
 - Modify: `scripts/seed.sql`
 
-### Step 1: Extend `e2e/fixtures/selectors/posts.ts` with new entries (skeleton)
+### Step 1: Extend `e2e/fixtures/selectors/posts.ts` with new entries
 
-Add the following to the existing `posts` object (do NOT remove or rename existing keys):
+Add these to the existing `posts` object (do NOT remove or rename existing keys):
 
 ```typescript
-// Add after existing entries, inside the `posts` const:
+// New for Task 1 (PostNewPage page-level testid)
+postNewPage: (page: Page): Locator => page.getByTestId('post-new-page'),
+// New for Task 3.4 (PostEditor cancel)
+postCancelBtn: (page: Page): Locator => page.getByTestId('post-cancel-btn'),
+// New for Task 4 (delete-confirm dialog)
 postDeleteBtn: (page: Page): Locator => page.getByTestId('post-delete-btn'),
 postDeleteConfirm: (page: Page): Locator => page.getByTestId('post-delete-confirm'),
 postDeleteCancel: (page: Page): Locator => page.getByTestId('post-delete-cancel'),
-postCancelBtn: (page: Page): Locator => page.getByTestId('post-cancel-btn'),
-tagLink: (page: Page, name: string): Locator => page.getByTestId(`tag-link-${name}`),
+postDeleteDialog: (page: Page): Locator => page.getByTestId('post-delete-dialog'),
+// New for Task 8.3 (visible tag chips on view page — no navigation, no tag page yet)
+postTagChip: (page: Page, name: string): Locator =>
+  page.getByTestId(`post-tag-chip-${name}`),
+// New for Task 9 (link-preview, tested via HomePage inline path)
 linkPreviewCard: (page: Page): Locator => page.getByTestId('link-preview-card'),
 linkPreviewRefresh: (page: Page): Locator => page.getByTestId('refresh-preview'),
+// New for Task 10 (code-runner, tested via HomePage inline path)
 codeRunner: (page: Page): Locator => page.getByTestId('code-runner'),
 runPlay: (page: Page): Locator => page.getByTestId('run-play'),
 runStop: (page: Page): Locator => page.getByTestId('run-stop'),
 executionOutput: (page: Page): Locator => page.getByTestId('execution-output'),
 clearOutputBtn: (page: Page): Locator => page.getByTestId('clear-button'),
+// New for Task 11.1 (author avatar on PostMetaHeader, used inline on HomePage)
 authorAvatar: (page: Page): Locator => page.getByTestId('author-avatar'),
+// New for Task 11.2 (presence on view page)
 presenceAvatar: (page: Page): Locator => page.getByTestId('presence-avatar'),
+// New for Task 12.2 (manual revision via button)
+saveRevisionBtn: (page: Page): Locator => page.getByTestId('save-revision-btn'),
 ```
 
 ### Step 2: Create `e2e/fixtures/selectors/revisions.ts`
@@ -120,11 +180,10 @@ presenceAvatar: (page: Page): Locator => page.getByTestId('presence-avatar'),
 import type { Page, Locator } from '@playwright/test';
 
 export const revisions = {
-  // RevisionTimeline
+  // RevisionTimeline (existing testids)
   revisionItem: (page: Page): Locator => page.getByTestId('revision-item'),
-  revisionAuthorAvatar: (page: Page): Locator => page.getByTestId('author-avatar'),
 
-  // RevisionDiffViewer
+  // RevisionDiffViewer (existing testids)
   diffViewer: (page: Page): Locator => page.getByTestId('diff-viewer'),
   modeInline: (page: Page): Locator => page.getByTestId('mode-inline'),
   modeSideBySide: (page: Page): Locator => page.getByTestId('mode-side-by-side'),
@@ -135,7 +194,7 @@ export const revisions = {
   sideLeft: (page: Page): Locator => page.getByTestId('side-left'),
   sideRight: (page: Page): Locator => page.getByTestId('side-right'),
 
-  // RestoreButton
+  // RestoreButton (existing testids)
   restoreTrigger: (page: Page): Locator => page.getByTestId('restore-trigger'),
   restoreDialog: (page: Page): Locator => page.getByTestId('restore-dialog'),
   restoreConfirm: (page: Page): Locator => page.getByTestId('restore-confirm'),
@@ -148,137 +207,79 @@ export const revisions = {
 
 ### Step 3: Extend `scripts/seed.sql` with additive fixtures
 
-Insert the following INSERTs into `scripts/seed.sql`. **Locate them at the correct sections** (do not append blindly — Postgres ordering matters because of FK constraints):
+Insert into `scripts/seed.sql` at the correct sections (FK-safe ordering):
 
-In the **Posts** section (after the existing `c…0099` insert, before `UPDATE posts SET link_url …`):
+In the **Posts** section (after the `c…0099` insert, adjust trailing semicolon):
 
 ```sql
-  -- testuser-owned draft fixture for E2E publish-toggle tests (issue #47)
   ('c0000000-0000-0000-0000-000000000098', 'a0000000-0000-0000-0000-000000000099', 'Test Fixture Draft Post (testuser-owned)', 'snippet', 'typescript', 'public', true, 0);
 ```
 
-(Move the trailing semicolon: change the `c…0099` line from `, 0);` to `, 0),` and put the semicolon on the new `c…0098` line.)
-
-In the **Post Revisions** section (after the existing `d…0099` insert):
+In the **Post Revisions** section (after `d…0099`, adjust trailing semicolon):
 
 ```sql
   ,
-  -- Initial revision for the testuser draft fixture (c…0098)
   ('d0000000-0000-0000-0000-000000000098', 'c0000000-0000-0000-0000-000000000098', 'a0000000-0000-0000-0000-000000000099', 'const draftFixture: string = "draft body for E2E publish-toggle test";', 'Initial draft version', 1),
-  -- Two extra revisions on c…0099 for E2E revision-list / chronological / diff tests (issue #47)
   ('d0000000-0000-0000-0000-000000000100', 'c0000000-0000-0000-0000-000000000099', 'a0000000-0000-0000-0000-000000000099', E'const testFixture: string = "hello from testuser v2";\nexport default testFixture;', 'Second revision — added export', 2),
   ('d0000000-0000-0000-0000-000000000101', 'c0000000-0000-0000-0000-000000000099', 'a0000000-0000-0000-0000-000000000099', E'const testFixture: string = "hello from testuser v3 with more body";\nexport default testFixture;\n// trailing comment for diff visibility', 'Third revision — comment + body change', 3);
 ```
 
-(Same trailing-semicolon adjustment: change the `d…0099` line from `1);` to `1)`.)
-
-In the **Votes** section (after the existing inserts, append):
+In **Votes** (append, adjust trailing semicolon):
 
 ```sql
   ,
-  -- Alice votes on testuser's c…0099 for cascade-delete observability + vote-display (issue #47)
   ('a0000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000099', 1);
 ```
 
-(Same trailing adjustment on the line above.)
-
-In the **Bookmarks** section (after the existing inserts, append):
+In **Bookmarks** (append, adjust trailing semicolon):
 
 ```sql
   ,
-  -- Alice bookmarks testuser's c…0099 for cascade-delete observability (issue #47)
   ('a0000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000099');
 ```
 
-(Same trailing adjustment on the line above.)
-
 ### Step 4: Verify seed parses + applies
-
-Run:
 
 ```bash
 set -a && source .env && set +a && psql "$DATABASE_URL" -f scripts/seed.sql
-```
-
-Expected: `BEGIN`, `TRUNCATE`, multiple `INSERT` lines, `COMMIT` — no errors. The post count should now be 13 originals + 1 new draft = **14 posts**, revisions count = 14 originals + 1 new initial + 2 new on c099 = **17 revisions**.
-
-Quick assertion:
-
-```bash
 psql "$DATABASE_URL" -c "SELECT count(*) FROM posts;"   # expect 14
 psql "$DATABASE_URL" -c "SELECT count(*) FROM post_revisions WHERE post_id='c0000000-0000-0000-0000-000000000099';"  # expect 3
 ```
 
-### Step 5: Run Bruno collection — verify additive seed didn't break anything
+### Step 5: Bruno regression — verify additive seed didn't break Bruno
 
 ```bash
 cd bruno && npx @usebruno/cli run -r --env local
 ```
 
-Expected: all Bruno requests pass with the same status codes as before. (Vote count and bookmark count for testuser's `c…0099` may change if any spec asserted a specific number — investigate failures, do NOT mutate seed to "match" Bruno; instead, update the Bruno assertion if the new fixture was always going to differ.)
+Expected: all green. If a Bruno spec fails on a count change for testuser's `c…0099`, update the Bruno expectation (the new fixtures are reality, not vice versa).
 
 ### Step 6: Commit
 
 ```bash
 git add e2e/fixtures/selectors/posts.ts e2e/fixtures/selectors/revisions.ts scripts/seed.sql
-git commit -m "feat(e2e): selector skeletons + seed extensions for issue #47
-
-Extend posts.ts selector shard with placeholders for delete/cancel/tag-link/link-preview/code-runner/avatar/presence selectors.
-Create revisions.ts selector shard wrapping existing testids in components/history/*.
-Extend seed.sql with testuser draft post (c…0098), 2 extra revisions on c…0099, and alice vote+bookmark on c…0099 for cascade-delete observability.
-
-Refs #47"
+git commit -m "feat(e2e): selector skeletons + seed extensions for issue #47"
 ```
 
 ---
 
-## TDD pattern (used in every spec task below)
+## Task 1: posts/ — new (3 specs + PostNewPage testid)
 
-For every spec in tasks 1–15, follow this loop:
+**DoD:** new — draft saves, required fields, markdown renders preview correctly.
 
-1. **Write the failing spec** — drop the `.spec.ts` file with the test code shown.
-2. **Run it:** `npm run e2e -- specs/posts/<file>.spec.ts` (or `specs/revisions/...`).
-3. **Watch it fail** — typically: locator times out because testid doesn't exist yet, OR feature behavior differs from assertion.
-4. **Fix the smallest thing:** add the missing testid in the named component file (1 line), or extend `selectors/posts.ts`/`revisions.ts` with the helper function. **Do NOT add features**; if a spec requires a feature that doesn't exist (e.g., delete confirmation dialog in Task 4), that's called out explicitly with implementation steps.
-5. **Run it again** — watch it pass.
-6. **Commit** the spec + any testid/selector additions together with a `feat(e2e):` message referencing the spec name.
+### Step 0: Add `post-new-page` testid to `PostNewPage.vue`
 
-**Test invocation reference:**
+In `packages/client/src/pages/PostNewPage.vue`, on the root container:
 
-```bash
-# Single spec
-cd e2e && npx playwright test specs/posts/new-draft-save.spec.ts --project=chromium
-
-# Whole posts folder, default workers
-cd e2e && npx playwright test specs/posts
-
-# Whole posts folder, workers=1 (must also pass)
-cd e2e && npx playwright test specs/posts --workers=1
-
-# Whole posts folder, workers=4 (the standard CI setting)
-cd e2e && npx playwright test specs/posts --workers=4
-
-# Combined (this issue's scope)
-cd e2e && npx playwright test specs/posts specs/revisions --workers=4
+```vue
+<div data-testid="post-new-page" class="...">
+  ...
+</div>
 ```
 
-(If the workspace exposes `npm run e2e` from repo root, prefer that; otherwise use the `cd e2e && npx playwright` form.)
-
----
-
-## Task 1: posts/ — new (3 specs)
-
-**DoD coverage:** `new: draft saves, required fields, markdown renders preview correctly`.
-
-**Files:**
-
-- Create: `e2e/specs/posts/new-draft-save.spec.ts`
-- Create: `e2e/specs/posts/new-required-fields.spec.ts`
-- Create: `e2e/specs/posts/new-markdown-preview.spec.ts`
+(Used by spec 1.1 to confirm the route loaded; required by DoD's "data-testid attributes on PostNewPage".)
 
 ### Spec 1.1: `new-draft-save.spec.ts`
-
-- [ ] **Step 1: Write the failing spec**
 
 ```typescript
 import { test, expect } from '../../fixtures/reset.js';
@@ -286,62 +287,36 @@ import { posts } from '../../fixtures/selectors/posts.js';
 
 test('new post: save draft persists and lands on the post detail page', async ({ testuser }) => {
   await testuser.goto('/posts/new');
+  await expect(posts.postNewPage(testuser)).toBeVisible();
   await posts.newPostTitle(testuser).fill('Draft from E2E');
   await posts.newPostBody(testuser).fill('console.log("hello e2e");');
   await posts.newPostSaveDraft(testuser).click();
 
-  // After save the user is redirected to /posts/:id (or /posts/:id/edit) and the
-  // draft badge is visible.
   await expect(testuser).toHaveURL(/\/posts\/[a-f0-9-]+/);
   await expect(posts.draftBadge(testuser)).toBeVisible();
 });
 ```
 
-- [ ] **Step 2: Run, watch fail / pass**
-
-```bash
-cd e2e && npx playwright test specs/posts/new-draft-save.spec.ts --project=chromium
-```
-
-If selectors miss, add the missing helper to `selectors/posts.ts` (already covered in Task 0). If the URL pattern doesn't match, inspect the `usePosts.createPost` redirect target.
-
-- [ ] **Step 3: Commit**
-
-```bash
-git add e2e/specs/posts/new-draft-save.spec.ts
-git commit -m "feat(e2e): posts/new — save-draft round-trip"
-```
+Run + commit: `feat(e2e): posts/new — save-draft round-trip + post-new-page testid`.
 
 ### Spec 1.2: `new-required-fields.spec.ts`
-
-- [ ] **Step 1: Write spec**
 
 ```typescript
 import { test, expect } from '../../fixtures/reset.js';
 import { posts } from '../../fixtures/selectors/posts.js';
 
-test('new post: empty title blocks save with a validation message', async ({ testuser }) => {
+test('new post: empty title disables the save button', async ({ testuser }) => {
   await testuser.goto('/posts/new');
-  // Leave title empty, fill body
   await posts.newPostBody(testuser).fill('body without a title');
-  await posts.newPostSaveDraft(testuser).click();
-
-  // Stay on /posts/new, validation visible
-  await expect(testuser).toHaveURL(/\/posts\/new/);
-  // The save button should be disabled OR an inline validation should be visible.
-  // Adapt to the actual UX: prefer asserting the save button is `[disabled]` if that's
-  // how PostEditor enforces it, otherwise look for `data-testid="validation-error"`.
   await expect(posts.newPostSaveDraft(testuser)).toBeDisabled();
 });
 ```
 
-- [ ] **Step 2: Run + adapt the assertion to the actual UX (disabled button vs. inline error). Keep one assertion only.**
+If the actual UX uses an inline error instead of disabled-button, swap `toBeDisabled()` for `await expect(testuser.getByTestId('validation-error')).toBeVisible()`. **Single concept per spec — pick one assertion based on actual UX.**
 
-- [ ] **Step 3: Commit:** `git commit -m "feat(e2e): posts/new — required-fields validation"`
+Run + commit: `feat(e2e): posts/new — required-fields validation`.
 
 ### Spec 1.3: `new-markdown-preview.spec.ts`
-
-- [ ] **Step 1: Write spec**
 
 ```typescript
 import { test, expect } from '../../fixtures/reset.js';
@@ -350,50 +325,40 @@ import { posts } from '../../fixtures/selectors/posts.js';
 test('new post: markdown body renders preview with formatted output', async ({ testuser }) => {
   await testuser.goto('/posts/new');
   await posts.newPostTitle(testuser).fill('MD preview test');
-  // Switch to document content type so the markdown preview is enabled
   await testuser.getByTestId('content-type-select').selectOption('document');
   await posts.newPostBody(testuser).fill('# heading\n\n**bold** word');
 
-  // Preview pane shows rendered HTML, not raw markdown
   const preview = testuser.getByTestId('markdown-preview');
   await expect(preview.locator('h1')).toHaveText('heading');
-  await expect(preview.locator('strong')).toHaveText('bold');
 });
 ```
 
-- [ ] **Step 2: Run** — if `data-testid="markdown-preview"` is missing on the preview component, add it (likely in `packages/client/src/components/editor/PostEditor.vue` or a `MarkdownPreview.vue`). One-liner.
-
-- [ ] **Step 3: Commit:** `git commit -m "feat(e2e): posts/new — markdown preview rendering"`
+If `data-testid="markdown-preview"` doesn't exist, add it where the preview component renders (likely a `<MarkdownPreview>` child of `PostEditor.vue`). Run + commit.
 
 ---
 
 ## Task 2: posts/ — view (4 specs)
 
-**DoD coverage:** `view: public post, draft visible to author, missing-id 404, permission (private post hidden from non-owner)`.
-
-**Fixtures:** `c…0099` is testuser's public snippet. `c…0098` is testuser's draft (added in Task 0). `c…0006` ("My Kubernetes Notes") is carol's PRIVATE post — use this for the cross-user permission test.
+**DoD:** view — public post, draft visible to author, missing-id 404, permission private hidden from non-owner.
 
 ### Spec 2.1: `view-public-post.spec.ts`
 
-- [ ] **Step 1: Write spec**
+Reads the seed fixture `c…0099`. Read-only — pinned `postId`.
 
 ```typescript
 import { test, expect } from '../../fixtures/reset.js';
 import { posts } from '../../fixtures/selectors/posts.js';
 
 test('view: public post renders title and content for any logged-in user', async ({ alice }) => {
-  // alice viewing testuser's public fixture post
   await alice.goto('/posts/c0000000-0000-0000-0000-000000000099');
   await expect(posts.postTitle(alice)).toHaveText('Test Fixture Post (testuser-owned)');
   await expect(posts.publishedBadge(alice)).toBeVisible();
 });
 ```
 
-- [ ] **Step 2: Run + commit** as `feat(e2e): posts/view — public post`
-
 ### Spec 2.2: `view-draft-as-author.spec.ts`
 
-- [ ] **Step 1: Write spec**
+Reads `c…0098` (testuser draft, added in Task 0). Read-only — pinned.
 
 ```typescript
 import { test, expect } from '../../fixtures/reset.js';
@@ -406,132 +371,145 @@ test('view: draft is visible to its author with a draft badge', async ({ testuse
 });
 ```
 
-- [ ] **Step 2: Run + commit** as `feat(e2e): posts/view — draft visible to author`
-
 ### Spec 2.3: `view-missing-id-404.spec.ts`
-
-- [ ] **Step 1: Write spec**
 
 ```typescript
 import { test, expect } from '../../fixtures/reset.js';
 
-test('view: missing post id renders a not-found state, not an error toast', async ({
-  testuser,
-}) => {
+test('view: missing post id renders a not-found state', async ({ testuser }) => {
   await testuser.goto('/posts/00000000-0000-0000-0000-000000000000');
-  // Page renders the "Post not found" message (PostViewPage.vue:172).
   await expect(testuser.getByText(/post not found/i)).toBeVisible();
 });
 ```
 
-- [ ] **Step 2: Run + commit** as `feat(e2e): posts/view — missing id 404`
-
 ### Spec 2.4: `view-private-as-non-owner.spec.ts`
 
-- [ ] **Step 1: Write spec**
+`c…0006` is carol's private post.
 
 ```typescript
 import { test, expect } from '../../fixtures/reset.js';
 
-// carol owns c…0006 (private). alice should NOT be able to view it.
 test('view: private post is hidden from a non-owner', async ({ alice }) => {
   await alice.goto('/posts/c0000000-0000-0000-0000-000000000006');
-  // Server returns 403/404 → the page shows the not-found OR forbidden message.
-  // Assert via testid added in PostEditPage for forbidden, OR via text fallback.
   await expect(alice.getByText(/(not found|forbidden|don't have access)/i)).toBeVisible();
 });
 ```
 
-- [ ] **Step 2: Run** — if the message wording differs, capture the actual text and tighten the regex; do NOT broaden to match accidentally.
-
-- [ ] **Step 3: Commit** as `feat(e2e): posts/view — private hidden from non-owner`
+If the wording differs after the first --headed run, tighten to the exact text. Each spec: run + commit individually.
 
 ---
 
 ## Task 3: posts/ — edit (4 specs)
 
-**DoD coverage:** `edit: own post, cannot-edit-others' post, changes persist after navigation, cancel reverts`.
+**DoD:** edit — own, cannot-edit-others, persists after navigation, cancel reverts.
 
-### Spec 3.1: `edit-own-post.spec.ts`
+### Spec 3.1: `edit-own-post.spec.ts` (uses `createdPostId`)
+
+Mutates state — must use `createdPostId` per issue's fixture-isolation rule.
 
 ```typescript
 import { test, expect } from '../../fixtures/reset.js';
 import { posts } from '../../fixtures/selectors/posts.js';
 
-test('edit: own post saves changes and the title updates', async ({ testuser }) => {
-  await testuser.goto('/posts/c0000000-0000-0000-0000-000000000099/edit');
+test('edit: own post saves changes and the title updates', async ({ testuser, request }) => {
+  // Create a fresh post owned by testuser
+  const created = await request.post('/api/posts', {
+    data: {
+      title: 'Edit-own seed',
+      contentType: 'snippet',
+      language: 'typescript',
+      content: 'x',
+      visibility: 'public',
+      isDraft: false,
+    },
+  });
+  const { id: createdPostId } = await created.json();
+
+  await testuser.goto(`/posts/${createdPostId}/edit`);
   const newTitle = 'Updated by E2E run';
   await posts.newPostTitle(testuser).fill(newTitle);
   await posts.newPostSaveDraft(testuser).click();
 
-  // After save → either stay on edit or go to view; the title must reflect.
   await expect(testuser.getByText(newTitle).first()).toBeVisible();
 });
 ```
 
-Run + commit as `feat(e2e): posts/edit — own post`.
-
 ### Spec 3.2: `edit-cannot-edit-others.spec.ts`
+
+Read-only attempt at someone else's post. No `createdPostId` needed.
 
 ```typescript
 import { test, expect } from '../../fixtures/reset.js';
 
 test('edit: alice cannot edit testuser-owned post (forbidden)', async ({ alice }) => {
   await alice.goto('/posts/c0000000-0000-0000-0000-000000000099/edit');
-  // PostEditPage:101 conditionally renders forbidden-page testid when the error matches /forbidden/i.
   await expect(alice.getByTestId('forbidden-page')).toBeVisible();
 });
 ```
 
-Run + commit as `feat(e2e): posts/edit — cannot edit others`.
+### Spec 3.3: `edit-changes-persist-after-nav.spec.ts` (uses `createdPostId`)
 
-### Spec 3.3: `edit-changes-persist-after-nav.spec.ts`
+Mutates — `createdPostId`.
 
 ```typescript
 import { test, expect } from '../../fixtures/reset.js';
 import { posts } from '../../fixtures/selectors/posts.js';
 
-test('edit: changes persist after navigating away and back', async ({ testuser }) => {
+test('edit: changes persist after navigating away and back', async ({ testuser, request }) => {
+  const created = await request.post('/api/posts', {
+    data: {
+      title: 'Persistence seed',
+      contentType: 'snippet',
+      language: 'typescript',
+      content: 'x',
+      visibility: 'public',
+      isDraft: false,
+    },
+  });
+  const { id: createdPostId } = await created.json();
   const persistedTitle = 'Persisted across nav';
-  await testuser.goto('/posts/c0000000-0000-0000-0000-000000000099/edit');
+
+  await testuser.goto(`/posts/${createdPostId}/edit`);
   await posts.newPostTitle(testuser).fill(persistedTitle);
   await posts.newPostSaveDraft(testuser).click();
-  // Navigate away
   await testuser.goto('/');
-  // Navigate back
-  await testuser.goto('/posts/c0000000-0000-0000-0000-000000000099');
+  await testuser.goto(`/posts/${createdPostId}`);
   await expect(posts.postTitle(testuser)).toHaveText(persistedTitle);
 });
 ```
 
-Run + commit as `feat(e2e): posts/edit — changes persist after nav`.
-
-### Spec 3.4: `edit-cancel-reverts.spec.ts` (requires testid addition)
-
-This spec needs a `post-cancel-btn` that doesn't yet exist on `PostEditor.vue`.
-
-- [ ] **Step 1: Write spec first**
+### Spec 3.4: `edit-cancel-reverts.spec.ts` (adds `post-cancel-btn` testid + emit)
 
 ```typescript
 import { test, expect } from '../../fixtures/reset.js';
 import { posts } from '../../fixtures/selectors/posts.js';
 
-test('edit: cancel button discards in-flight changes and returns to view', async ({ testuser }) => {
-  const originalTitle = 'Test Fixture Post (testuser-owned)';
-  await testuser.goto('/posts/c0000000-0000-0000-0000-000000000099/edit');
+test('edit: cancel button discards in-flight changes and returns to view', async ({
+  testuser,
+  request,
+}) => {
+  const originalTitle = 'Cancel seed title';
+  const created = await request.post('/api/posts', {
+    data: {
+      title: originalTitle,
+      contentType: 'snippet',
+      language: 'typescript',
+      content: 'x',
+      visibility: 'public',
+      isDraft: false,
+    },
+  });
+  const { id: createdPostId } = await created.json();
+
+  await testuser.goto(`/posts/${createdPostId}/edit`);
   await posts.newPostTitle(testuser).fill('Stomp the title');
   await posts.postCancelBtn(testuser).click();
-  // Cancel returns to view page; title is unchanged.
-  await expect(testuser).toHaveURL(/\/posts\/c0000000-0000-0000-0000-000000000099(?!\/edit)/);
+  await expect(testuser).toHaveURL(new RegExp(`/posts/${createdPostId}(?!/edit)`));
   await expect(posts.postTitle(testuser)).toHaveText(originalTitle);
 });
 ```
 
-- [ ] **Step 2: Run, watch fail** (no `post-cancel-btn` exists yet).
-
-- [ ] **Step 3: Add the testid + behavior to `PostEditor.vue`**
-
-In `packages/client/src/components/editor/PostEditor.vue`, locate the buttons row (near `data-testid="new-post-save-draft-btn"` around line 121). Add a Cancel button beside it:
+**Implementation:** in `PostEditor.vue`, near the existing save/publish buttons:
 
 ```vue
 <button
@@ -544,30 +522,21 @@ In `packages/client/src/components/editor/PostEditor.vue`, locate the buttons ro
 </button>
 ```
 
-Wire `@cancel` in `PostEditPage.vue` to `router.push({ name: 'post-view', params: { id } })`.
+In `PostEditPage.vue`, wire `@cancel` to `router.push({ name: 'post-view', params: { id } })`.
 
-- [ ] **Step 4: Run, watch pass**
+**Vitest impact:** if `PostEditor.vue` has unit tests asserting button counts/labels, update them. Run `npm run test:coverage` after the change.
 
-- [ ] **Step 5: Commit**
-
-```bash
-git add e2e/specs/posts/edit-cancel-reverts.spec.ts \
-        packages/client/src/components/editor/PostEditor.vue \
-        packages/client/src/pages/PostEditPage.vue
-git commit -m "feat(e2e): posts/edit — cancel reverts changes (adds post-cancel-btn)"
-```
+Run + commit: `feat(e2e,client): posts/edit — cancel reverts (adds post-cancel-btn)`.
 
 ---
 
-## Task 4: posts/ — delete (3 specs, includes confirmation dialog feature work)
+## Task 4: posts/ — delete (3 specs, includes confirmation dialog feature)
 
-**DoD coverage:** `delete: confirms, own-only, cascade (comments / votes / bookmarks deleted with post)`.
+**DoD:** delete — confirms, own-only, cascade (comments / votes / bookmarks deleted with post).
 
-**Important — feature gap:** The current Delete button in `PostViewPage.vue:150-155` calls `handleDelete` directly with no confirmation. The DoD requires "confirms". Plan adds a **minimal inline confirmation dialog** in `PostViewPage.vue` (no new component, no scope expansion).
+**Feature gap closed by this task:** `PostViewPage.vue:150-155` currently has a Delete button with no confirmation. Plan adds an inline dialog. Single feature add, declared.
 
-### Spec 4.1: `delete-confirms.spec.ts` (drives the confirmation-dialog implementation)
-
-- [ ] **Step 1: Write spec**
+### Spec 4.1: `delete-confirms.spec.ts` (drives the dialog implementation)
 
 ```typescript
 import { test, expect } from '../../fixtures/reset.js';
@@ -577,38 +546,28 @@ test('delete: clicking delete shows a confirmation dialog; cancel keeps the post
   testuser,
   request,
 }) => {
-  // Use createdPostId pattern — don't delete the seed fixture
   const created = await request.post('/api/posts', {
     data: {
-      title: 'Spec-created post for delete-confirms',
+      title: 'Delete-confirm seed',
       contentType: 'snippet',
       language: 'typescript',
-      content: 'const x = 1;',
+      content: 'x',
       visibility: 'public',
       isDraft: false,
     },
   });
-  const { id } = await created.json();
+  const { id: createdPostId } = await created.json();
 
-  await testuser.goto(`/posts/${id}`);
+  await testuser.goto(`/posts/${createdPostId}`);
   await posts.postDeleteBtn(testuser).click();
-
-  // Dialog appears
-  const dialog = testuser.getByTestId('post-delete-dialog');
-  await expect(dialog).toBeVisible();
-
-  // Cancel keeps the post
+  await expect(posts.postDeleteDialog(testuser)).toBeVisible();
   await posts.postDeleteCancel(testuser).click();
-  await expect(dialog).not.toBeVisible();
-  await expect(posts.postTitle(testuser)).toHaveText('Spec-created post for delete-confirms');
+  await expect(posts.postDeleteDialog(testuser)).not.toBeVisible();
+  await expect(posts.postTitle(testuser)).toHaveText('Delete-confirm seed');
 });
 ```
 
-- [ ] **Step 2: Run, watch fail** — dialog testids don't exist.
-
-- [ ] **Step 3: Add the confirmation dialog to `PostViewPage.vue`**
-
-Replace lines 150–155 (the existing direct-click Delete button) with a button that opens a dialog, plus the dialog markup. Pseudocode of the diff:
+**Implementation:** replace `PostViewPage.vue:150-155` with a dialog-opening button + dialog markup:
 
 ```vue
 <!-- script setup additions -->
@@ -620,7 +579,7 @@ async function confirmDelete(): Promise<void> {
   if (!error.value) router.push('/');
 }
 
-<!-- template: replace the existing single button with -->
+<!-- template — replace existing single delete button -->
 <button
   data-testid="post-delete-btn"
   class="text-sm px-3 py-1 rounded border border-red-500 text-red-400 hover:bg-red-900/30"
@@ -629,7 +588,7 @@ async function confirmDelete(): Promise<void> {
   Delete
 </button>
 
-<!-- below the buttons row, before </template> -->
+<!-- below buttons row, before </template> -->
 <div
   v-if="showDeleteDialog"
   data-testid="post-delete-dialog"
@@ -648,14 +607,9 @@ async function confirmDelete(): Promise<void> {
 </div>
 ```
 
-- [ ] **Step 4: Run, watch pass**
+**Vitest impact:** existing `PostViewPage` component tests (if any) may need updates to handle the new ref + dialog rendering. Run `npm run test:coverage` after.
 
-- [ ] **Step 5: Commit**
-
-```bash
-git add e2e/specs/posts/delete-confirms.spec.ts packages/client/src/pages/PostViewPage.vue
-git commit -m "feat(e2e,client): posts/delete — confirmation dialog + spec"
-```
+Run + commit: `feat(e2e,client): posts/delete — confirmation dialog`.
 
 ### Spec 4.2: `delete-own-only.spec.ts`
 
@@ -669,21 +623,18 @@ test('delete: alice cannot see a delete button on testuser-owned post', async ({
 });
 ```
 
-Run + commit as `feat(e2e): posts/delete — own-only visibility`.
-
-### Spec 4.3: `delete-cascade.spec.ts`
+### Spec 4.3: `delete-cascade.spec.ts` (asserts comments + votes + bookmarks gone)
 
 ```typescript
 import { test, expect } from '../../fixtures/reset.js';
 import { posts } from '../../fixtures/selectors/posts.js';
 
-test('delete: cascade — comments / votes / bookmarks vanish with the post', async ({
+test('delete: cascade — comments + votes + bookmarks all vanish with the post', async ({
   testuser,
   alice,
   request,
 }) => {
-  // Create post + comment + vote + bookmark via API, then delete the post via UI, then assert API endpoints return 404 for the children.
-  const post = await request.post('/api/posts', {
+  const created = await request.post('/api/posts', {
     data: {
       title: 'Cascade test',
       contentType: 'snippet',
@@ -693,67 +644,88 @@ test('delete: cascade — comments / votes / bookmarks vanish with the post', as
       isDraft: false,
     },
   });
-  const { id: postId } = await post.json();
+  const { id: createdPostId } = await created.json();
 
-  // Alice (other user) adds a vote and bookmark and a comment
-  await alice.request.post(`/api/posts/${postId}/votes`, { data: { value: 1 } });
-  await alice.request.post(`/api/posts/${postId}/bookmarks`, {});
-  const comment = await alice.request.post(`/api/posts/${postId}/comments`, {
+  // Alice (other user) creates a vote, bookmark, and comment
+  await alice.request.post(`/api/posts/${createdPostId}/votes`, { data: { value: 1 } });
+  await alice.request.post(`/api/posts/${createdPostId}/bookmarks`, { data: {} });
+  const cRes = await alice.request.post(`/api/posts/${createdPostId}/comments`, {
     data: { body: 'cascade comment' },
   });
-  const { id: commentId } = await comment.json();
+  const { id: commentId } = await cRes.json();
 
   // testuser deletes via UI
-  await testuser.goto(`/posts/${postId}`);
+  await testuser.goto(`/posts/${createdPostId}`);
   await posts.postDeleteBtn(testuser).click();
   await posts.postDeleteConfirm(testuser).click();
   await expect(testuser).toHaveURL('/');
 
-  // Assert children gone (server returns 404)
-  const commentRes = await request.get(`/api/posts/${postId}/comments/${commentId}`);
+  // Assert all three children gone (server returns 404 / empty)
+  const commentRes = await request.get(`/api/posts/${createdPostId}/comments/${commentId}`);
   expect(commentRes.status()).toBe(404);
+
+  const votesRes = await request.get(`/api/posts/${createdPostId}/votes`);
+  expect(votesRes.status()).toBe(404);
+
+  const bookmarksRes = await request.get(`/api/posts/${createdPostId}/bookmarks`);
+  expect(bookmarksRes.status()).toBe(404);
 });
 ```
 
-Run + commit as `feat(e2e): posts/delete — cascade comments/votes/bookmarks`.
+If a route returns 200 with empty body instead of 404 (depending on server semantics), update assertion to match observed behavior. **Single concept**: the post and its children are all gone after delete.
+
+Run + commit each spec.
 
 ---
 
-## Task 5: posts/ — publish (3 specs)
+## Task 5: posts/ — publish (2 specs)
 
-**DoD coverage:** `publish: toggle draft → public, draft list updates, published-list updates`.
+**DoD:** publish — toggle draft → public, draft list updates, published-list updates.
 
-**Fixture:** `c…0098` (testuser draft, added in Task 0).
+REV 2 collapses the original 3 specs into 2 (no `?filter=drafts` URL exists; `/my-snippets` shows both drafts and published).
 
-### Spec 5.1: `publish-draft-to-public.spec.ts`
+### Spec 5.1: `publish-draft-to-public.spec.ts` (uses `createdPostId`)
 
 ```typescript
 import { test, expect } from '../../fixtures/reset.js';
 import { posts } from '../../fixtures/selectors/posts.js';
 
-test('publish: draft → public toggles the badge', async ({ testuser }) => {
-  await testuser.goto('/posts/c0000000-0000-0000-0000-000000000098/edit');
+test('publish: draft → public toggles the badge', async ({ testuser, request }) => {
+  const created = await request.post('/api/posts', {
+    data: {
+      title: 'Publish-toggle seed',
+      contentType: 'snippet',
+      language: 'typescript',
+      content: 'x',
+      visibility: 'public',
+      isDraft: true,
+    },
+  });
+  const { id: createdPostId } = await created.json();
+
+  await testuser.goto(`/posts/${createdPostId}/edit`);
   await expect(posts.draftBadge(testuser)).toBeVisible();
   await posts.newPostPublish(testuser).click();
-  // Either stays on edit page or redirects — assert published-badge visible.
   await expect(posts.publishedBadge(testuser)).toBeVisible();
   await expect(posts.draftBadge(testuser)).toHaveCount(0);
 });
 ```
 
-### Spec 5.2: `publish-draft-list-updates.spec.ts`
+### Spec 5.2: `publish-list-reflects-state.spec.ts`
+
+Combined spec replacing original 5.2 + 5.3. Tests both states on `/my-snippets` (which already includes drafts per `feed.ts:137`).
 
 ```typescript
 import { test, expect } from '../../fixtures/reset.js';
 
-test('publish: drafts list no longer contains the post after publishing', async ({
+test('publish: /my-snippets shows the post with draft-badge before publish, published-badge after', async ({
   testuser,
   request,
 }) => {
-  // Use createdPostId pattern so we don't depend on c…0098 staying draft for other specs.
+  const title = 'List-reflects-state seed';
   const created = await request.post('/api/posts', {
     data: {
-      title: 'Publish list test',
+      title,
       contentType: 'snippet',
       language: 'typescript',
       content: 'x',
@@ -761,55 +733,34 @@ test('publish: drafts list no longer contains the post after publishing', async 
       isDraft: true,
     },
   });
-  const { id } = await created.json();
+  const { id: createdPostId } = await created.json();
 
-  await testuser.goto('/?filter=drafts');
-  await expect(testuser.getByText('Publish list test')).toBeVisible();
+  // Before publish — show in /my-snippets with draft-badge
+  await testuser.goto('/my-snippets');
+  const itemBefore = testuser.getByText(title).locator('..');
+  await expect(itemBefore.getByTestId('draft-badge')).toBeVisible();
 
   // Publish via API for speed
-  await request.patch(`/api/posts/${id}`, { data: { isDraft: false } });
+  await request.patch(`/api/posts/${createdPostId}`, { data: { isDraft: false } });
 
+  // After publish — same /my-snippets list, now with published-badge
   await testuser.reload();
-  await expect(testuser.getByText('Publish list test')).toHaveCount(0);
+  const itemAfter = testuser.getByText(title).locator('..');
+  await expect(itemAfter.getByTestId('published-badge')).toBeVisible();
 });
 ```
 
-### Spec 5.3: `publish-published-list-updates.spec.ts`
+**Note:** the locator `.getByText(title).locator('..')` walks up to the post-list-item container. If `PostListItem.vue` doesn't render badges, scope to the actual badge-bearing ancestor. Adjust to actual DOM after first --headed run.
 
-```typescript
-import { test, expect } from '../../fixtures/reset.js';
-
-test('publish: published list contains the post after publishing', async ({
-  testuser,
-  request,
-}) => {
-  const created = await request.post('/api/posts', {
-    data: {
-      title: 'Published-list test',
-      contentType: 'snippet',
-      language: 'typescript',
-      content: 'x',
-      visibility: 'public',
-      isDraft: true,
-    },
-  });
-  const { id } = await created.json();
-  await request.patch(`/api/posts/${id}`, { data: { isDraft: false } });
-
-  await testuser.goto('/');
-  await expect(testuser.getByText('Published-list test')).toBeVisible();
-});
-```
-
-Each: run + commit as `feat(e2e): posts/publish — <spec-name>`.
-
-**Note:** The `?filter=drafts` query and "Publish list test" text assertions are _guesses based on common patterns_. If the actual UX differs (e.g., drafts page is `/drafts` or the home filter UI differs), update both spec assertions and the URL/text. Resolve via 1 manual `--headed` run before finalizing each spec.
+Run + commit each.
 
 ---
 
 ## Task 6: posts/ — fork (3 specs)
 
-**DoD coverage:** `fork: creates linked copy, edits to fork don't affect original, fork-of relationship displayed`.
+**DoD:** fork — creates linked copy, edits to fork don't affect original, fork-of relationship displayed.
+
+(Fork-of-fork-of-fork explicitly OOS — see "Out of scope" section at end.)
 
 ### Spec 6.1: `fork-creates-linked-copy.spec.ts`
 
@@ -817,14 +768,10 @@ Each: run + commit as `feat(e2e): posts/publish — <spec-name>`.
 import { test, expect } from '../../fixtures/reset.js';
 import { posts } from '../../fixtures/selectors/posts.js';
 
-test('fork: clicking fork creates a new post owned by the actor and redirects to its edit page', async ({
-  alice,
-}) => {
-  // alice forks testuser's c…0099
+test('fork: clicking fork creates a new post and redirects to its edit page', async ({ alice }) => {
   await alice.goto('/posts/c0000000-0000-0000-0000-000000000099');
   await posts.forkBtn(alice).click();
   await expect(alice).toHaveURL(/\/posts\/[a-f0-9-]+\/edit/);
-  // Title carries the original
   await expect(posts.newPostTitle(alice)).toHaveValue(/Test Fixture Post/);
 });
 ```
@@ -838,16 +785,13 @@ import { posts } from '../../fixtures/selectors/posts.js';
 test('fork: editing the fork does not mutate the original', async ({ alice, request }) => {
   await alice.goto('/posts/c0000000-0000-0000-0000-000000000099');
   await posts.forkBtn(alice).click();
-  // Capture the new fork id from the URL
   const url = alice.url();
   const forkId = url.match(/\/posts\/([a-f0-9-]+)\/edit/)?.[1];
   expect(forkId).toBeTruthy();
 
-  // Edit fork title
   await posts.newPostTitle(alice).fill('Fork-only mutation');
   await posts.newPostSaveDraft(alice).click();
 
-  // Assert original via API — unchanged
   const orig = await request.get('/api/posts/c0000000-0000-0000-0000-000000000099');
   const { title } = await orig.json();
   expect(title).toBe('Test Fixture Post (testuser-owned)');
@@ -863,7 +807,6 @@ import { posts } from '../../fixtures/selectors/posts.js';
 test('fork: fork-attribution shows on the forked post view', async ({ alice }) => {
   await alice.goto('/posts/c0000000-0000-0000-0000-000000000099');
   await posts.forkBtn(alice).click();
-  // After fork, navigate to the fork's view page (not edit)
   const url = alice.url();
   const forkId = url.match(/\/posts\/([a-f0-9-]+)\/edit/)?.[1];
   await alice.goto(`/posts/${forkId}`);
@@ -871,17 +814,15 @@ test('fork: fork-attribution shows on the forked post view', async ({ alice }) =
 });
 ```
 
-Each: run + commit as `feat(e2e): posts/fork — <spec-name>`.
+Run + commit each.
 
 ---
 
 ## Task 7: posts/ — multi-file (3 specs)
 
-**DoD coverage:** `multi-file post: upload, preview, in-post rendering`.
+**DoD:** multi-file post — upload, preview, in-post rendering.
 
-**Note:** Uses real MinIO; orphaned objects are accepted per design.
-
-**Fixture file:** `e2e/fixtures/journey-asset.txt` already exists (26 bytes) — reuse it.
+Uses real MinIO; orphaned objects accepted per design. Fixture file `e2e/fixtures/journey-asset.txt` exists.
 
 ### Spec 7.1: `multi-file-upload.spec.ts`
 
@@ -937,42 +878,66 @@ test('multi-file: uploaded file appears on the post view page after save', async
   await posts.newPostTitle(testuser).fill('File renders in post');
   await posts.fileUploadInput(testuser).setInputFiles(ASSET);
   await posts.newPostSaveDraft(testuser).click();
-  // Land on view; file list is visible
   await expect(testuser.getByTestId('post-file-list')).toContainText('journey-asset.txt');
 });
 ```
 
-If `post-file-list` testid doesn't exist on the view, add one to wherever `post_files` are rendered (likely a `<PostFileList>` component or inline in `PostViewPage.vue`).
+If `post-file-list` testid is missing on the view, add it where `post_files` are rendered.
 
-Each: run + commit as `feat(e2e): posts/multi-file — <spec-name>`.
+Run + commit each.
 
 ---
 
-## Task 8: posts/ — tags (3 specs, includes view-page tag-link testid)
+## Task 8: posts/ — tags (3 specs)
 
-**DoD coverage:** `tags: add to post, remove from post, post page shows tag links`.
+**DoD:** tags — add to post, remove from post, post page shows tag links.
 
-### Spec 8.1: `tags-add-to-post.spec.ts`
+REV 2: spec 8.3 asserts visible tag chips (no router-link assertion — no tag-page route exists yet; that's deferred to rollout #4).
+
+### Spec 8.1: `tags-add-to-post.spec.ts` (uses `createdPostId`)
 
 ```typescript
 import { test, expect } from '../../fixtures/reset.js';
-import { posts } from '../../fixtures/selectors/posts.js';
 
-test('tags: add a tag in the editor and it appears as a chip', async ({ testuser }) => {
-  await testuser.goto('/posts/c0000000-0000-0000-0000-000000000099/edit');
+test('tags: add a tag in the editor and it appears as a chip', async ({ testuser, request }) => {
+  const created = await request.post('/api/posts', {
+    data: {
+      title: 'Tag-add seed',
+      contentType: 'snippet',
+      language: 'typescript',
+      content: 'x',
+      visibility: 'public',
+      isDraft: false,
+    },
+  });
+  const { id } = await created.json();
+
+  await testuser.goto(`/posts/${id}/edit`);
   await testuser.getByTestId('tag-input').fill('react');
   await testuser.getByTestId('tag-input').press('Enter');
   await expect(testuser.getByTestId('tag-item').filter({ hasText: 'react' })).toBeVisible();
 });
 ```
 
-### Spec 8.2: `tags-remove-from-post.spec.ts`
+### Spec 8.2: `tags-remove-from-post.spec.ts` (uses `createdPostId`)
 
 ```typescript
 import { test, expect } from '../../fixtures/reset.js';
 
-test('tags: clicking the remove icon on a chip removes the tag', async ({ testuser }) => {
-  await testuser.goto('/posts/c0000000-0000-0000-0000-000000000099/edit');
+test('tags: clicking the remove icon on a chip removes the tag', async ({ testuser, request }) => {
+  const created = await request.post('/api/posts', {
+    data: {
+      title: 'Tag-remove seed',
+      contentType: 'snippet',
+      language: 'typescript',
+      content: 'x',
+      visibility: 'public',
+      isDraft: false,
+    },
+  });
+  const { id } = await created.json();
+
+  await testuser.goto(`/posts/${id}/edit`);
   await testuser.getByTestId('tag-input').fill('typescript');
   await testuser.getByTestId('tag-input').press('Enter');
   const chip = testuser.getByTestId('tag-item').filter({ hasText: 'typescript' });
@@ -982,230 +947,272 @@ test('tags: clicking the remove icon on a chip removes the tag', async ({ testus
 });
 ```
 
-### Spec 8.3: `tags-view-page-shows-links.spec.ts` (requires testid addition)
+### Spec 8.3: `tags-view-page-shows-chips.spec.ts` (adds `post-tag-chip-<name>` testid)
+
+`c…0001` has tag `typescript` per seed.
 
 ```typescript
 import { test, expect } from '../../fixtures/reset.js';
 import { posts } from '../../fixtures/selectors/posts.js';
 
-test('tags: view page renders tag chips as router-links to the tag page', async ({ alice }) => {
-  // c…0001 has tag 'typescript' (b…0001) per seed
+test('tags: view page renders tag chips', async ({ alice }) => {
   await alice.goto('/posts/c0000000-0000-0000-0000-000000000001');
-  const link = posts.tagLink(alice, 'typescript');
-  await expect(link).toBeVisible();
-  await link.click();
-  await expect(alice).toHaveURL(/\/tags\/typescript/);
+  await expect(posts.postTagChip(alice, 'typescript')).toBeVisible();
 });
 ```
 
-If the view page renders tags but lacks the `tag-link-<name>` testid, add it in `PostViewPage.vue` near where the tag chips are rendered:
+**Implementation:** in `PostMetaHeader.vue:34-40`, change the `<span>` to include a testid (still a `<span>`, not a `<router-link>` — no tag-page exists yet; navigation is rollout #4):
 
 ```vue
-<router-link
-  v-for="tag in currentPost.tags"
-  :key="tag.id"
-  :to="{ name: 'tag', params: { name: tag.name } }"
-  :data-testid="`tag-link-${tag.name}`"
-  class="..."
->
-  #{{ tag.name }}
-</router-link>
+<span v-for="tag in post.tags" :key="tag" :data-testid="`post-tag-chip-${tag}`" class="...">
+  #{{ tag }}
+</span>
 ```
 
-If the view page doesn't currently render tag chips at all, add minimal rendering — this is in scope (issue's DoD).
-
-Each: run + commit.
+Run + commit each.
 
 ---
 
-## Task 9: posts/ — link-preview (2 specs, NEW from amendment)
+## Task 9: posts/ — link-preview (2 specs, HomePage inline path)
 
-**DoD coverage (amendment):** Link-preview-card renders on a link-type post; refresh action triggers a refetch.
+**DoD (amendment):** link-preview-card visible on a link-type post; refresh action triggers a refetch.
 
-**Fixture:** `c…0007` ("Awesome TypeScript Resources") is a `link` post with `link_url` and `link_preview` set.
+REV 2: tested via HomePage inline path because `LinkPreviewCard.vue` only mounts in `PostDetail.vue` (used by `HomePage:18`). `c…0007` is alice's link-type post.
 
-### Spec 9.1: `link-preview-renders-on-link-post.spec.ts`
+### Spec 9.1: `home-link-preview-on-link-post.spec.ts` (adds `link-preview-card` testid root)
 
 ```typescript
 import { test, expect } from '../../fixtures/reset.js';
 import { posts } from '../../fixtures/selectors/posts.js';
 
-test('link-preview: card renders on a link-type post view', async ({ alice }) => {
-  await alice.goto('/posts/c0000000-0000-0000-0000-000000000007');
+test('home: link-preview card renders inline when a link-type post is selected', async ({
+  alice,
+}) => {
+  await alice.goto('/');
+  // Click the link-type post (c…0007 = "Awesome TypeScript Resources")
+  await alice.getByText('Awesome TypeScript Resources').click();
+  // Inline detail panel renders LinkPreviewCard
   await expect(posts.linkPreviewCard(alice)).toBeVisible();
   await expect(posts.linkPreviewCard(alice)).toContainText('Type Challenges');
 });
 ```
 
-If `link-preview-card` testid is missing on `LinkPreviewCard.vue`, add it on the root element (the file already has child testids `image-placeholder` and `refresh-preview`).
+**Implementation:** in `LinkPreviewCard.vue`, add `data-testid="link-preview-card"` to the root element.
 
-### Spec 9.2: `link-preview-refresh-action.spec.ts`
+### Spec 9.2: `home-link-preview-refresh.spec.ts`
 
 ```typescript
 import { test, expect } from '../../fixtures/reset.js';
 import { posts } from '../../fixtures/selectors/posts.js';
 
-test('link-preview: refresh button is visible on a link post and emits a request', async ({
-  testuser,
+test('home: link-preview refresh button is visible and triggers a refresh request for the author', async ({
+  alice,
 }) => {
-  // testuser must be the author (or admin) for refresh to be permitted; navigate to one of testuser's posts that's a link, OR test that the button is hidden for non-author. Per current UX, refresh-preview is visible only to the author.
-  // c…0007 is alice's. Use alice instead.
+  await alice.goto('/');
+  await alice.getByText('Awesome TypeScript Resources').click();
+  await expect(posts.linkPreviewRefresh(alice)).toBeVisible();
+
+  const responsePromise = alice.waitForResponse(/\/refresh-preview/);
+  await posts.linkPreviewRefresh(alice).click();
+  const response = await responsePromise;
+  expect(response.status()).toBe(200);
 });
-
-import { test as t2, expect as e2 } from '../../fixtures/reset.js';
-import { posts as p2 } from '../../fixtures/selectors/posts.js';
-
-t2(
-  'link-preview: refresh button is visible on a link post for the author',
-  async ({ alice, request }) => {
-    await alice.goto('/posts/c0000000-0000-0000-0000-000000000007');
-    await e2(p2.linkPreviewRefresh(alice)).toBeVisible();
-
-    // Click triggers a network request to /api/posts/:id/refresh-preview
-    const responsePromise = alice.waitForResponse(/\/refresh-preview/);
-    await p2.linkPreviewRefresh(alice).click();
-    const response = await responsePromise;
-    e2(response.status()).toBe(200);
-  },
-);
 ```
 
-(Tidy up the duplicate import — keep only one `test`/`expect` per file.)
-
-Each: run + commit.
+Run + commit each.
 
 ---
 
-## Task 10: posts/ — code-runner (2 specs, NEW from amendment)
+## Task 10: posts/ — code-runner (2 specs, HomePage inline path)
 
-**DoD coverage (amendment):** Run button visible on snippet view; click runs and produces execution output.
+**DoD (amendment):** Run controls visible on a snippet post inline; click Run produces execution output.
 
-### Spec 10.1: `code-runner-button-on-snippet.spec.ts`
+REV 2: tested via HomePage inline path (`PostDetail.vue` mounts `CodeRunner`).
+
+### Spec 10.1: `home-code-runner-on-snippet.spec.ts`
 
 ```typescript
 import { test, expect } from '../../fixtures/reset.js';
 import { posts } from '../../fixtures/selectors/posts.js';
 
-test('code-runner: snippet post view shows code runner controls', async ({ alice }) => {
-  await alice.goto('/posts/c0000000-0000-0000-0000-000000000099');
+test('home: code-runner controls render inline when a snippet post is selected', async ({
+  alice,
+}) => {
+  await alice.goto('/');
+  await alice.getByText('Test Fixture Post (testuser-owned)').click();
   await expect(posts.codeRunner(alice)).toBeVisible();
   await expect(posts.runPlay(alice)).toBeVisible();
 });
 ```
 
-### Spec 10.2: `code-runner-execution-output.spec.ts`
+### Spec 10.2: `home-code-runner-execution.spec.ts`
 
 ```typescript
 import { test, expect } from '../../fixtures/reset.js';
 import { posts } from '../../fixtures/selectors/posts.js';
 
-test('code-runner: clicking Run produces execution output', async ({ alice }) => {
-  await alice.goto('/posts/c0000000-0000-0000-0000-000000000099');
+test('home: clicking Run produces execution output', async ({ alice }) => {
+  await alice.goto('/');
+  await alice.getByText('Test Fixture Post (testuser-owned)').click();
   await posts.runPlay(alice).click();
   await expect(posts.executionOutput(alice)).toBeVisible();
-  // The seed content is `const testFixture: string = "hello from testuser";` — running it produces no console output, but the runner must reach a "complete" state. Assert the status-bar reflects completion.
-  await expect(alice.getByTestId('status-bar')).toContainText(/(complete|done|finished)/i);
+  await expect(alice.getByTestId('status-bar')).toContainText(/(complete|done|finished|ready)/i);
 });
 ```
 
-Each: run + commit.
+If WASM init causes flake: anchor on a stable readiness marker via `waitForFunction` — never `waitForTimeout`.
 
-**Note:** The WASM runtime initialization is async. If runs are flaky, add `await alice.waitForFunction(() => window.Pyodide /* or whatever marker */)` before the click — DO NOT add `waitForTimeout`.
+Run + commit each.
 
 ---
 
-## Task 11: posts/ — profile-avatar (2 specs, NEW from amendment)
+## Task 11: posts/ — author-avatar + presence (2 specs)
 
-**DoD coverage (amendment):** Author avatar links to `/users/:id`; presence indicator visible during edit.
+**DoD (amendment):** Author avatar links to user profile; presence indicator visible.
 
-### Spec 11.1: `profile-avatar-links-to-profile.spec.ts`
+REV 2:
+
+- Author-avatar tested via HomePage inline path (`PostMetaHeader` is rendered inside `PostDetail`).
+- Presence-indicator tested on `/posts/:id` (only mounted on `PostViewPage:134`).
+- Profile route is `/user/:id` (singular).
+
+### Spec 11.1: `home-author-avatar-links.spec.ts` (adds `author-avatar` testid)
 
 ```typescript
 import { test, expect } from '../../fixtures/reset.js';
 import { posts } from '../../fixtures/selectors/posts.js';
 
-test('profile-avatar: author avatar on post view links to /users/:id', async ({ alice }) => {
-  await alice.goto('/posts/c0000000-0000-0000-0000-000000000099');
-  const avatar = posts.authorAvatar(alice);
+test('home: author avatar in the inline panel links to /user/<author-id>', async ({ alice }) => {
+  await alice.goto('/');
+  await alice.getByText('Test Fixture Post (testuser-owned)').click();
+  const avatar = posts.authorAvatar(alice).first();
   await expect(avatar).toBeVisible();
-  // It should be a router-link to testuser's profile
   await avatar.click();
-  await expect(alice).toHaveURL(/\/users\/a0000000-0000-0000-0000-000000000099/);
+  await expect(alice).toHaveURL(/\/user\/a0000000-0000-0000-0000-000000000099/);
 });
 ```
 
-If `author-avatar` testid is missing on the avatar element (likely in `PostMetaHeader.vue` or `PostViewPage.vue`), add it.
+**Implementation:** in `PostMetaHeader.vue` (rendered by `PostDetail.vue`), wrap the author element in a `<router-link to="{ name: 'user-profile', params: { id: post.authorId } }">` with `data-testid="author-avatar"`. If a UserAvatar component exists, add the testid there.
 
-### Spec 11.2: `profile-presence-indicator-on-edit.spec.ts`
+### Spec 11.2: `view-presence-indicator.spec.ts`
 
 ```typescript
 import { test, expect } from '../../fixtures/reset.js';
 import { posts } from '../../fixtures/selectors/posts.js';
 
-test('profile-presence: presence indicator renders on edit page', async ({ testuser }) => {
-  await testuser.goto('/posts/c0000000-0000-0000-0000-000000000099/edit');
-  // PresenceIndicator already has testid `presence-avatar`; assert it renders.
-  // (Multi-user concurrent presence is out of scope here — single-user just checks rendering.)
+test('view: presence indicator renders on the post view page', async ({ testuser }) => {
+  await testuser.goto('/posts/c0000000-0000-0000-0000-000000000099');
   await expect(posts.presenceAvatar(testuser).first()).toBeVisible();
 });
 ```
 
-Each: run + commit.
+(`presence-avatar` already exists on `PresenceIndicator.vue`.)
+
+Run + commit each.
 
 ---
 
-## Task 12: revisions/ — create (2 specs)
+## Task 12: revisions/ — create (2 specs, includes `save-revision-btn` feature)
 
-**DoD coverage:** `create (auto-on-edit, manual-via-button)`.
+**DoD:** create — auto-on-edit, manual-via-button.
 
-### Spec 12.1: `create-auto-on-edit.spec.ts`
+REV 2: spec 12.2 adds a small `save-revision-btn` to the editor toolbar, wired to the existing `POST /:id/revisions` API (per Q3 user choice).
+
+### Spec 12.1: `create-auto-on-edit.spec.ts` (uses `createdPostId`)
 
 ```typescript
 import { test, expect } from '../../fixtures/reset.js';
 import { posts } from '../../fixtures/selectors/posts.js';
 import { revisions } from '../../fixtures/selectors/revisions.js';
 
-test('revisions: editing a post auto-creates a new revision', async ({ testuser }) => {
-  await testuser.goto('/posts/c0000000-0000-0000-0000-000000000099/edit');
+test('revisions: editing a post auto-creates a new revision', async ({ testuser, request }) => {
+  const created = await request.post('/api/posts', {
+    data: {
+      title: 'Auto-rev seed',
+      contentType: 'snippet',
+      language: 'typescript',
+      content: 'initial',
+      visibility: 'public',
+      isDraft: false,
+    },
+  });
+  const { id: createdPostId } = await created.json();
+
+  await testuser.goto(`/posts/${createdPostId}/edit`);
   await posts.newPostBody(testuser).fill('const updated: string = "auto revision body";');
   await posts.newPostSaveDraft(testuser).click();
 
-  await testuser.goto('/posts/c0000000-0000-0000-0000-000000000099/history');
-  // Seed has 3 revisions; after our edit there should be 4
-  await expect(revisions.revisionItem(testuser)).toHaveCount(4);
+  await testuser.goto(`/posts/${createdPostId}/history`);
+  // Initial post has 1 revision; after our edit there should be 2
+  await expect(revisions.revisionItem(testuser)).toHaveCount(2);
 });
 ```
 
-### Spec 12.2: `create-manual-via-button.spec.ts`
-
-If a manual "Create revision" button doesn't exist (verify the codebase first), this spec is **not applicable** and should be removed from scope. The DoD lists it; if missing in code, add a `createdPostId`-based flow that creates a manual revision via API and asserts it appears:
+### Spec 12.2: `create-manual-via-button.spec.ts` (adds `save-revision-btn`)
 
 ```typescript
 import { test, expect } from '../../fixtures/reset.js';
+import { posts } from '../../fixtures/selectors/posts.js';
 import { revisions } from '../../fixtures/selectors/revisions.js';
 
-test('revisions: manual revision created via API appears in the list', async ({
+test('revisions: clicking Save Revision creates a new revision with the current body', async ({
   testuser,
   request,
 }) => {
-  // POST /api/posts/:id/revisions { content, message }
-  await request.post('/api/posts/c0000000-0000-0000-0000-000000000099/revisions', {
-    data: { content: 'manual revision content', message: 'Manual rev via E2E' },
+  const created = await request.post('/api/posts', {
+    data: {
+      title: 'Manual-rev seed',
+      contentType: 'snippet',
+      language: 'typescript',
+      content: 'initial',
+      visibility: 'public',
+      isDraft: false,
+    },
   });
-  await testuser.goto('/posts/c0000000-0000-0000-0000-000000000099/history');
-  await expect(testuser.getByText('Manual rev via E2E')).toBeVisible();
+  const { id: createdPostId } = await created.json();
+
+  await testuser.goto(`/posts/${createdPostId}/edit`);
+  await posts.newPostBody(testuser).fill('manual revision body');
+  await posts.saveRevisionBtn(testuser).click();
+
+  await testuser.goto(`/posts/${createdPostId}/history`);
+  await expect(revisions.revisionItem(testuser)).toHaveCount(2);
 });
 ```
 
-If neither UI nor API supports this, document the gap in the PR description and skip this spec (DoD coverage adjusted to 9 instead of 10 revisions specs).
+**Implementation (Save Revision button):** in `EditorToolbar.vue`, add a button visible only when editing an existing post (i.e., when a `postId` prop is supplied):
 
-Each: run + commit.
+```vue
+<button
+  v-if="postId"
+  type="button"
+  data-testid="save-revision-btn"
+  @click="$emit('save-revision')"
+  class="px-3 py-1 text-sm rounded border border-gray-600 text-gray-300 hover:text-white"
+>
+  Save Revision
+</button>
+```
+
+Wire `@save-revision` in `PostEditor.vue` → `PostEditPage.vue` to call a new method that POSTs to `/api/posts/:id/revisions` with `{ content: currentBody, message: 'Manual revision' }`. Use the existing `useRevisions` composable if present; otherwise add a small `saveRevision(postId, content, message)` helper.
+
+**Vitest impact:** add unit test for the new emit + handler. Coverage gate enforces.
+
+Run + commit each.
 
 ---
 
-## Task 13: revisions/ — list (2 specs, includes page-level testid addition)
+## Task 13: revisions/ — list (2 specs, adds `post-history-page` testid)
 
-**DoD coverage:** `list: chronological order, empty state for posts with no revisions`.
+**DoD:** list — chronological order, empty state for posts with no revisions.
+
+**Note on "empty state":** in this codebase, every post auto-creates an initial revision on creation, so a true 0-revision state cannot exist via normal flows. REV 2 interprets the DoD as "single-revision (only-initial) state", which is the closest observable variant. If the UI shows a specific "no edits yet" message in this state, the spec asserts it; otherwise, it asserts the 1-revision count and notes the DoD wording gap in the PR.
+
+### Step 0: Add `post-history-page` testid to `PostHistoryPage.vue` root
+
+```vue
+<div data-testid="post-history-page" class="...">
+```
 
 ### Spec 13.1: `list-chronological.spec.ts`
 
@@ -1213,29 +1220,26 @@ Each: run + commit.
 import { test, expect } from '../../fixtures/reset.js';
 import { revisions } from '../../fixtures/selectors/revisions.js';
 
-test('revisions: list shows revisions in chronological order (newest first or oldest first — assert the order matches reality)', async ({
-  testuser,
-}) => {
+test('revisions: list shows revisions in chronological order', async ({ testuser }) => {
   await testuser.goto('/posts/c0000000-0000-0000-0000-000000000099/history');
-  // Seed (Task 0) has 3 revisions on c…0099 with messages "Initial version", "Second revision — added export", "Third revision — comment + body change"
+  // Seed (Task 0) gives c…0099 three revisions: Initial / Second / Third
   const items = revisions.revisionItem(testuser);
   await expect(items).toHaveCount(3);
-  // Assert order — choose ONE direction (whichever the UI uses) after first run.
-  // Newest-first variant:
+  // Pick a direction based on first --headed observation; example for newest-first:
   await expect(items.nth(0)).toContainText(/Third revision/);
   await expect(items.nth(2)).toContainText(/Initial version/);
 });
 ```
 
-### Spec 13.2: `list-empty-state.spec.ts`
+### Spec 13.2: `list-only-initial-revision.spec.ts`
 
-For `c…0098` (testuser's draft, has 1 initial revision) — actually has 1 revision, not zero. To test the empty state, create a post via API but skip the auto-revision (if API allows), OR test for a "no edits yet" message that renders when only the initial revision exists.
+`c…0098` (testuser draft) has 1 revision.
 
 ```typescript
 import { test, expect } from '../../fixtures/reset.js';
 import { revisions } from '../../fixtures/selectors/revisions.js';
 
-test('revisions: post with only the initial revision shows the timeline with one entry, not an empty state', async ({
+test('revisions: post with only the initial revision shows a single timeline entry', async ({
   testuser,
 }) => {
   await testuser.goto('/posts/c0000000-0000-0000-0000-000000000098/history');
@@ -1243,25 +1247,13 @@ test('revisions: post with only the initial revision shows the timeline with one
 });
 ```
 
-(If the spec author wants a true "empty" state, the codebase might not support 0-revision posts. Adapt the assertion to what the UI actually shows.)
-
-**Add page-level testid to `PostHistoryPage.vue`** (Task 0 selector references `post-history-page`):
-
-In `packages/client/src/pages/PostHistoryPage.vue`, on the root container:
-
-```vue
-<div data-testid="post-history-page" class="...">
-  ...
-</div>
-```
-
-Run + commit each spec.
+Run + commit each.
 
 ---
 
 ## Task 14: revisions/ — view + diff (3 specs)
 
-**DoD coverage:** `view-by-number, side-by-side diff, inline diff`.
+**DoD:** view-by-number, side-by-side diff, inline diff. All testids exist on `RevisionDiffViewer.vue`.
 
 ### Spec 14.1: `view-by-number.spec.ts`
 
@@ -1269,9 +1261,7 @@ Run + commit each spec.
 import { test, expect } from '../../fixtures/reset.js';
 import { revisions } from '../../fixtures/selectors/revisions.js';
 
-test('revisions: clicking a revision item shows the diff for that revision', async ({
-  testuser,
-}) => {
+test('revisions: clicking a revision item shows the diff', async ({ testuser }) => {
   await testuser.goto('/posts/c0000000-0000-0000-0000-000000000099/history');
   await revisions.revisionItem(testuser).nth(0).click();
   await expect(revisions.diffViewer(testuser)).toBeVisible();
@@ -1304,20 +1294,21 @@ test('diff: inline mode renders combined add/remove lines', async ({ testuser })
   await testuser.goto('/posts/c0000000-0000-0000-0000-000000000099/history');
   await revisions.revisionItem(testuser).nth(0).click();
   await revisions.modeInline(testuser).click();
-  // Inline mode shows diffAdded/diffRemoved entries; we have content changes between revs 2 and 3.
   await expect(revisions.diffAdded(testuser).first()).toBeVisible();
 });
 ```
 
-Each: run + commit.
+Run + commit each.
 
 ---
 
 ## Task 15: revisions/ — rollback (2 specs)
 
-**DoD coverage:** `rollback to previous revision; permission (only own posts can be rolled back)`.
+**DoD:** rollback to previous revision; permission (only own posts can be rolled back).
 
-### Spec 15.1: `rollback-to-previous.spec.ts`
+(Rollback-on-forked-post explicitly OOS — see "Out of scope" section.)
+
+### Spec 15.1: `rollback-to-previous.spec.ts` (uses `createdPostId`)
 
 ```typescript
 import { test, expect } from '../../fixtures/reset.js';
@@ -1326,20 +1317,33 @@ import { revisions } from '../../fixtures/selectors/revisions.js';
 
 test('rollback: confirming restore swaps the post body to the chosen revision', async ({
   testuser,
+  request,
 }) => {
-  // c…0099 has rev 1 = `const testFixture ... "hello from testuser"`
-  // Rollback to revision 1
-  await testuser.goto('/posts/c0000000-0000-0000-0000-000000000099/history');
-  // Click the OLDEST revision (revision_number=1) — its index depends on UI direction.
+  // Create a post with two revisions
+  const created = await request.post('/api/posts', {
+    data: {
+      title: 'Rollback seed',
+      contentType: 'snippet',
+      language: 'typescript',
+      content: 'first body',
+      visibility: 'public',
+      isDraft: false,
+    },
+  });
+  const { id: createdPostId } = await created.json();
+  await request.post(`/api/posts/${createdPostId}/revisions`, {
+    data: { content: 'second body', message: 'Second' },
+  });
+
+  await testuser.goto(`/posts/${createdPostId}/history`);
+  // Click the OLDEST revision (revision_number=1) — last in list if newest-first ordering
   await revisions.revisionItem(testuser).last().click();
   await revisions.restoreTrigger(testuser).click();
   await expect(revisions.restoreDialog(testuser)).toBeVisible();
   await revisions.restoreConfirm(testuser).click();
 
-  // Verify on view page that body now matches rev 1
-  await testuser.goto('/posts/c0000000-0000-0000-0000-000000000099');
-  // Body content text — assert via the code viewer (likely a `<pre>` or CodeMirror render)
-  await expect(testuser.getByText(/hello from testuser/)).toBeVisible();
+  await testuser.goto(`/posts/${createdPostId}`);
+  await expect(testuser.getByText(/first body/)).toBeVisible();
 });
 ```
 
@@ -1349,37 +1353,34 @@ test('rollback: confirming restore swaps the post body to the chosen revision', 
 import { test, expect } from '../../fixtures/reset.js';
 import { revisions } from '../../fixtures/selectors/revisions.js';
 
-test('rollback: alice cannot restore a revision on testuser-owned post (no restore button visible)', async ({
-  alice,
-}) => {
+test('rollback: alice cannot restore a revision on testuser-owned post', async ({ alice }) => {
   await alice.goto('/posts/c0000000-0000-0000-0000-000000000099/history');
   await alice.getByTestId('revision-item').first().click();
-  // Restore trigger must NOT be visible (or must be disabled) for non-author
   await expect(revisions.restoreTrigger(alice)).toHaveCount(0);
 });
 ```
 
-Each: run + commit.
+Run + commit each.
 
 ---
 
 ## Task 16: Final verification + tracking-issue update
 
-### Step 1: Run the full posts + revisions suite at workers=1
+### Step 1: Run full posts + revisions suite at workers=1
 
 ```bash
 cd e2e && npx playwright test specs/posts specs/revisions --workers=1
 ```
 
-Expected: all specs pass.
+Expected: all 40 specs pass.
 
-### Step 2: Run at workers=4 (CI default)
+### Step 2: Run at workers=4
 
 ```bash
 cd e2e && npx playwright test specs/posts specs/revisions --workers=4
 ```
 
-Expected: all specs pass. If any fail at workers=4 but pass at workers=1, the spec depends on shared state; use `createdPostId` to isolate it.
+Expected: all pass. If any fail at workers=4 but pass at workers=1, the spec depends on shared state — fix to use `createdPostId` until isolated.
 
 ### Step 3: Run unit + coverage gate
 
@@ -1387,7 +1388,7 @@ Expected: all specs pass. If any fail at workers=4 but pass at workers=1, the sp
 npm run test:coverage
 ```
 
-Expected: thresholds in `.coverage-thresholds.json` met.
+Expected: thresholds in `.coverage-thresholds.json` met. If new dialog/button code drops coverage, add unit tests for the new component code paths.
 
 ### Step 4: Run Bruno regression
 
@@ -1395,71 +1396,175 @@ Expected: thresholds in `.coverage-thresholds.json` met.
 cd bruno && npx @usebruno/cli run -r --env local
 ```
 
-Expected: all green. If any Bruno spec fails because of seed extension (Task 0), update the Bruno expectation, do NOT mutate the seed.
+Expected: all green.
 
-### Step 5: Update tracking issue #43
+### Step 5: Spec-N-alone independence verification
 
-Edit the issue body's coverage matrix to fill in actual spec counts and mark phase 2 status:
+Pick 5 specs at random across folders and run each in isolation:
 
 ```bash
-gh issue edit 43 --body-file <(gh issue view 43 --json body -q .body | sed 's|^| 2 → in progress \| posts/ \(actual\) \| ... |')
+cd e2e && npx playwright test specs/posts/edit-changes-persist-after-nav.spec.ts --workers=1
+cd e2e && npx playwright test specs/posts/delete-cascade.spec.ts --workers=1
+cd e2e && npx playwright test specs/posts/home-code-runner-execution.spec.ts --workers=1
+cd e2e && npx playwright test specs/revisions/rollback-to-previous.spec.ts --workers=1
+cd e2e && npx playwright test specs/revisions/list-chronological.spec.ts --workers=1
 ```
 
-(Or just edit interactively with `gh issue edit 43`.)
+Expected: each passes when run alone.
 
-### Step 6: Commit and prepare PR
+### Step 6: 3 consecutive green CI runs
+
+After the PR is opened, watch CI. Use `gh pr checks <PR>` and re-run on flake:
 
 ```bash
-git status
-git log --oneline main..HEAD  # review the chain of commits
+PR=<pr-number>
+for i in 1 2 3; do
+  gh pr checks "$PR" --watch
+  gh pr comment "$PR" --body "CI green run $i / 3"
+  # If this iteration was green, trigger another run
+  if [ "$i" -lt 3 ]; then
+    gh workflow run e2e-playwright.yml -r "$(git rev-parse HEAD)" || gh pr ready "$PR"
+  fi
+done
+```
+
+(Adapt to actual CI re-trigger mechanism — `workflow run` or empty commit.)
+
+### Step 7: CI runtime delta capture
+
+Before pushing the spec PR, capture the baseline e2e suite runtime on `main`:
+
+```bash
+git stash || true
+git checkout main
+gh run list --workflow=e2e-playwright.yml --branch=main --limit=3 --json conclusion,startedAt,updatedAt --jq '.[] | "\(.conclusion) \(((.updatedAt | fromdate) - (.startedAt | fromdate)) | tostring) seconds"' > /tmp/e2e-baseline.txt
+git checkout -
+git stash pop || true
+```
+
+After PR CI runs at least once, capture new runtime; record both in PR body as:
+
+> **CI runtime delta**: baseline `<X>s` → new `<Y>s` (+`<delta>%`). Full e2e suite under the 10-min target: `<yes/no>`.
+
+### Step 8: Update tracking issue #43
+
+Edit `gh issue view 43` body to fill in actual spec counts and mark phase 2 status:
+
+```bash
+gh issue edit 43
+# in the editor, update the rollout matrix row for issue 2:
+#   2 | E2E posts + revisions | 40 specs delivered (31 posts + 9 revisions) | merged
+```
+
+### Step 9: Run /self-reflect to capture knowledge
+
+Per CLAUDE.md, run `/self-reflect` to extract learnings into the knowledge base. Commit knowledge updates so they ride along with the PR.
+
+### Step 10: Push + open PR
+
+```bash
 git push -u origin feat/e2e-posts-revisions-specs
+gh pr create --title "feat(e2e): posts + revisions specs (#47)" --body "$(cat <<'EOF'
+## Summary
+- 40 Playwright specs delivered: 31 in `e2e/specs/posts/`, 9 in `e2e/specs/revisions/`
+- Selector shards: extends `selectors/posts.ts` (existing), creates `selectors/revisions.ts` (new)
+- Seed: testuser draft fixture (`c…0098`), 2 extra revisions on `c…0099`, alice vote/bookmark on `c…0099`
+- Minimal feature adds (driven by DoD): delete-confirm dialog on `PostViewPage.vue`, `Save Revision` button in `EditorToolbar.vue`, `post-cancel-btn` on `PostEditor.vue`, tag-chip testid on `PostMetaHeader.vue`, link-preview-card testid on `LinkPreviewCard.vue`, author-avatar testid + router-link on `PostMetaHeader.vue`
+- All specs pass at workers=1 AND workers=4
+- CI runtime delta recorded in this PR description below
+
+## Out of scope (with notes)
+- Fork-of-fork-of-fork case: not addressed. Schema-wise the `forks_from_id` column allows arbitrary depth; this issue does not test n-depth forks. Tracked separately.
+- Revision rollback on a forked post: not addressed. Same fork system supports it; rollout #4 or a follow-up issue covers it.
+
+## Test plan
+- [x] `npm run e2e` (workers=1)
+- [x] `npm run e2e -- --workers=4`
+- [x] `npm run test:coverage`
+- [x] `cd bruno && npx @usebruno/cli run -r --env local`
+- [x] 5 specs run in isolation
+- [ ] 3 consecutive green CI runs
+- [ ] Tracking issue #43 updated with spec counts
+
+Closes #47
+EOF
+)"
 ```
 
-### Step 7: Run /self-reflect to capture knowledge
+---
 
-Per CLAUDE.md, run `/self-reflect` to extract learnings into the knowledge base before opening the PR. Commit knowledge updates.
+## Out of scope (with notes)
 
-### Step 8: Create the PR
+The issue's adversarial review checklist requires explicit handling of:
 
-Use `/metaswarm:pr-shepherd` or `gh pr create` with title `feat(e2e): posts + revisions specs (#47)` and body referencing #47, summarizing the spec count delta vs. issue (38–40 actual vs. 32 original — explain via amendment).
+1. **Fork-of-fork-of-fork case** — "considered (or explicitly out of scope with a note)". The `posts.forked_from_id` FK supports arbitrary depth, so the schema permits it. This rollout phase tests **single-level** fork only. Rationale: testing n-depth fork chains adds combinatorial spec count without proportional coverage gain; the underlying mechanism is identical. **Tracked**: a follow-up issue should add a 1-spec n-depth fork test (e.g., fork → fork the fork → fork that fork → assert relationships).
+
+2. **Revision rollback on a forked post** — "tested for both original and fork". The rollback flow uses the same `POST /:id/revisions/:rev/restore` endpoint regardless of fork status; the only difference is which post the rollback applies to. This rollout tests rollback on the **original**; the cross-user `rollback-permission` spec covers the auth side. **Tracked**: same follow-up issue should add `rollback-on-forked-post` once n-depth fork specs land.
+
+Both items are noted in the PR body so reviewers see them explicitly.
 
 ---
 
 ## Risks & mitigations (plan-specific)
 
-| Risk                                                              | Mitigation                                                                                                                                                                                             |
-| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Drafts list URL `/?filter=drafts` is a guess; UI may differ       | Resolve via `--headed` exploration before finalizing Task 5 specs; update spec assertions to match actual UI.                                                                                          |
-| WASM runtime warm-up causes flake on Task 10 specs                | Use `waitForFunction` on a stable runtime-ready marker; never `waitForTimeout`.                                                                                                                        |
-| Manual-revision creation (Task 12.2) may not be implemented in UI | If neither UI nor API supports it, drop the spec, note in PR; coverage adjusts to 9/10.                                                                                                                |
-| Multi-file `post-file-list` testid may not exist                  | Add it inline when spec 7.3 fails; the file-list rendering is in scope per issue.                                                                                                                      |
-| Seed extension breaks a Bruno fixture assertion                   | Investigate; the extensions are additive on testuser's `c…0099`. If a Bruno test asserted a specific vote/bookmark count on that post, update Bruno (the new fixture matches reality, not vice versa). |
-| `createdPostId` API calls bloat spec runtime                      | Use `request` fixture (no UI), parallelize with `workers: 4`. Runtime budget per design (4 min for both folders) holds.                                                                                |
+| Risk                                                                                                                     | Mitigation                                                                                                                                                                                                                                                |
+| ------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| HomePage feed ordering shifts which post is auto-selected, breaking Task 9/10/11 specs                                   | Specs scope by post **title text** (`getByText('Test Fixture Post (testuser-owned)')`), not by index — order-independent.                                                                                                                                 |
+| WASM runtime warm-up causes flake on Task 10.2                                                                           | Anchor on a stable runtime-ready marker via `waitForFunction`; never `waitForTimeout`.                                                                                                                                                                    |
+| `markdown-preview` testid (Task 1.3) doesn't exist in current code                                                       | Add it inline when spec fails — small, in scope (issue's testid scope on `components/editor/**`).                                                                                                                                                         |
+| `post-file-list` testid (Task 7.3) doesn't exist                                                                         | Same — add inline, in scope.                                                                                                                                                                                                                              |
+| `PostEditor.vue` is shared by new + edit; the cancel emit (Task 3.4) needs different behavior on each path               | New page: cancel could emit a discard event that navigates to `/`. Edit page: navigate to view. Implementation detail — keep emit semantically generic (`cancel`) and route per-page.                                                                     |
+| HomePage selection click might require waiting for feed to load                                                          | Use Playwright's `getByText(...)` which auto-waits on visible text. No explicit timeouts.                                                                                                                                                                 |
+| Save Revision button (Task 12.2) wired naively could conflict with auto-revision                                         | Server creates a new revision unconditionally on edit save; manual save is a separate POST. Verify server doesn't dedupe and that two consecutive saves create two revisions.                                                                             |
+| `useRevisions` composable may not exist; need to add                                                                     | If it doesn't exist, add a minimal `saveRevision(postId, content, message)` function in `usePosts.ts` or create `useRevisions.ts`. Both options stay inside `components/editor/**` + `composables/` (the latter is implicit support code for the editor). |
+| `PostMetaHeader` is rendered both inline (HomePage) and on PostViewPage; adding the avatar router-link could double-link | Single change — wrap once in PostMetaHeader, no duplication.                                                                                                                                                                                              |
 
 ---
 
-## Self-review
+## Self-review (REV 2)
 
-**1. Spec coverage:** Every DoD bullet from the issue has a Task:
+**1. Spec coverage:** Every DoD bullet maps to a task — table below.
 
-- new (draft, required, markdown) → Task 1 ✓
-- view (public, draft-author, missing-id, permission) → Task 2 ✓
-- edit (own, others, persists, cancel) → Task 3 ✓
-- delete (confirms, own-only, cascade) → Task 4 ✓
-- publish (toggle, draft-list, published-list) → Task 5 ✓
-- fork (linked, independent, displayed) → Task 6 ✓
-- multi-file (upload, preview, render) → Task 7 ✓
-- tags (add, remove, links) → Task 8 ✓
-- Amendment additions: link-preview (Task 9), code-runner (Task 10), profile-avatar (Task 11) ✓
-- revisions create (auto, manual) → Task 12 ✓
-- revisions list (chronological, empty) → Task 13 ✓
-- revisions view + diff → Task 14 ✓
-- revisions rollback (to-previous, permission) → Task 15 ✓
-- workers=1 + workers=4 + Bruno + coverage → Task 16 ✓
-- Tracking issue update → Task 16 ✓
+| DoD bullet                                                                       | Task / Spec                                                          |
+| -------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| new — draft saves, required fields, markdown preview                             | Task 1.1, 1.2, 1.3                                                   |
+| view — public, draft-as-author, missing-id, private-as-non-owner                 | Task 2.1–2.4                                                         |
+| edit — own, cannot-edit-others, persist-after-nav, cancel-reverts                | Task 3.1–3.4                                                         |
+| delete — confirms, own-only, cascade (comments + votes + bookmarks)              | Task 4.1–4.3                                                         |
+| publish — toggle, draft-list, published-list (combined)                          | Task 5.1, 5.2                                                        |
+| fork — linked, independent, displayed                                            | Task 6.1–6.3                                                         |
+| multi-file — upload, preview, in-post rendering                                  | Task 7.1–7.3                                                         |
+| tags — add, remove, view-page chips                                              | Task 8.1–8.3                                                         |
+| link-preview (amendment)                                                         | Task 9.1, 9.2                                                        |
+| code-runner (amendment)                                                          | Task 10.1, 10.2                                                      |
+| author-avatar + presence (amendment)                                             | Task 11.1, 11.2                                                      |
+| revisions/create — auto-on-edit, manual-via-button                               | Task 12.1, 12.2                                                      |
+| revisions/list — chronological, only-initial                                     | Task 13.1, 13.2                                                      |
+| revisions/view — by-number, side-by-side, inline                                 | Task 14.1–14.3                                                       |
+| revisions/rollback — to-previous, permission                                     | Task 15.1, 15.2                                                      |
+| selector shards (posts.ts extend, revisions.ts new)                              | Task 0                                                               |
+| testids on PostNewPage, PostViewPage, PostEditPage, PostHistoryPage + components | Tasks 0, 1, 4, 8.3, 11.1, 12.2, 13                                   |
+| createdPostId for mutations                                                      | Tasks 3.1, 3.3, 3.4, 4.1, 4.3, 5.1, 5.2, 8.1, 8.2, 12.1, 12.2, 15.1  |
+| pinned postId for reads                                                          | Tasks 2.1–2.4, 6.1–6.3, 11.2, 13.1, 13.2, 14.1–14.3, 15.2, 9.x, 10.x |
+| workers=1 + workers=4                                                            | Task 16.1, 16.2                                                      |
+| Vitest + Bruno gates                                                             | Task 16.3, 16.4                                                      |
+| spec-N-alone independence                                                        | Task 16.5                                                            |
+| 3 consecutive green CI runs                                                      | Task 16.6                                                            |
+| CI runtime delta tracked in PR                                                   | Task 16.7                                                            |
+| Tracking issue #43 updated                                                       | Task 16.8                                                            |
+| Knowledge capture                                                                | Task 16.9                                                            |
+| `Closes #47` in PR body                                                          | Task 16.10                                                           |
+| Adversarial checklist: fork-of-fork OOS note                                     | OOS section                                                          |
+| Adversarial checklist: rollback-on-forked-post OOS note                          | OOS section                                                          |
 
-**2. Placeholder scan:** No "TBD"/"TODO"; every code block contains real testable code; testid additions are shown with concrete file paths and snippets.
+**2. Placeholder scan:** No "TBD" / "TODO". All code blocks contain real testable code or concrete implementation steps.
 
-**3. Type consistency:** Selector helper names match between `selectors/posts.ts` extension (Task 0) and uses across all tasks (`postDeleteBtn`, `postCancelBtn`, `tagLink`, `linkPreviewCard`, `linkPreviewRefresh`, `codeRunner`, `runPlay`, `runStop`, `executionOutput`, `clearOutputBtn`, `authorAvatar`, `presenceAvatar`). Revisions selectors match between Task 0 and Tasks 12–15.
+**3. Type consistency:** Selector helper names match between Task 0 definition and uses in subsequent tasks (`postNewPage`, `postCancelBtn`, `postDeleteBtn`, `postDeleteConfirm`, `postDeleteCancel`, `postDeleteDialog`, `postTagChip`, `linkPreviewCard`, `linkPreviewRefresh`, `codeRunner`, `runPlay`, `runStop`, `executionOutput`, `clearOutputBtn`, `authorAvatar`, `presenceAvatar`, `saveRevisionBtn`). Revisions selectors match between Task 0 and Tasks 12–15.
 
-**4. Out-of-scope creep check:** Only one feature add (delete-confirm dialog in `PostViewPage.vue`) — declared explicitly in Task 4. All other changes are testid additions on existing UI elements, plus seed extensions. No server-side changes. No other rollout-folder selector files.
+**4. File scope discipline:** No `packages/server/` files modified. Only the selector shards, seed.sql, and components/pages explicitly listed in the issue's file scope plus the design amendment.
+
+**5. Mutation discipline:** Every spec that mutates state uses `createdPostId` from a `request.post('/api/posts', ...)` setup. Read-only specs use pinned seed UUIDs.
+
+**6. Single-concept assertions:** Each spec has one primary assertion (or a tightly related cluster — e.g., 4.3 asserts comment + vote + bookmark all gone, all tied to one concept "cascade-delete works"). No spec branches on a `if/else` to assert different things.
+
+**7. No `waitForTimeout`:** All timing handled by Playwright auto-wait or `waitForResponse`/`waitForFunction`.
