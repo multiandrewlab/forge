@@ -4,6 +4,8 @@ import { ref, computed, watch } from 'vue';
 import type { ContentType, Visibility, AiCompleteRequest, AiGenerateRequest } from '@forge/shared';
 import type { EditorView } from '@codemirror/view';
 import type { SaveStatus } from '@/stores/posts';
+import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 import CodeEditor from '@/components/editor/CodeEditor.vue';
 import EditorToolbar from '@/components/editor/EditorToolbar.vue';
 import DraftStatus from '@/components/editor/DraftStatus.vue';
@@ -37,14 +39,22 @@ const emit = defineEmits<{
   'update:tags': [value: string[]];
   publish: [];
   'save-draft': [];
+  'save-revision': [];
+  cancel: [];
+  // Emitted when a file is picked before the post exists (no postId yet).
+  // Parents (PostNewPage) collect these and flush them to the server after
+  // createPost so they get committed to the initial revision.
+  'local-file-staged': [file: File];
 }>();
 
 const filesStore = useFilesStore();
 const isDragging = ref(false);
 // Local list of files attached pre-creation (no postId yet). Mirrors the
 // staged-files concept but lives in the component so the new-post page can
-// preview attachments before the post exists.
-const localStagedFiles = ref<{ name: string; size: number }[]>([]);
+// preview attachments before the post exists. We retain the raw File so the
+// parent can flush them to the server once the post is created (parent reads
+// the array via the `local-files` v-model — defined via emit/prop below).
+const localStagedFiles = ref<File[]>([]);
 const showFileSidebar = computed(() => filesStore.stagedFiles.length > 0);
 
 function handleDrop(e: DragEvent): void {
@@ -69,7 +79,8 @@ function handleLocalFileChange(event: Event): void {
     if (props.postId) {
       void filesStore.uploadFile(props.postId, file);
     } else {
-      localStagedFiles.value.push({ name: file.name, size: file.size });
+      localStagedFiles.value.push(file);
+      emit('local-file-staged', file);
     }
   }
 }
@@ -103,6 +114,17 @@ const AI_GENERATE_CONTENT_TYPES: ReadonlySet<string> = new Set<AiGenerateContent
   'document',
 ]);
 const isAiGenerateContentType = computed(() => AI_GENERATE_CONTENT_TYPES.has(props.contentType));
+
+// Markdown preview is rendered alongside the editor when contentType === 'document'.
+// The body is treated as markdown, parsed via `marked`, and sanitized via DOMPurify
+// before being injected with v-html. The `markdown-preview` testid lets E2E specs
+// assert formatted output (e.g., headings, bold) without re-implementing parsing.
+const isMarkdownPreviewContentType = computed(() => props.contentType === 'document');
+const markdownPreviewHtml = computed<string>(() => {
+  if (!isMarkdownPreviewContentType.value) return '';
+  const rawHtml = marked.parse(props.modelValue, { async: false }) as string;
+  return DOMPurify.sanitize(rawHtml);
+});
 </script>
 
 <template>
@@ -118,8 +140,17 @@ const isAiGenerateContentType = computed(() => AI_GENERATE_CONTENT_TYPES.has(pro
       />
       <DraftStatus :status="saveStatus" :last-saved-at="lastSavedAt" />
       <button
+        type="button"
+        data-testid="post-cancel-btn"
+        class="rounded border border-surface-500 px-4 py-1.5 text-sm font-medium text-gray-300 hover:bg-surface-600 hover:text-white"
+        @click="emit('cancel')"
+      >
+        Cancel
+      </button>
+      <button
         data-testid="new-post-save-draft-btn"
-        class="rounded border border-surface-500 px-4 py-1.5 text-sm font-medium text-gray-200 hover:bg-surface-600"
+        class="rounded border border-surface-500 px-4 py-1.5 text-sm font-medium text-gray-200 hover:bg-surface-600 disabled:cursor-not-allowed disabled:opacity-50"
+        :disabled="!title.trim()"
         @click="emit('save-draft')"
       >
         Save Draft
@@ -139,10 +170,12 @@ const isAiGenerateContentType = computed(() => AI_GENERATE_CONTENT_TYPES.has(pro
         :visibility="visibility"
         :content-type="contentType"
         :tags="tags"
+        :post-id="postId"
         @update:language="(val) => emit('update:language', val)"
         @update:visibility="(val) => emit('update:visibility', val)"
         @update:content-type="(val) => emit('update:contentType', val)"
         @update:tags="(val) => emit('update:tags', val)"
+        @save-revision="emit('save-revision')"
       />
       <!--
         Always-available file attach input. Hidden in the layout (label is the
@@ -204,6 +237,12 @@ const isAiGenerateContentType = computed(() => AI_GENERATE_CONTENT_TYPES.has(pro
           class="absolute bottom-4 right-4"
         />
       </div>
+      <div
+        v-if="isMarkdownPreviewContentType"
+        data-testid="markdown-preview"
+        class="markdown-preview flex-1 overflow-auto border-l border-surface-500 bg-surface px-4 py-3 text-sm text-gray-200"
+        v-html="markdownPreviewHtml"
+      />
     </div>
   </div>
 </template>

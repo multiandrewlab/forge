@@ -554,6 +554,37 @@ describe('usePosts', () => {
       });
     });
 
+    it('should include stagedFileIds when non-empty list is passed', async () => {
+      const mockRevision = createMockRevision();
+      mockApiFetch.mockResolvedValue(new Response(JSON.stringify(mockRevision), { status: 201 }));
+
+      const { saveRevision } = usePosts();
+      await saveRevision('post-1', 'updated content', null, ['file-a', 'file-b']);
+
+      expect(mockApiFetch).toHaveBeenCalledWith('/api/posts/post-1/revisions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: 'updated content',
+          stagedFileIds: ['file-a', 'file-b'],
+        }),
+      });
+    });
+
+    it('should omit stagedFileIds when an empty list is passed', async () => {
+      const mockRevision = createMockRevision();
+      mockApiFetch.mockResolvedValue(new Response(JSON.stringify(mockRevision), { status: 201 }));
+
+      const { saveRevision } = usePosts();
+      await saveRevision('post-1', 'content', null, []);
+
+      expect(mockApiFetch).toHaveBeenCalledWith('/api/posts/post-1/revisions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: 'content' }),
+      });
+    });
+
     it('should set saveStatus to "saving" then "saved" on success', async () => {
       const store = usePostsStore();
       const statusHistory: string[] = [];

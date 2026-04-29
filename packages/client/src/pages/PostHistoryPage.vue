@@ -1,5 +1,5 @@
 <template>
-  <div class="mx-auto max-w-5xl px-4 py-6">
+  <div data-testid="post-history-page" class="mx-auto max-w-5xl px-4 py-6">
     <!-- Header -->
     <div class="mb-6 flex items-center justify-between">
       <div>

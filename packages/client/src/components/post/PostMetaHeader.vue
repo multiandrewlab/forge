@@ -7,6 +7,7 @@
         class="flex items-center gap-3"
       >
         <div
+          data-testid="author-avatar"
           class="flex h-8 w-8 items-center justify-center rounded-full bg-primary/20 text-sm font-bold text-primary"
         >
           {{ post.author.displayName[0]?.toUpperCase() }}
@@ -35,6 +36,7 @@
       <span
         v-for="tag in post.tags"
         :key="tag"
+        :data-testid="`post-tag-chip-${tag}`"
         class="rounded bg-gray-700 px-2 py-0.5 text-xs text-gray-300"
       >
         #{{ tag }}

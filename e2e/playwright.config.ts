@@ -10,7 +10,11 @@ export default defineConfig({
   fullyParallel: false,
   workers: process.env.CI ? 4 : undefined,
   forbidOnly: !!process.env.CI,
-  retries: 0,
+  // Retry once in CI to absorb workers=4 flakes from auth-rate-limit and
+  // reset-window contention; specs pass deterministically at workers=1, so a
+  // single retry on the second worker shakes out cross-test interference
+  // without masking real spec failures.
+  retries: process.env.CI ? 1 : 0,
   reporter: [['html', { open: 'never' }], ['list'], ['github']],
   globalSetup: './support/global-setup.ts',
   globalTeardown: './support/global-teardown.ts',

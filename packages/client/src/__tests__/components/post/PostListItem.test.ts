@@ -82,7 +82,7 @@ describe('PostListItem', () => {
     expect(pushSpy).toHaveBeenCalledWith('/posts/1');
   });
 
-  it('shows draft badge when isDraft is true', () => {
+  it('shows draft badge with data-testid="draft-badge" when isDraft is true', () => {
     const router = createTestRouter();
     const draftPost = { ...mockPost, isDraft: true };
     const wrapper = mount(PostListItem, {
@@ -90,6 +90,25 @@ describe('PostListItem', () => {
       global: { plugins: [router] },
     });
     expect(wrapper.text()).toContain('Draft');
+    expect(wrapper.find('[data-testid="draft-badge"]').exists()).toBe(true);
+  });
+
+  it('does not render draft-badge when isDraft is false', () => {
+    const router = createTestRouter();
+    const wrapper = mount(PostListItem, {
+      props: { post: mockPost, selected: false },
+      global: { plugins: [router] },
+    });
+    expect(wrapper.find('[data-testid="draft-badge"]').exists()).toBe(false);
+  });
+
+  it('renders the root element with data-testid="post-list-item" for E2E row scoping', () => {
+    const router = createTestRouter();
+    const wrapper = mount(PostListItem, {
+      props: { post: mockPost, selected: false },
+      global: { plugins: [router] },
+    });
+    expect(wrapper.find('[data-testid="post-list-item"]').exists()).toBe(true);
   });
 
   // ── timeAgo branches (lines 59-64) ───────────────────────────

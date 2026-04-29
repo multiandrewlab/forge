@@ -1,8 +1,10 @@
 <script setup lang="ts">
+/* global File */
 import { ref, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import PostEditor from '@/components/editor/PostEditor.vue';
 import { usePosts } from '@/composables/usePosts';
+import { useFilesStore } from '@/stores/files';
 import { detectLanguage } from '@/lib/detectLanguage';
 import type { ContentType, Visibility } from '@forge/shared';
 import type { SaveStatus } from '@/stores/posts';
@@ -10,6 +12,7 @@ import type { SaveStatus } from '@/stores/posts';
 const router = useRouter();
 const route = useRoute();
 const { createPost, saveRevision, publishPost, error } = usePosts();
+const filesStore = useFilesStore();
 
 const title = ref('');
 const content = ref('');
@@ -19,6 +22,32 @@ const visibility = ref<Visibility>('public');
 const contentType = ref<ContentType>('snippet');
 const tags = ref<string[]>([]);
 const saveStatus = ref<SaveStatus>('saved');
+// Files picked before the post exists. PostEditor emits `local-file-staged`
+// for each pre-create pick; we collect them here and flush to the server in
+// handleSaveDraft / handlePublish once we have a postId.
+const localStagedFiles = ref<File[]>([]);
+
+function onLocalFileStaged(file: File): void {
+  localStagedFiles.value.push(file);
+}
+
+/**
+ * Upload accumulated local files to the newly-created post and return their
+ * IDs as an ordered list — suitable for passing to saveRevision via
+ * stagedFileIds so they get committed to the initial revision rather than
+ * orphaned in staging.
+ */
+async function flushLocalFiles(postId: string): Promise<string[]> {
+  const localFiles = localStagedFiles.value;
+  localStagedFiles.value = [];
+  if (localFiles.length === 0) return [];
+  const ids: string[] = [];
+  for (const file of localFiles) {
+    const uploaded = await filesStore.uploadFile(postId, file);
+    if (uploaded) ids.push(uploaded.id);
+  }
+  return ids;
+}
 
 // Pre-fill from AI Action query params
 if (typeof route.query.description === 'string' && route.query.description) {
@@ -56,8 +85,17 @@ async function handlePublish(): Promise<void> {
     content: content.value || undefined,
   });
   if (id) {
-    if (content.value) {
-      await saveRevision(id, content.value, null);
+    // Upload locally-staged files first so we can commit them to the next
+    // revision; otherwise they remain orphaned in staging.
+    const stagedFileIds = await flushLocalFiles(id);
+    if (content.value || stagedFileIds.length > 0) {
+      // Pass stagedFileIds only when non-empty — keeps the no-file path
+      // signature-compatible with existing call sites and unit tests.
+      if (stagedFileIds.length > 0) {
+        await saveRevision(id, content.value, null, stagedFileIds);
+      } else {
+        await saveRevision(id, content.value, null);
+      }
     }
     // The new-post create path persists the post as a draft (server default);
     // honour the user's "Publish" intent by flipping the draft flag before
@@ -79,8 +117,13 @@ async function handleSaveDraft(): Promise<void> {
     content: content.value || undefined,
   });
   if (id) {
-    if (content.value) {
-      await saveRevision(id, content.value, null);
+    const stagedFileIds = await flushLocalFiles(id);
+    if (content.value || stagedFileIds.length > 0) {
+      if (stagedFileIds.length > 0) {
+        await saveRevision(id, content.value, null, stagedFileIds);
+      } else {
+        await saveRevision(id, content.value, null);
+      }
     }
     router.push({ name: 'post-view', params: { id } });
   }
@@ -88,7 +131,7 @@ async function handleSaveDraft(): Promise<void> {
 </script>
 
 <template>
-  <div class="min-h-screen bg-surface p-4">
+  <div data-testid="post-new-page" class="min-h-screen bg-surface p-4">
     <div class="max-w-5xl mx-auto">
       <router-link to="/" class="text-gray-400 hover:text-white text-sm mb-4 inline-block">
         &larr; Back to Workspace
@@ -113,6 +156,7 @@ async function handleSaveDraft(): Promise<void> {
         @update:language="onLanguageChange"
         @publish="handlePublish"
         @save-draft="handleSaveDraft"
+        @local-file-staged="onLocalFileStaged"
       />
     </div>
   </div>

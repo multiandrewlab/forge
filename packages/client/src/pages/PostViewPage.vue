@@ -10,19 +10,32 @@ import { useComments } from '@/composables/useComments';
 import { useVotes } from '@/composables/useVotes';
 import { storeToRefs } from 'pinia';
 import { usePostsStore } from '@/stores/posts';
+import { useFilesStore } from '@/stores/files';
 import { useAuth } from '@/composables/useAuth';
-import type { PostWithRevision } from '@forge/shared';
+import type { PostFile, PostWithRevision } from '@forge/shared';
 
 const route = useRoute();
 const router = useRouter();
 const { fetchPost, deletePost, forkPost, error } = usePosts();
 const store = usePostsStore();
+const filesStore = useFilesStore();
 const { currentPost } = storeToRefs(store);
 const { user } = useAuth();
 const loading = ref(true);
 const isAuthor = ref(false);
+// Files attached to the latest revision. Rendered as a small `post-file-list`
+// surface so multi-file posts (uploaded through the new/edit flow) show their
+// attachments on the read-only view. Empty for single-file posts — the testid
+// is only emitted when files exist so existing single-file specs aren't
+// affected by an incidental empty container.
+const revisionFiles = ref<PostFile[]>([]);
 
 const cleanupFns: Array<() => void> = [];
+
+// Delete-confirm dialog (Task 4 of issue #47). The plain Delete button
+// previously triggered an irreversible DELETE on click; the dialog gates the
+// action behind an explicit confirmation step.
+const showDeleteDialog = ref(false);
 
 const latestRevision = computed(() => {
   if (!currentPost.value) return undefined;
@@ -61,6 +74,14 @@ onMounted(async () => {
   }
   // Eagerly load comments so the thread renders without a separate user click.
   await useComments().fetchComments(id);
+  // Fetch files attached to the latest revision. Skipped silently when there
+  // is no revision (e.g., 404 path) — `revisionFiles` stays empty and the
+  // post-file-list block is not rendered.
+  const rev = currentPost.value?.revisions?.[0];
+  if (rev) {
+    await filesStore.fetchFiles(id, rev.id);
+    revisionFiles.value = filesStore.filesByRevision[rev.id] ?? [];
+  }
   loading.value = false;
 
   // Subscribe to real-time comment and vote events for this post
@@ -74,7 +95,8 @@ onUnmounted(() => {
   }
 });
 
-async function handleDelete(): Promise<void> {
+async function confirmDelete(): Promise<void> {
+  showDeleteDialog.value = false;
   const id = route.params.id as string;
   await deletePost(id);
   if (!error.value) {
@@ -148,8 +170,9 @@ async function handleFork(): Promise<void> {
               Edit
             </router-link>
             <button
+              data-testid="post-delete-btn"
               class="text-sm px-3 py-1 rounded border border-red-500 text-red-400 hover:bg-red-900/30"
-              @click="handleDelete"
+              @click="showDeleteDialog = true"
             >
               Delete
             </button>
@@ -162,6 +185,20 @@ async function handleFork(): Promise<void> {
           :language="currentPost.language ?? undefined"
         />
 
+        <ul
+          v-if="revisionFiles.length > 0"
+          data-testid="post-file-list"
+          class="mt-3 flex flex-wrap gap-2"
+        >
+          <li
+            v-for="file in revisionFiles"
+            :key="file.id"
+            class="rounded border border-surface-500 bg-surface-700 px-2 py-1 text-xs text-gray-300"
+          >
+            {{ file.filename }}
+          </li>
+        </ul>
+
         <PostActions class="mt-4" :post="buildPostForActions(currentPost)" @fork="handleFork" />
 
         <div class="mt-6">
@@ -170,6 +207,33 @@ async function handleFork(): Promise<void> {
       </template>
 
       <div v-else class="text-gray-400 text-center py-12">Post not found</div>
+
+      <div
+        v-if="showDeleteDialog"
+        data-testid="post-delete-dialog"
+        class="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
+      >
+        <div class="bg-surface border border-gray-700 rounded p-6 max-w-md">
+          <h2 class="text-lg font-semibold text-white mb-2">Delete this post?</h2>
+          <p class="text-sm text-gray-400 mb-4">This action cannot be undone.</p>
+          <div class="flex justify-end gap-2">
+            <button
+              data-testid="post-delete-cancel"
+              class="px-3 py-1 rounded border border-gray-600 text-gray-300"
+              @click="showDeleteDialog = false"
+            >
+              Cancel
+            </button>
+            <button
+              data-testid="post-delete-confirm"
+              class="px-3 py-1 rounded bg-red-600 text-white"
+              @click="confirmDelete"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>

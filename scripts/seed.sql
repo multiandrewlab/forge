@@ -48,7 +48,8 @@ INSERT INTO posts (id, author_id, title, content_type, language, visibility, is_
   ('c0000000-0000-0000-0000-000000000011', 'a0000000-0000-0000-0000-000000000002', 'React Testing Library Tips', 'snippet', 'typescript', 'public', false, 60),
   ('c0000000-0000-0000-0000-000000000012', 'a0000000-0000-0000-0000-000000000001', 'SQL Performance Tuning', 'document', NULL, 'public', false, 40),
   -- testuser-owned fixture post for Bruno regression tests
-  ('c0000000-0000-0000-0000-000000000099', 'a0000000-0000-0000-0000-000000000099', 'Test Fixture Post (testuser-owned)', 'snippet', 'typescript', 'public', false, 0);
+  ('c0000000-0000-0000-0000-000000000099', 'a0000000-0000-0000-0000-000000000099', 'Test Fixture Post (testuser-owned)', 'snippet', 'typescript', 'public', false, 0),
+  ('c0000000-0000-0000-0000-000000000098', 'a0000000-0000-0000-0000-000000000099', 'Forge E2E Draft Sandbox (testuser)', 'snippet', 'typescript', 'public', true, 0);
 
 -- Update link post
 UPDATE posts SET
@@ -73,7 +74,11 @@ INSERT INTO post_revisions (id, post_id, author_id, content, message, revision_n
   ('d0000000-0000-0000-0000-000000000011', 'c0000000-0000-0000-0000-000000000010', 'a0000000-0000-0000-0000-000000000003', E'# Claude API Integration\n\nHow to use the Anthropic API with streaming, tool use, and prompt caching...', 'Initial version', 1),
   ('d0000000-0000-0000-0000-000000000012', 'c0000000-0000-0000-0000-000000000011', 'a0000000-0000-0000-0000-000000000002', E'import { render, screen } from "@testing-library/react";\n\ntest("renders component", () => {\n  render(<MyComponent />);\n  expect(screen.getByText("Hello")).toBeInTheDocument();\n});', 'Initial version', 1),
   ('d0000000-0000-0000-0000-000000000013', 'c0000000-0000-0000-0000-000000000012', 'a0000000-0000-0000-0000-000000000001', E'# SQL Performance Tuning\n\nKey techniques for optimizing PostgreSQL queries...', 'Initial version', 1),
-  ('d0000000-0000-0000-0000-000000000099', 'c0000000-0000-0000-0000-000000000099', 'a0000000-0000-0000-0000-000000000099', 'const testFixture: string = "hello from testuser";', 'Initial version', 1);
+  ('d0000000-0000-0000-0000-000000000099', 'c0000000-0000-0000-0000-000000000099', 'a0000000-0000-0000-0000-000000000099', 'const testFixture: string = "hello from testuser";', 'Initial version', 1)
+  ,
+  ('d0000000-0000-0000-0000-000000000098', 'c0000000-0000-0000-0000-000000000098', 'a0000000-0000-0000-0000-000000000099', 'const draftFixture: string = "draft body for E2E publish-toggle test";', 'Initial draft version', 1),
+  ('d0000000-0000-0000-0000-000000000100', 'c0000000-0000-0000-0000-000000000099', 'a0000000-0000-0000-0000-000000000099', E'const testFixture: string = "hello from testuser v2";\nexport default testFixture;', 'Second revision — added export', 2),
+  ('d0000000-0000-0000-0000-000000000101', 'c0000000-0000-0000-0000-000000000099', 'a0000000-0000-0000-0000-000000000099', E'const testFixture: string = "hello from testuser v3 with more body";\nexport default testFixture;\n// trailing comment for diff visibility', 'Third revision — comment + body change', 3);
 
 -- ============================================================
 -- Post Tags
@@ -102,7 +107,9 @@ INSERT INTO votes (user_id, post_id, value) VALUES
   ('a0000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000003', 1),
   ('a0000000-0000-0000-0000-000000000003', 'c0000000-0000-0000-0000-000000000003', 1),
   ('a0000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000004', 1),
-  ('a0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000010', 1);
+  ('a0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000010', 1)
+  ,
+  ('a0000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000099', 1);
 
 -- ============================================================
 -- Bookmarks
@@ -110,7 +117,9 @@ INSERT INTO votes (user_id, post_id, value) VALUES
 INSERT INTO bookmarks (user_id, post_id) VALUES
   ('a0000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000003'),
   ('a0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000001'),
-  ('a0000000-0000-0000-0000-000000000003', 'c0000000-0000-0000-0000-000000000010');
+  ('a0000000-0000-0000-0000-000000000003', 'c0000000-0000-0000-0000-000000000010')
+  ,
+  ('a0000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000099');
 
 -- ============================================================
 -- Tag Subscriptions

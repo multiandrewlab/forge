@@ -49,8 +49,14 @@ vi.mock('@/components/editor/AiSuggestion.vue', () => ({
 vi.mock('@/components/editor/EditorToolbar.vue', () => ({
   default: {
     name: 'EditorToolbar',
-    props: ['language', 'visibility', 'contentType', 'tags'],
-    emits: ['update:language', 'update:visibility', 'update:contentType', 'update:tags'],
+    props: ['language', 'visibility', 'contentType', 'tags', 'postId'],
+    emits: [
+      'update:language',
+      'update:visibility',
+      'update:contentType',
+      'update:tags',
+      'save-revision',
+    ],
     template: '<div data-testid="editor-toolbar-stub"></div>',
   },
 }));
@@ -230,6 +236,54 @@ describe('PostEditor', () => {
     });
   });
 
+  describe('markdown preview computed', () => {
+    // The `markdownPreviewHtml` computed has an early-return when
+    // `isMarkdownPreviewContentType` is false. The template gates the v-html
+    // binding behind a v-if for the same flag, so the early-return branch is
+    // never exercised through normal template flow. Read the computed
+    // directly via the component's setup state to cover the false branch.
+    it('returns an empty string when contentType is not "document"', async () => {
+      const w = mount(PostEditor, { props: { ...defaultProps, contentType: 'snippet' as const } });
+      await nextTick();
+
+      const setupState = (w.vm as Record<string, unknown>).$.devtoolsRawSetupState as
+        | Record<string, { value: string }>
+        | undefined;
+      const computedRef = setupState?.markdownPreviewHtml;
+      expect(computedRef?.value).toBe('');
+    });
+
+    it('returns sanitized HTML when contentType is "document"', async () => {
+      const w = mount(PostEditor, {
+        props: { ...defaultProps, contentType: 'document' as const, modelValue: '# Heading' },
+      });
+      await nextTick();
+
+      const setupState = (w.vm as Record<string, unknown>).$.devtoolsRawSetupState as
+        | Record<string, { value: string }>
+        | undefined;
+      const computedRef = setupState?.markdownPreviewHtml;
+      expect(computedRef?.value).toContain('<h1');
+    });
+  });
+
+  describe('cancel button', () => {
+    it('should render a Cancel button with the post-cancel-btn testid', () => {
+      const button = wrapper.find('[data-testid="post-cancel-btn"]');
+      expect(button.exists()).toBe(true);
+      expect(button.text()).toBe('Cancel');
+    });
+
+    it('should emit cancel when clicked', async () => {
+      const button = wrapper.find('[data-testid="post-cancel-btn"]');
+      await button.trigger('click');
+
+      const emitted = wrapper.emitted('cancel');
+      expect(emitted).toBeTruthy();
+      expect(emitted).toHaveLength(1);
+    });
+  });
+
   describe('event forwarding', () => {
     it('should forward update:modelValue from CodeEditor', async () => {
       const codeEditor = wrapper.findComponent({ name: 'CodeEditor' });
@@ -274,6 +328,31 @@ describe('PostEditor', () => {
       const emitted = wrapper.emitted('update:tags');
       expect(emitted).toBeTruthy();
       expect((emitted as unknown[][])[0]).toEqual([['vue', 'typescript']]);
+    });
+
+    it('should pass postId to EditorToolbar so it can render save-revision-btn', () => {
+      const w = mount(PostEditor, {
+        props: { ...defaultProps, postId: 'post-edit-123' },
+      });
+      const toolbar = w.findComponent({ name: 'EditorToolbar' });
+      expect(toolbar.props('postId')).toBe('post-edit-123');
+    });
+
+    it('should NOT pass a postId to EditorToolbar when none is supplied (new-post flow)', () => {
+      const toolbar = wrapper.findComponent({ name: 'EditorToolbar' });
+      expect(toolbar.props('postId')).toBeUndefined();
+    });
+
+    it('should forward save-revision from EditorToolbar so the page can POST a manual revision', async () => {
+      const w = mount(PostEditor, {
+        props: { ...defaultProps, postId: 'post-edit-123' },
+      });
+      const toolbar = w.findComponent({ name: 'EditorToolbar' });
+      await toolbar.vm.$emit('save-revision');
+
+      const emitted = w.emitted('save-revision');
+      expect(emitted).toBeTruthy();
+      expect(emitted).toHaveLength(1);
     });
   });
 

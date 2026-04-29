@@ -23,6 +23,17 @@ const tags = ref<string[]>([]);
 const loading = ref(true);
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
+// Snapshot of post metadata captured on mount, used to revert when the user
+// clicks Cancel. Auto-save fires synchronously on title/visibility/language/
+// contentType changes, so a Cancel that merely navigates away would still
+// leave the in-flight edits committed server-side. Capturing the snapshot
+// here lets handleCancel() PATCH the post back to its original state before
+// navigating, restoring the "discard in-flight changes" semantics.
+const originalTitle = ref('');
+const originalLanguage = ref('');
+const originalVisibility = ref<Visibility>('public');
+const originalContentType = ref<ContentType>('snippet');
+
 onMounted(async () => {
   const id = route.params.id as string;
   await fetchPost(id);
@@ -32,6 +43,10 @@ onMounted(async () => {
     language.value = currentPost.value.language ?? '';
     visibility.value = currentPost.value.visibility;
     contentType.value = currentPost.value.contentType;
+    originalTitle.value = currentPost.value.title;
+    originalLanguage.value = currentPost.value.language ?? '';
+    originalVisibility.value = currentPost.value.visibility;
+    originalContentType.value = currentPost.value.contentType;
   }
   loading.value = false;
 });
@@ -41,13 +56,17 @@ onBeforeUnmount(() => {
   store.clearPost();
 });
 
-// Auto-save: debounce 2s after content changes
+// Auto-save: debounce 2s after content changes. The timer ref is cleared
+// when the timeout fires so subsequent flush points (handleSaveDraft,
+// handleSaveRevision, handlePublish) correctly observe "no pending work" via
+// `if (debounceTimer)` guards instead of seeing a stale timeout id.
 watch(content, (newContent) => {
   if (loading.value) return;
   store.setDirty(true);
   if (debounceTimer) clearTimeout(debounceTimer);
   debounceTimer = setTimeout(() => {
     const id = route.params.id as string;
+    debounceTimer = null;
     saveRevision(id, newContent, null);
   }, 2000);
 });
@@ -71,6 +90,58 @@ async function handlePublish(): Promise<void> {
     await saveRevision(id, content.value, null);
   }
   await publishPost(id);
+  router.push({ name: 'post-view', params: { id } });
+}
+
+// Save Draft on the edit page: flush any pending content debounce timer so
+// the in-flight body change lands as a new revision immediately. The metadata
+// watcher already auto-saves title/visibility/language/contentType changes
+// synchronously, so this handler only needs to deal with the body timer.
+async function handleSaveDraft(): Promise<void> {
+  const id = route.params.id as string;
+  if (debounceTimer) {
+    clearTimeout(debounceTimer);
+    debounceTimer = null;
+    await saveRevision(id, content.value, null);
+    return;
+  }
+  // No pending body change; still create a manual snapshot to honor the
+  // user's explicit "Save Draft" intent. This mirrors the manual revision
+  // path used by save-revision-btn but without a custom message.
+  await saveRevision(id, content.value, null);
+}
+
+// Manual revision via save-revision-btn: POSTs the current body as a new
+// revision with an explicit message. Unlike auto-save (debounced) and
+// handleSaveDraft (untagged flush), this path always sends a message so the
+// timeline distinguishes manual snapshots from automatic ones.
+async function handleSaveRevision(): Promise<void> {
+  const id = route.params.id as string;
+  if (debounceTimer) {
+    clearTimeout(debounceTimer);
+    debounceTimer = null;
+  }
+  await saveRevision(id, content.value, 'Manual revision');
+}
+
+// Cancel: discard in-flight changes and return to the view page.
+//
+// Title / visibility / language / contentType auto-save synchronously via the
+// metadata watcher above, so by the time Cancel fires those changes already
+// landed server-side. We undo them by PATCHing the post back to the snapshot
+// captured on mount. Pending content debounce timers are cleared (no flush).
+async function handleCancel(): Promise<void> {
+  const id = route.params.id as string;
+  if (debounceTimer) {
+    clearTimeout(debounceTimer);
+    debounceTimer = null;
+  }
+  await updatePost(id, {
+    title: originalTitle.value,
+    visibility: originalVisibility.value,
+    language: originalLanguage.value || null,
+    contentType: originalContentType.value,
+  });
   router.push({ name: 'post-view', params: { id } });
 }
 </script>
@@ -116,7 +187,11 @@ async function handlePublish(): Promise<void> {
         v-model:tags="tags"
         :save-status="saveStatus"
         :last-saved-at="lastSavedAt"
+        :post-id="currentPost.id"
         @publish="handlePublish"
+        @save-draft="handleSaveDraft"
+        @save-revision="handleSaveRevision"
+        @cancel="handleCancel"
       />
 
       <div v-else class="text-gray-400 text-center py-12">

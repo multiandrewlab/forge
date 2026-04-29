@@ -111,6 +111,17 @@ describe('PostMetaHeader', () => {
       const authorLink = findAuthorLink(wrapper);
       expect(authorLink.text()).toContain('Test User');
     });
+
+    it('exposes data-testid="author-avatar" on the avatar element', () => {
+      const wrapper = mount(PostMetaHeader, {
+        props: { post: mockPost },
+        global: defaultGlobal,
+      });
+
+      const avatar = wrapper.find('[data-testid="author-avatar"]');
+      expect(avatar.exists()).toBe(true);
+      expect(avatar.text()).toBe('T');
+    });
   });
 
   describe('fork attribution', () => {
