@@ -1,7 +1,7 @@
 # Auth + Visibility Enforcement on Read Endpoints — Design
 
 **Date:** 2026-04-29
-**Status:** Draft REV 2 (after design-review-gate iteration 1 — Designer + Security blockers incorporated)
+**Status:** Draft REV 3 (after design-review-gate iter 2 — Designer blockers incorporated)
 **Closes:** [#62](https://github.com/multiandrewlab/forge/issues/62)
 **Provenance:** Issue #62 was filed during the issue #47 E2E rollout. The DoD bullet "view: permission private hidden from non-owner" assumed visibility enforcement on `GET /api/posts/:id`, but enforcement does not exist. The audit during this brainstorm widened the scope to all read endpoints.
 
@@ -364,3 +364,100 @@ This is **deferred to a follow-up issue** unless trivial to add in this PR (TBD 
 - [x] Database index migration added
 - [x] Coverage matrix specified (6×4 = 24 unit tests minimum)
 - [x] WebSocket broadcast mechanism decision deferred to plan with explicit selection rule
+
+---
+
+## REV 3 amendments (design-review-gate iteration 2 — Designer blockers)
+
+Iter 2 verdict: PM/Architect/Security/CTO APPROVED. Designer NEEDS_REVISION on 3 blockers. REV 3 sections below SUPERSEDE conflicting REV 2 / base content.
+
+### 1. Existing `'Forbidden'` strings updated for consistency (Designer blocker #1)
+
+The codebase has 5 existing bare `{ error: 'Forbidden' }` returns in `posts.ts` (lines 169, 208, 227, 381, 610). REV 2's "matches existing patterns" claim was wrong — there is NO consistent pattern; some 403s are bare, some descriptive.
+
+**REV 3 decision: update all 5 existing bare strings to descriptive ones in this PR.** Co-located change; trivial; eliminates inconsistency permanently.
+
+| Line                                              | Current       | New                                                  |
+| ------------------------------------------------- | ------------- | ---------------------------------------------------- |
+| `posts.ts:169` (PATCH /:id)                       | `'Forbidden'` | `'You can only edit your own posts'`                 |
+| `posts.ts:208` (DELETE /:id)                      | `'Forbidden'` | `'You can only delete your own posts'`               |
+| `posts.ts:227` (POST /:id/publish)                | `'Forbidden'` | `'You can only publish your own posts'`              |
+| `posts.ts:381` (POST /:id/revisions)              | `'Forbidden'` | `'You can only add revisions to your own posts'`     |
+| `posts.ts:610` (POST /:id/revisions/:rev/restore) | `'Forbidden'` | `'You can only restore revisions on your own posts'` |
+
+Plus the new visibility helper's 403 from REV 2: `'This post is private'`.
+
+After this change, all 403 responses in the codebase carry actionable strings.
+
+### 2. Frontend forbidden detection by status code, not message text (Designer blocker #2)
+
+REV 2 specified `/private|forbidden/i.test(error)` regex matching. Designer correctly flagged this as fragile (i18n-hostile, false positives on future "private" errors).
+
+**REV 3 decision: surface HTTP status from the composable; gate forbidden state on `error.status === 403`.**
+
+Two-step change:
+
+#### 2a. Update `packages/client/src/composables/usePosts.ts`
+
+Replace `error: Ref<string | null>` with a structured shape. Add an `errorStatus: Ref<number | null>` ref alongside, populated via `response.status` in the catch path of `fetchPost`/`fetchPostHistory`/etc. (Or replace the existing `error` with an object `{ message, status }`. Plan picks the less-invasive option — a separate `errorStatus` ref preserves the existing `error.value` string for backwards compatibility with components that show it.)
+
+```typescript
+const errorStatus = ref<number | null>(null);
+
+async function fetchPost(id: string): Promise<void> {
+  error.value = null;
+  errorStatus.value = null;
+  try {
+    const response = await apiFetch(`/api/posts/${id}`);
+    if (!response.ok) {
+      errorStatus.value = response.status;
+      error.value = await parseErrorMessage(response, 'Failed to fetch post');
+      return;
+    }
+    // ...
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Failed to fetch post';
+  }
+}
+```
+
+Export `errorStatus` from the composable's return.
+
+#### 2b. PostViewPage / PostHistoryPage forbidden state
+
+```vue
+<div v-if="errorStatus === 403" data-testid="forbidden-page" class="...">
+  <h2>This post is private</h2>
+  <p>{{ error || "The owner has not shared it with you." }}</p>
+</div>
+<div v-else-if="error" class="...">{{ error }}</div>
+```
+
+i18n-friendly + future-proof.
+
+### 3. Client route entry-point audit (Designer blocker #3)
+
+Designer asked: which client routes hit the 6 audited endpoints, and does each render `forbidden-page`?
+
+**REV 3 audit result:**
+
+| Client route                            | Server endpoints called                                                                                   | Forbidden-state component                                                                |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `/posts/:id`                            | `GET /:id`, `GET /:id/comments`, `GET /:id/files` (inline), `GET /:id/files/:fileId` (signed-URL fetches) | `PostViewPage.vue` (REV 2 §"Client-side forbidden states")                               |
+| `/posts/:id/edit`                       | `GET /:id`, `PATCH /:id`, etc.                                                                            | `PostEditPage.vue:101` already has `forbidden-page` testid (existing pattern, unchanged) |
+| `/posts/:id/history`                    | `GET /:id/revisions`, `GET /:id/revisions/:rev`                                                           | `PostHistoryPage.vue` (REV 2 — error UI added)                                           |
+| `/posts/:id/files/<fileId>`             | n/a — files are NOT a Vue route; they're served via signed URLs                                           | Page-level forbidden state on the calling page handles                                   |
+| `/posts/:id#comment-<id>` (hash anchor) | n/a — hash anchors are within `PostViewPage`                                                              | PostViewPage's forbidden state covers                                                    |
+
+**Conclusion: the three pages (PostViewPage, PostEditPage, PostHistoryPage) are the ONLY client entry points to the 6 audited endpoints.** PostEditPage already has the pattern; PostViewPage and PostHistoryPage are the changes in this PR. No deep-link route gaps.
+
+For the sub-resource endpoints (`/comments`, `/revisions`, `/files`): they're called from WITHIN the three pages. The page-level `GET /:id` 403 short-circuits the page render BEFORE those sub-fetches fire (the existing `v-if` / loading state on currentPost gates the children). So sub-resource 403s never reach the user as a separate UX state — the page-level forbidden state is the only state.
+
+Plan-time verification: confirm that `PostViewPage`'s `onMounted` order is `fetchPost → fetchComments / fetchFiles` and that the post-fetch 403 prevents the children from firing. If not (race condition possible), the design holds either way because EVERY child also gets a 403 and we'd render the same forbidden state for the first one to land.
+
+### REV 3 acceptance criteria
+
+- [x] 5 bare `'Forbidden'` strings updated to descriptive (server-side consistency)
+- [x] Frontend forbidden detection switched to HTTP status code (`error.status === 403`) — i18n-friendly
+- [x] Client entry-point audit: 3 Vue routes (PostView, PostEdit, PostHistory) are the only entry points to the 6 audited endpoints; sub-resource gaps are covered by page-level forbidden state
+- [x] Composable change: `errorStatus` ref added to `usePosts`
