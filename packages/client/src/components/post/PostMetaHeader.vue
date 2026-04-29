@@ -35,6 +35,7 @@
       <span
         v-for="tag in post.tags"
         :key="tag"
+        :data-testid="`post-tag-chip-${tag}`"
         class="rounded bg-gray-700 px-2 py-0.5 text-xs text-gray-300"
       >
         #{{ tag }}
