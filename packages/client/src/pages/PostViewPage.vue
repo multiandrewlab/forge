@@ -10,17 +10,25 @@ import { useComments } from '@/composables/useComments';
 import { useVotes } from '@/composables/useVotes';
 import { storeToRefs } from 'pinia';
 import { usePostsStore } from '@/stores/posts';
+import { useFilesStore } from '@/stores/files';
 import { useAuth } from '@/composables/useAuth';
-import type { PostWithRevision } from '@forge/shared';
+import type { PostFile, PostWithRevision } from '@forge/shared';
 
 const route = useRoute();
 const router = useRouter();
 const { fetchPost, deletePost, forkPost, error } = usePosts();
 const store = usePostsStore();
+const filesStore = useFilesStore();
 const { currentPost } = storeToRefs(store);
 const { user } = useAuth();
 const loading = ref(true);
 const isAuthor = ref(false);
+// Files attached to the latest revision. Rendered as a small `post-file-list`
+// surface so multi-file posts (uploaded through the new/edit flow) show their
+// attachments on the read-only view. Empty for single-file posts — the testid
+// is only emitted when files exist so existing single-file specs aren't
+// affected by an incidental empty container.
+const revisionFiles = ref<PostFile[]>([]);
 
 const cleanupFns: Array<() => void> = [];
 
@@ -66,6 +74,14 @@ onMounted(async () => {
   }
   // Eagerly load comments so the thread renders without a separate user click.
   await useComments().fetchComments(id);
+  // Fetch files attached to the latest revision. Skipped silently when there
+  // is no revision (e.g., 404 path) — `revisionFiles` stays empty and the
+  // post-file-list block is not rendered.
+  const rev = currentPost.value?.revisions?.[0];
+  if (rev) {
+    await filesStore.fetchFiles(id, rev.id);
+    revisionFiles.value = filesStore.filesByRevision[rev.id] ?? [];
+  }
   loading.value = false;
 
   // Subscribe to real-time comment and vote events for this post
@@ -168,6 +184,20 @@ async function handleFork(): Promise<void> {
           :code="latestRevision.content"
           :language="currentPost.language ?? undefined"
         />
+
+        <ul
+          v-if="revisionFiles.length > 0"
+          data-testid="post-file-list"
+          class="mt-3 flex flex-wrap gap-2"
+        >
+          <li
+            v-for="file in revisionFiles"
+            :key="file.id"
+            class="rounded border border-surface-500 bg-surface-700 px-2 py-1 text-xs text-gray-300"
+          >
+            {{ file.filename }}
+          </li>
+        </ul>
 
         <PostActions class="mt-4" :post="buildPostForActions(currentPost)" @fork="handleFork" />
 

@@ -143,6 +143,7 @@ export function usePosts() {
     postId: string,
     content: string,
     message: string | null,
+    stagedFileIds?: string[],
   ): Promise<void> {
     error.value = null;
     store.setSaveStatus('saving');
@@ -150,8 +151,12 @@ export function usePosts() {
       // Server's createRevisionSchema treats `message` as optional string —
       // sending an explicit null fails validation, so we only include the
       // field when the caller actually has a message to attach.
-      const body: { content: string; message?: string } = { content };
+      const body: { content: string; message?: string; stagedFileIds?: string[] } = { content };
       if (message !== null) body.message = message;
+      // Only include stagedFileIds when callers actually have files to commit.
+      // Sending an empty array is harmless server-side, but omitting it keeps
+      // the payload identical to the pre-multi-file path for existing tests.
+      if (stagedFileIds && stagedFileIds.length > 0) body.stagedFileIds = stagedFileIds;
       const response = await apiFetch(`/api/posts/${postId}/revisions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

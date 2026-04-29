@@ -42,6 +42,20 @@ vi.mock('@/stores/posts', () => ({
   }),
 }));
 
+// --- Mock useFilesStore ---
+// PostViewPage now fetches the post's revision files for the multi-file
+// post-file-list surface (issue #47 Task 7.3). The default returns no files
+// so existing single-file specs still see an empty list.
+const mockFetchFiles = vi.fn().mockResolvedValue(undefined);
+const mockFilesByRevision: Ref<Record<string, unknown[]>> = ref({});
+
+vi.mock('@/stores/files', () => ({
+  useFilesStore: () => ({
+    fetchFiles: mockFetchFiles,
+    filesByRevision: mockFilesByRevision.value,
+  }),
+}));
+
 // --- Mock pinia storeToRefs to return our mock refs ---
 vi.mock('pinia', async () => {
   const actual = await vi.importActual<typeof import('pinia')>('pinia');

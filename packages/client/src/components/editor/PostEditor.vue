@@ -40,14 +40,20 @@ const emit = defineEmits<{
   publish: [];
   'save-draft': [];
   cancel: [];
+  // Emitted when a file is picked before the post exists (no postId yet).
+  // Parents (PostNewPage) collect these and flush them to the server after
+  // createPost so they get committed to the initial revision.
+  'local-file-staged': [file: File];
 }>();
 
 const filesStore = useFilesStore();
 const isDragging = ref(false);
 // Local list of files attached pre-creation (no postId yet). Mirrors the
 // staged-files concept but lives in the component so the new-post page can
-// preview attachments before the post exists.
-const localStagedFiles = ref<{ name: string; size: number }[]>([]);
+// preview attachments before the post exists. We retain the raw File so the
+// parent can flush them to the server once the post is created (parent reads
+// the array via the `local-files` v-model — defined via emit/prop below).
+const localStagedFiles = ref<File[]>([]);
 const showFileSidebar = computed(() => filesStore.stagedFiles.length > 0);
 
 function handleDrop(e: DragEvent): void {
@@ -72,7 +78,8 @@ function handleLocalFileChange(event: Event): void {
     if (props.postId) {
       void filesStore.uploadFile(props.postId, file);
     } else {
-      localStagedFiles.value.push({ name: file.name, size: file.size });
+      localStagedFiles.value.push(file);
+      emit('local-file-staged', file);
     }
   }
 }

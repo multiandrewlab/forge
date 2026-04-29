@@ -31,6 +31,7 @@ vi.mock('@/components/editor/PostEditor.vue', () => ({
       'update:tags',
       'publish',
       'save-draft',
+      'local-file-staged',
     ],
     template: '<div data-testid="post-editor-stub"></div>',
   },
@@ -54,6 +55,18 @@ const mockDetectLanguage = vi.fn();
 
 vi.mock('@/lib/detectLanguage', () => ({
   detectLanguage: (...args: unknown[]) => mockDetectLanguage(...args),
+}));
+
+// useFilesStore is now consumed by PostNewPage to flush locally-staged files
+// after createPost succeeds. Default returns null so tests that don't stage
+// files see no file uploads — they fall through to the no-files saveRevision
+// branch (or skip saveRevision entirely when content is empty).
+const mockUploadFile = vi.fn().mockResolvedValue(null);
+
+vi.mock('@/stores/files', () => ({
+  useFilesStore: () => ({
+    uploadFile: mockUploadFile,
+  }),
 }));
 
 import PostNewPage from '@/pages/PostNewPage.vue';
@@ -91,6 +104,8 @@ describe('PostNewPage', () => {
     mockSaveRevision.mockReset();
     mockPublishPost.mockReset();
     mockDetectLanguage.mockReset();
+    mockUploadFile.mockReset();
+    mockUploadFile.mockResolvedValue(null);
     mockError.value = null;
   });
 
@@ -439,6 +454,95 @@ describe('PostNewPage', () => {
       await flushPromises();
 
       expect(editor.props('language')).toBe('');
+    });
+  });
+
+  // ── Locally-staged file flush (multi-file post issue #47 Task 7.3) ─
+  // PostEditor emits `local-file-staged` for each pre-create file pick;
+  // PostNewPage accumulates them, then on save uploads each via
+  // filesStore.uploadFile(postId, file) and forwards the resulting IDs to
+  // saveRevision via its optional stagedFileIds arg.
+  describe('locally-staged file flush', () => {
+    function makeFile(name: string, body = 'data'): File {
+      return new File([body], name, { type: 'text/plain' });
+    }
+
+    it('should upload locally-staged files and forward IDs to saveRevision on save-draft', async () => {
+      mockCreatePost.mockResolvedValue('post-with-files');
+      mockSaveRevision.mockResolvedValue(undefined);
+      mockUploadFile
+        .mockResolvedValueOnce({ id: 'file-1', filename: 'one.txt' })
+        .mockResolvedValueOnce({ id: 'file-2', filename: 'two.txt' });
+      const wrapper = await mountPage();
+
+      const editor = wrapper.findComponent({ name: 'PostEditor' });
+      await editor.vm.$emit('update:modelValue', 'body content');
+      await editor.vm.$emit('local-file-staged', makeFile('one.txt'));
+      await editor.vm.$emit('local-file-staged', makeFile('two.txt'));
+      await editor.vm.$emit('save-draft');
+      await flushPromises();
+
+      expect(mockUploadFile).toHaveBeenCalledTimes(2);
+      expect(mockUploadFile).toHaveBeenNthCalledWith(1, 'post-with-files', expect.any(File));
+      expect(mockUploadFile).toHaveBeenNthCalledWith(2, 'post-with-files', expect.any(File));
+      // saveRevision called with the 4-arg form including the ID list
+      expect(mockSaveRevision).toHaveBeenCalledWith('post-with-files', 'body content', null, [
+        'file-1',
+        'file-2',
+      ]);
+    });
+
+    it('should call saveRevision with files even when content is empty on save-draft', async () => {
+      mockCreatePost.mockResolvedValue('post-files-only');
+      mockSaveRevision.mockResolvedValue(undefined);
+      mockUploadFile.mockResolvedValueOnce({ id: 'file-only', filename: 'only.txt' });
+      const wrapper = await mountPage();
+
+      const editor = wrapper.findComponent({ name: 'PostEditor' });
+      await editor.vm.$emit('local-file-staged', makeFile('only.txt'));
+      // Empty content path — files-only triggers the "stagedFileIds.length > 0"
+      // branch of the gating condition.
+      await editor.vm.$emit('save-draft');
+      await flushPromises();
+
+      expect(mockSaveRevision).toHaveBeenCalledWith('post-files-only', '', null, ['file-only']);
+    });
+
+    it('should skip uploaded entries when filesStore.uploadFile returns null', async () => {
+      mockCreatePost.mockResolvedValue('post-skip-null');
+      mockSaveRevision.mockResolvedValue(undefined);
+      mockUploadFile
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ id: 'file-b', filename: 'b.txt' });
+      const wrapper = await mountPage();
+
+      const editor = wrapper.findComponent({ name: 'PostEditor' });
+      await editor.vm.$emit('update:modelValue', 'with body');
+      await editor.vm.$emit('local-file-staged', makeFile('a.txt'));
+      await editor.vm.$emit('local-file-staged', makeFile('b.txt'));
+      await editor.vm.$emit('save-draft');
+      await flushPromises();
+
+      expect(mockSaveRevision).toHaveBeenCalledWith('post-skip-null', 'with body', null, [
+        'file-b',
+      ]);
+    });
+
+    it('should upload locally-staged files and forward IDs to saveRevision on publish', async () => {
+      mockCreatePost.mockResolvedValue('post-pub-files');
+      mockSaveRevision.mockResolvedValue(undefined);
+      mockPublishPost.mockResolvedValue(undefined);
+      mockUploadFile.mockResolvedValueOnce({ id: 'file-p', filename: 'p.txt' });
+      const wrapper = await mountPage();
+
+      const editor = wrapper.findComponent({ name: 'PostEditor' });
+      await editor.vm.$emit('update:modelValue', 'pub body');
+      await editor.vm.$emit('local-file-staged', makeFile('p.txt'));
+      await editor.vm.$emit('publish');
+      await flushPromises();
+
+      expect(mockSaveRevision).toHaveBeenCalledWith('post-pub-files', 'pub body', null, ['file-p']);
+      expect(mockPublishPost).toHaveBeenCalledWith('post-pub-files');
     });
   });
 });
