@@ -64,7 +64,21 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
   // POST /register
   app.post(
     '/register',
-    { config: { rateLimit: { max: 3, timeWindow: '1 hour' } } },
+    {
+      config: {
+        // E2E journey + register suite fires several registrations per run
+        // (journey smoke + register-success + register-duplicate-email + the
+        // 5-consecutive-local-runs stability gate). The 3/hour production cap
+        // exhausts in a single CI run when both suites land together. Lift
+        // the per-route cap when E2E_MODE=1, matching the same pattern used
+        // by /login below. The strict 3/hour production branch is unchanged
+        // and still covered by the dedicated rate-limit tests.
+        rateLimit:
+          process.env.E2E_MODE === '1'
+            ? { max: 10_000, timeWindow: '1 hour' }
+            : { max: 3, timeWindow: '1 hour' },
+      },
+    },
     async (request, reply) => {
       const parsed = registerSchema.safeParse(request.body);
       if (!parsed.success) {
