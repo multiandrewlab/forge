@@ -7,6 +7,7 @@
         class="flex items-center gap-3"
       >
         <div
+          data-testid="author-avatar"
           class="flex h-8 w-8 items-center justify-center rounded-full bg-primary/20 text-sm font-bold text-primary"
         >
           {{ post.author.displayName[0]?.toUpperCase() }}
