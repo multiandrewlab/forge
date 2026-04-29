@@ -384,7 +384,50 @@ describe('PostViewPage', () => {
   });
 
   describe('delete action', () => {
-    it('should call deletePost and navigate to home on successful delete', async () => {
+    it('opens the confirm dialog (does NOT delete) when the delete button is clicked', async () => {
+      const post = createMockPost({ authorId: 'user-1' });
+      mockFetchPost.mockImplementation(async () => {
+        mockCurrentPost.value = post;
+      });
+      mockUser.value = createMockUser({ id: 'user-1' });
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      // Dialog hidden by default.
+      expect(wrapper.find('[data-testid="post-delete-dialog"]').exists()).toBe(false);
+
+      await wrapper.find('[data-testid="post-delete-btn"]').trigger('click');
+      await flushPromises();
+
+      // Dialog now visible; deletePost was NOT called yet.
+      expect(wrapper.find('[data-testid="post-delete-dialog"]').exists()).toBe(true);
+      expect(mockDeletePost).not.toHaveBeenCalled();
+    });
+
+    it('cancel hides the dialog and does not call deletePost', async () => {
+      const post = createMockPost({ authorId: 'user-1' });
+      mockFetchPost.mockImplementation(async () => {
+        mockCurrentPost.value = post;
+      });
+      mockUser.value = createMockUser({ id: 'user-1' });
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      await wrapper.find('[data-testid="post-delete-btn"]').trigger('click');
+      await flushPromises();
+      expect(wrapper.find('[data-testid="post-delete-dialog"]').exists()).toBe(true);
+
+      await wrapper.find('[data-testid="post-delete-cancel"]').trigger('click');
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid="post-delete-dialog"]').exists()).toBe(false);
+      expect(mockDeletePost).not.toHaveBeenCalled();
+      expect(router.currentRoute.value.name).toBe('post-view');
+    });
+
+    it('confirm calls deletePost and navigates to home on success', async () => {
       const post = createMockPost({ authorId: 'user-1' });
       mockFetchPost.mockImplementation(async () => {
         mockCurrentPost.value = post;
@@ -397,15 +440,15 @@ describe('PostViewPage', () => {
       const wrapper = await mountPage();
       await flushPromises();
 
-      const deleteButton = wrapper.findAll('button').find((b) => b.text() === 'Delete') as
-        | ReturnType<typeof wrapper.find>
-        | undefined;
-      expect(deleteButton).toBeDefined();
-      await (deleteButton as ReturnType<typeof wrapper.find>).trigger('click');
+      await wrapper.find('[data-testid="post-delete-btn"]').trigger('click');
+      await flushPromises();
+      await wrapper.find('[data-testid="post-delete-confirm"]').trigger('click');
       await flushPromises();
 
       expect(mockDeletePost).toHaveBeenCalledWith('post-1');
       expect(router.currentRoute.value.path).toBe('/');
+      // Dialog dismissed.
+      expect(wrapper.find('[data-testid="post-delete-dialog"]').exists()).toBe(false);
     });
   });
 
@@ -565,11 +608,11 @@ describe('PostViewPage', () => {
       const wrapper = await mountPage();
       await flushPromises();
 
-      const deleteButton = wrapper.findAll('button').find((b) => b.text() === 'Delete') as
-        | ReturnType<typeof wrapper.find>
-        | undefined;
-      expect(deleteButton).toBeDefined();
-      await (deleteButton as ReturnType<typeof wrapper.find>).trigger('click');
+      // Open dialog, then confirm — but deletePost surfaces an error so the
+      // post-delete navigation guard short-circuits.
+      await wrapper.find('[data-testid="post-delete-btn"]').trigger('click');
+      await flushPromises();
+      await wrapper.find('[data-testid="post-delete-confirm"]').trigger('click');
       await flushPromises();
 
       // Should stay on the post-view route, not navigate to '/'

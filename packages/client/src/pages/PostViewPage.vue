@@ -24,6 +24,11 @@ const isAuthor = ref(false);
 
 const cleanupFns: Array<() => void> = [];
 
+// Delete-confirm dialog (Task 4 of issue #47). The plain Delete button
+// previously triggered an irreversible DELETE on click; the dialog gates the
+// action behind an explicit confirmation step.
+const showDeleteDialog = ref(false);
+
 const latestRevision = computed(() => {
   if (!currentPost.value) return undefined;
   return currentPost.value.revisions[0];
@@ -74,7 +79,8 @@ onUnmounted(() => {
   }
 });
 
-async function handleDelete(): Promise<void> {
+async function confirmDelete(): Promise<void> {
+  showDeleteDialog.value = false;
   const id = route.params.id as string;
   await deletePost(id);
   if (!error.value) {
@@ -148,8 +154,9 @@ async function handleFork(): Promise<void> {
               Edit
             </router-link>
             <button
+              data-testid="post-delete-btn"
               class="text-sm px-3 py-1 rounded border border-red-500 text-red-400 hover:bg-red-900/30"
-              @click="handleDelete"
+              @click="showDeleteDialog = true"
             >
               Delete
             </button>
@@ -170,6 +177,33 @@ async function handleFork(): Promise<void> {
       </template>
 
       <div v-else class="text-gray-400 text-center py-12">Post not found</div>
+
+      <div
+        v-if="showDeleteDialog"
+        data-testid="post-delete-dialog"
+        class="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
+      >
+        <div class="bg-surface border border-gray-700 rounded p-6 max-w-md">
+          <h2 class="text-lg font-semibold text-white mb-2">Delete this post?</h2>
+          <p class="text-sm text-gray-400 mb-4">This action cannot be undone.</p>
+          <div class="flex justify-end gap-2">
+            <button
+              data-testid="post-delete-cancel"
+              class="px-3 py-1 rounded border border-gray-600 text-gray-300"
+              @click="showDeleteDialog = false"
+            >
+              Cancel
+            </button>
+            <button
+              data-testid="post-delete-confirm"
+              class="px-3 py-1 rounded bg-red-600 text-white"
+              @click="confirmDelete"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
