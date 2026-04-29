@@ -30,12 +30,27 @@ jobs:
     continue-on-error: true
     timeout-minutes: 15
 
+    # The github-script "Comment on PR with artifact link" step needs to write
+    # to issues / pull-requests; default GITHUB_TOKEN read-only for forks plus
+    # a hardened branch-protection makes the implicit grant insufficient.
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+
     # Pattern mirrors .github/workflows/bruno-regression.yml:
     #   - postgres user/password = forge/forge (NOT the docker-compose forge_dev value)
     #   - schema applied via `cd packages/server && npm run migrate:up`
     #   - seed applied via `psql -f scripts/seed.sql`
     # Migration 001 already runs `CREATE EXTENSION IF NOT EXISTS uuid-ossp/pg_trgm/unaccent`,
     # so we do NOT need to apply docker/init-db.sql separately.
+    #
+    # MinIO note: we cannot use `services:` for MinIO because GitHub Actions'
+    # `services:` schema has no `command:` field — only env/ports/options.
+    # The `minio/minio:latest` image has no default `server /data` command,
+    # so without a CMD it just prints help and exits (or runs idle, never
+    # binding port 9000). We launch MinIO with an explicit `docker run` step
+    # below so we can pass `server /data` and bind the right port.
     services:
       postgres:
         image: postgres:16-alpine
@@ -47,18 +62,6 @@ jobs:
           - 5432:5432
         options: >-
           --health-cmd "pg_isready -U forge"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 10
-      minio:
-        image: minio/minio:latest
-        env:
-          MINIO_ROOT_USER: forge_minio
-          MINIO_ROOT_PASSWORD: forge_minio_secret
-        ports:
-          - 9000:9000
-        options: >-
-          --health-cmd "curl -f http://localhost:9000/minio/health/live"
           --health-interval 5s
           --health-timeout 3s
           --health-retries 10
@@ -89,6 +92,31 @@ jobs:
 
       - name: Build client (production)
         run: npm run build --workspace=@forge/client
+
+      - name: Start MinIO
+        # GitHub Actions `services:` has no `command:` field; minio:latest has
+        # no default CMD that runs the server. So we launch it explicitly.
+        run: |
+          docker run -d --name minio \
+            -e MINIO_ROOT_USER=forge_minio \
+            -e MINIO_ROOT_PASSWORD=forge_minio_secret \
+            -p 9000:9000 \
+            minio/minio:latest server /data
+
+      - name: Wait for MinIO
+        # Poll /minio/health/live from the runner — the minio image lacks
+        # curl/wget so a service-level --health-cmd can't work.
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:9000/minio/health/live >/dev/null 2>&1; then
+              echo "MinIO ready after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "MinIO did not become ready in 60s"
+          docker logs minio | tail -50 || true
+          exit 1
 
       - name: Start API server
         env:
@@ -169,10 +197,11 @@ jobs:
             ${{ runner.temp }}/preview.log
           retention-days: 7
 
-      # Default GITHUB_TOKEN write perms for `pull_request` cover issues:write
-      # (PR comments use the issues API). If repo branch protection tightens
-      # this, add `permissions: { issues: write, pull-requests: write,
-      # contents: read }` at the job level.
+      # PR comments use the issues API. The job-level `permissions:` block
+      # above explicitly grants `issues: write` + `pull-requests: write`
+      # because the default GITHUB_TOKEN grant for `pull_request` is NOT
+      # sufficient on this repo (PR #59's first run hit "Resource not
+      # accessible by integration").
       - name: Comment on PR with artifact link
         if: failure() && github.event_name == 'pull_request'
         uses: actions/github-script@v7
