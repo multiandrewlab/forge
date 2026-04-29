@@ -10,6 +10,11 @@ const props = defineProps<{
   visibility: Visibility;
   contentType: ContentType;
   tags: string[];
+  // postId is set when the toolbar is mounted on the edit page (post already
+  // exists). Passing it on the new-post page would be incorrect — there is no
+  // id to attach a revision to. The save-revision-btn renders only when
+  // postId is present, scoping the manual-revision affordance to /edit pages.
+  postId?: string;
 }>();
 
 const emit = defineEmits<{
@@ -17,6 +22,7 @@ const emit = defineEmits<{
   'update:visibility': [value: Visibility];
   'update:contentType': [value: ContentType];
   'update:tags': [value: string[]];
+  'save-revision': [];
 }>();
 
 const { searchTags } = useTags();
@@ -116,6 +122,10 @@ function removeTag(index: number): void {
   const updated = props.tags.filter((_, i) => i !== index);
   emit('update:tags', updated);
 }
+
+function onSaveRevision(): void {
+  emit('save-revision');
+}
 </script>
 
 <template>
@@ -153,6 +163,16 @@ function removeTag(index: number): void {
       @click="toggleVisibility"
     >
       {{ visibility === 'public' ? 'Public' : 'Private' }}
+    </button>
+
+    <button
+      v-if="postId"
+      type="button"
+      data-testid="save-revision-btn"
+      class="rounded border border-surface-500 px-3 py-1 text-sm text-gray-300 hover:bg-surface-600 hover:text-white"
+      @click="onSaveRevision"
+    >
+      Save Revision
     </button>
 
     <div class="flex flex-wrap items-center gap-1">

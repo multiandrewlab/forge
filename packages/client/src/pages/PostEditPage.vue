@@ -56,13 +56,17 @@ onBeforeUnmount(() => {
   store.clearPost();
 });
 
-// Auto-save: debounce 2s after content changes
+// Auto-save: debounce 2s after content changes. The timer ref is cleared
+// when the timeout fires so subsequent flush points (handleSaveDraft,
+// handleSaveRevision, handlePublish) correctly observe "no pending work" via
+// `if (debounceTimer)` guards instead of seeing a stale timeout id.
 watch(content, (newContent) => {
   if (loading.value) return;
   store.setDirty(true);
   if (debounceTimer) clearTimeout(debounceTimer);
   debounceTimer = setTimeout(() => {
     const id = route.params.id as string;
+    debounceTimer = null;
     saveRevision(id, newContent, null);
   }, 2000);
 });
@@ -87,6 +91,37 @@ async function handlePublish(): Promise<void> {
   }
   await publishPost(id);
   router.push({ name: 'post-view', params: { id } });
+}
+
+// Save Draft on the edit page: flush any pending content debounce timer so
+// the in-flight body change lands as a new revision immediately. The metadata
+// watcher already auto-saves title/visibility/language/contentType changes
+// synchronously, so this handler only needs to deal with the body timer.
+async function handleSaveDraft(): Promise<void> {
+  const id = route.params.id as string;
+  if (debounceTimer) {
+    clearTimeout(debounceTimer);
+    debounceTimer = null;
+    await saveRevision(id, content.value, null);
+    return;
+  }
+  // No pending body change; still create a manual snapshot to honor the
+  // user's explicit "Save Draft" intent. This mirrors the manual revision
+  // path used by save-revision-btn but without a custom message.
+  await saveRevision(id, content.value, null);
+}
+
+// Manual revision via save-revision-btn: POSTs the current body as a new
+// revision with an explicit message. Unlike auto-save (debounced) and
+// handleSaveDraft (untagged flush), this path always sends a message so the
+// timeline distinguishes manual snapshots from automatic ones.
+async function handleSaveRevision(): Promise<void> {
+  const id = route.params.id as string;
+  if (debounceTimer) {
+    clearTimeout(debounceTimer);
+    debounceTimer = null;
+  }
+  await saveRevision(id, content.value, 'Manual revision');
 }
 
 // Cancel: discard in-flight changes and return to the view page.
@@ -152,7 +187,10 @@ async function handleCancel(): Promise<void> {
         v-model:tags="tags"
         :save-status="saveStatus"
         :last-saved-at="lastSavedAt"
+        :post-id="currentPost.id"
         @publish="handlePublish"
+        @save-draft="handleSaveDraft"
+        @save-revision="handleSaveRevision"
         @cancel="handleCancel"
       />
 

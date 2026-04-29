@@ -21,6 +21,7 @@ vi.mock('@/components/editor/PostEditor.vue', () => ({
       'tags',
       'saveStatus',
       'lastSavedAt',
+      'postId',
     ],
     emits: [
       'update:modelValue',
@@ -30,6 +31,8 @@ vi.mock('@/components/editor/PostEditor.vue', () => ({
       'update:contentType',
       'update:tags',
       'publish',
+      'save-draft',
+      'save-revision',
       'cancel',
     ],
     template: '<div data-testid="post-editor-stub"></div>',
@@ -665,6 +668,158 @@ describe('PostEditPage', () => {
         'post-abc',
         expect.objectContaining({ language: null }),
       );
+    });
+  });
+
+  // ── postId pass-through ────────────────────────────────────────
+  // PostEditPage must hand the loaded post's id to PostEditor so the toolbar
+  // can render the save-revision-btn (which is gated on the postId prop).
+  describe('postId pass-through', () => {
+    it('should pass currentPost.id to PostEditor as the postId prop', async () => {
+      const post = createMockPost({ id: 'post-pass-through-xyz' });
+      mockFetchPost.mockImplementation(async () => {
+        const store = usePostsStore();
+        store.setPost(post);
+      });
+      const wrapper = await mountPage('post-pass-through-xyz');
+      await flushPromises();
+
+      const editor = wrapper.findComponent({ name: 'PostEditor' });
+      expect(editor.props('postId')).toBe('post-pass-through-xyz');
+    });
+  });
+
+  // ── Save Draft (edit page) ────────────────────────────────────
+  // On the edit page, the Save Draft button on PostEditor flushes any pending
+  // body debounce timer so the in-flight change lands as a revision
+  // immediately. When no timer is pending, it still creates an untagged
+  // snapshot to honor the user's explicit save intent.
+  describe('save-draft handler (edit page)', () => {
+    async function mountWithPost() {
+      const post = createMockPost();
+      mockFetchPost.mockImplementation(async () => {
+        const store = usePostsStore();
+        store.setPost(post);
+      });
+      mockSaveRevision.mockResolvedValue(undefined);
+      const wrapper = await mountPage();
+      await flushPromises();
+      return wrapper;
+    }
+
+    it('should flush a pending body debounce timer and call saveRevision once', async () => {
+      const wrapper = await mountWithPost();
+      const editor = wrapper.findComponent({ name: 'PostEditor' });
+
+      // Arm the body debounce timer with a content change.
+      await editor.vm.$emit('update:modelValue', 'flushed body');
+      await flushPromises();
+      mockSaveRevision.mockClear();
+
+      // Save Draft fires before the 2s timer would auto-fire.
+      await editor.vm.$emit('save-draft');
+      await flushPromises();
+
+      expect(mockSaveRevision).toHaveBeenCalledTimes(1);
+      expect(mockSaveRevision).toHaveBeenCalledWith('post-abc', 'flushed body', null);
+
+      // Advancing past 2s must NOT fire saveRevision again — proves the
+      // pending timer was cleared, not duplicated.
+      vi.advanceTimersByTime(2000);
+      await flushPromises();
+      expect(mockSaveRevision).toHaveBeenCalledTimes(1);
+    });
+
+    it('should still call saveRevision when no debounce timer is pending', async () => {
+      const wrapper = await mountWithPost();
+      const editor = wrapper.findComponent({ name: 'PostEditor' });
+
+      // Vue's content watcher fires once on mount as content is hydrated from
+      // the loaded post. Drain that initial debounce window so debounceTimer
+      // resets to null before exercising the no-pending branch.
+      vi.advanceTimersByTime(2000);
+      await flushPromises();
+      mockSaveRevision.mockClear();
+
+      // No pending timer at this point → save-draft hits the no-pending branch.
+      await editor.vm.$emit('save-draft');
+      await flushPromises();
+
+      // Initial body content from the seeded post is sent.
+      expect(mockSaveRevision).toHaveBeenCalledTimes(1);
+      expect(mockSaveRevision).toHaveBeenCalledWith('post-abc', 'console.log("hello")', null);
+    });
+  });
+
+  // ── Save Revision (manual snapshot via button) ────────────────
+  // The save-revision-btn on the toolbar emits save-revision from PostEditor
+  // up to PostEditPage. The handler clears any pending body debounce timer
+  // (so it doesn't double-fire) and POSTs the current body with an explicit
+  // "Manual revision" message so the timeline distinguishes manual snapshots.
+  describe('save-revision handler (edit page)', () => {
+    async function mountWithPost() {
+      const post = createMockPost();
+      mockFetchPost.mockImplementation(async () => {
+        const store = usePostsStore();
+        store.setPost(post);
+      });
+      mockSaveRevision.mockResolvedValue(undefined);
+      const wrapper = await mountPage();
+      await flushPromises();
+      return wrapper;
+    }
+
+    it('should call saveRevision with the current content and a "Manual revision" message', async () => {
+      const wrapper = await mountWithPost();
+      const editor = wrapper.findComponent({ name: 'PostEditor' });
+
+      // Body is unchanged from initial — manual button still snapshots it.
+      await editor.vm.$emit('save-revision');
+      await flushPromises();
+
+      expect(mockSaveRevision).toHaveBeenCalledWith(
+        'post-abc',
+        'console.log("hello")',
+        'Manual revision',
+      );
+    });
+
+    it('should send the latest content when the body has been changed before clicking', async () => {
+      const wrapper = await mountWithPost();
+      const editor = wrapper.findComponent({ name: 'PostEditor' });
+
+      await editor.vm.$emit('update:modelValue', 'updated body before manual save');
+      await flushPromises();
+      mockSaveRevision.mockClear();
+
+      await editor.vm.$emit('save-revision');
+      await flushPromises();
+
+      expect(mockSaveRevision).toHaveBeenCalledWith(
+        'post-abc',
+        'updated body before manual save',
+        'Manual revision',
+      );
+    });
+
+    it('should clear a pending debounce timer so the auto-save does not double-fire', async () => {
+      const wrapper = await mountWithPost();
+      const editor = wrapper.findComponent({ name: 'PostEditor' });
+
+      await editor.vm.$emit('update:modelValue', 'pending body');
+      await flushPromises();
+      mockSaveRevision.mockClear();
+
+      await editor.vm.$emit('save-revision');
+      await flushPromises();
+
+      // Manual save fired exactly once.
+      expect(mockSaveRevision).toHaveBeenCalledTimes(1);
+
+      // Advancing past 2s must NOT fire the auto-save — the timer was cleared.
+      vi.advanceTimersByTime(2000);
+      await flushPromises();
+      expect(mockSaveRevision).toHaveBeenCalledTimes(1);
     });
   });
 

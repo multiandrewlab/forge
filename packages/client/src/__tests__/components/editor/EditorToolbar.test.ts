@@ -527,4 +527,36 @@ describe('EditorToolbar', () => {
       expect(dropdown.exists()).toBe(false);
     });
   });
+
+  // The save-revision-btn lets the edit page surface a manual "snapshot now"
+  // affordance distinct from the auto-save debounce. It must only render when
+  // a postId is supplied (i.e., on /edit, not on /new), and clicking it must
+  // emit save-revision so the parent can call POST /:id/revisions.
+  describe('save-revision button', () => {
+    it('should NOT render save-revision-btn when postId is absent (new-post flow)', () => {
+      const w = mount(EditorToolbar, { props: { ...defaultProps } });
+      expect(w.find('[data-testid="save-revision-btn"]').exists()).toBe(false);
+    });
+
+    it('should render save-revision-btn when postId is supplied (edit flow)', () => {
+      const w = mount(EditorToolbar, {
+        props: { ...defaultProps, postId: 'post-123' },
+      });
+      const btn = w.find('[data-testid="save-revision-btn"]');
+      expect(btn.exists()).toBe(true);
+      expect(btn.text()).toBe('Save Revision');
+    });
+
+    it('should emit save-revision when the button is clicked', async () => {
+      const w = mount(EditorToolbar, {
+        props: { ...defaultProps, postId: 'post-123' },
+      });
+      const btn = w.find('[data-testid="save-revision-btn"]');
+      await btn.trigger('click');
+
+      const emitted = w.emitted('save-revision');
+      expect(emitted).toBeTruthy();
+      expect(emitted).toHaveLength(1);
+    });
+  });
 });

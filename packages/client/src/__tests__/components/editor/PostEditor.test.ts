@@ -49,8 +49,14 @@ vi.mock('@/components/editor/AiSuggestion.vue', () => ({
 vi.mock('@/components/editor/EditorToolbar.vue', () => ({
   default: {
     name: 'EditorToolbar',
-    props: ['language', 'visibility', 'contentType', 'tags'],
-    emits: ['update:language', 'update:visibility', 'update:contentType', 'update:tags'],
+    props: ['language', 'visibility', 'contentType', 'tags', 'postId'],
+    emits: [
+      'update:language',
+      'update:visibility',
+      'update:contentType',
+      'update:tags',
+      'save-revision',
+    ],
     template: '<div data-testid="editor-toolbar-stub"></div>',
   },
 }));
@@ -322,6 +328,31 @@ describe('PostEditor', () => {
       const emitted = wrapper.emitted('update:tags');
       expect(emitted).toBeTruthy();
       expect((emitted as unknown[][])[0]).toEqual([['vue', 'typescript']]);
+    });
+
+    it('should pass postId to EditorToolbar so it can render save-revision-btn', () => {
+      const w = mount(PostEditor, {
+        props: { ...defaultProps, postId: 'post-edit-123' },
+      });
+      const toolbar = w.findComponent({ name: 'EditorToolbar' });
+      expect(toolbar.props('postId')).toBe('post-edit-123');
+    });
+
+    it('should NOT pass a postId to EditorToolbar when none is supplied (new-post flow)', () => {
+      const toolbar = wrapper.findComponent({ name: 'EditorToolbar' });
+      expect(toolbar.props('postId')).toBeUndefined();
+    });
+
+    it('should forward save-revision from EditorToolbar so the page can POST a manual revision', async () => {
+      const w = mount(PostEditor, {
+        props: { ...defaultProps, postId: 'post-edit-123' },
+      });
+      const toolbar = w.findComponent({ name: 'EditorToolbar' });
+      await toolbar.vm.$emit('save-revision');
+
+      const emitted = w.emitted('save-revision');
+      expect(emitted).toBeTruthy();
+      expect(emitted).toHaveLength(1);
     });
   });
 

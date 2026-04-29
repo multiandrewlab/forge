@@ -39,6 +39,7 @@ const emit = defineEmits<{
   'update:tags': [value: string[]];
   publish: [];
   'save-draft': [];
+  'save-revision': [];
   cancel: [];
   // Emitted when a file is picked before the post exists (no postId yet).
   // Parents (PostNewPage) collect these and flush them to the server after
@@ -169,10 +170,12 @@ const markdownPreviewHtml = computed<string>(() => {
         :visibility="visibility"
         :content-type="contentType"
         :tags="tags"
+        :post-id="postId"
         @update:language="(val) => emit('update:language', val)"
         @update:visibility="(val) => emit('update:visibility', val)"
         @update:content-type="(val) => emit('update:contentType', val)"
         @update:tags="(val) => emit('update:tags', val)"
+        @save-revision="emit('save-revision')"
       />
       <!--
         Always-available file attach input. Hidden in the layout (label is the
