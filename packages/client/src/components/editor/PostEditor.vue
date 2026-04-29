@@ -4,6 +4,8 @@ import { ref, computed, watch } from 'vue';
 import type { ContentType, Visibility, AiCompleteRequest, AiGenerateRequest } from '@forge/shared';
 import type { EditorView } from '@codemirror/view';
 import type { SaveStatus } from '@/stores/posts';
+import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 import CodeEditor from '@/components/editor/CodeEditor.vue';
 import EditorToolbar from '@/components/editor/EditorToolbar.vue';
 import DraftStatus from '@/components/editor/DraftStatus.vue';
@@ -103,6 +105,17 @@ const AI_GENERATE_CONTENT_TYPES: ReadonlySet<string> = new Set<AiGenerateContent
   'document',
 ]);
 const isAiGenerateContentType = computed(() => AI_GENERATE_CONTENT_TYPES.has(props.contentType));
+
+// Markdown preview is rendered alongside the editor when contentType === 'document'.
+// The body is treated as markdown, parsed via `marked`, and sanitized via DOMPurify
+// before being injected with v-html. The `markdown-preview` testid lets E2E specs
+// assert formatted output (e.g., headings, bold) without re-implementing parsing.
+const isMarkdownPreviewContentType = computed(() => props.contentType === 'document');
+const markdownPreviewHtml = computed<string>(() => {
+  if (!isMarkdownPreviewContentType.value) return '';
+  const rawHtml = marked.parse(props.modelValue, { async: false }) as string;
+  return DOMPurify.sanitize(rawHtml);
+});
 </script>
 
 <template>
@@ -119,7 +132,8 @@ const isAiGenerateContentType = computed(() => AI_GENERATE_CONTENT_TYPES.has(pro
       <DraftStatus :status="saveStatus" :last-saved-at="lastSavedAt" />
       <button
         data-testid="new-post-save-draft-btn"
-        class="rounded border border-surface-500 px-4 py-1.5 text-sm font-medium text-gray-200 hover:bg-surface-600"
+        class="rounded border border-surface-500 px-4 py-1.5 text-sm font-medium text-gray-200 hover:bg-surface-600 disabled:cursor-not-allowed disabled:opacity-50"
+        :disabled="!title.trim()"
         @click="emit('save-draft')"
       >
         Save Draft
@@ -204,6 +218,12 @@ const isAiGenerateContentType = computed(() => AI_GENERATE_CONTENT_TYPES.has(pro
           class="absolute bottom-4 right-4"
         />
       </div>
+      <div
+        v-if="isMarkdownPreviewContentType"
+        data-testid="markdown-preview"
+        class="markdown-preview flex-1 overflow-auto border-l border-surface-500 bg-surface px-4 py-3 text-sm text-gray-200"
+        v-html="markdownPreviewHtml"
+      />
     </div>
   </div>
 </template>

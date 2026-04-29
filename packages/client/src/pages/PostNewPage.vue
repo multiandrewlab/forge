@@ -88,7 +88,7 @@ async function handleSaveDraft(): Promise<void> {
 </script>
 
 <template>
-  <div class="min-h-screen bg-surface p-4">
+  <div data-testid="post-new-page" class="min-h-screen bg-surface p-4">
     <div class="max-w-5xl mx-auto">
       <router-link to="/" class="text-gray-400 hover:text-white text-sm mb-4 inline-block">
         &larr; Back to Workspace
