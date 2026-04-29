@@ -41,7 +41,7 @@ async function handleSubmit(): Promise<void> {
     const response = await apiFetch('/api/auth/link-google', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ link_token: linkToken.value, password: password.value }),
+      body: JSON.stringify({ linkToken: linkToken.value, password: password.value }),
     });
 
     if (!response.ok) {
@@ -68,8 +68,10 @@ async function handleSubmit(): Promise<void> {
 
 <template>
   <div class="min-h-screen flex items-center justify-center bg-surface">
-    <div v-if="ready" class="w-full max-w-md p-8">
-      <h1 class="text-3xl font-bold text-center mb-4">Link Your Account</h1>
+    <div v-if="ready" data-testid="account-link-form" class="w-full max-w-md p-8">
+      <h1 data-testid="account-link-heading" class="text-3xl font-bold text-center mb-4">
+        Link Your Account
+      </h1>
 
       <p class="text-gray-400 text-center mb-8">
         An account with this email already exists. Enter your password to link your Google account.
@@ -89,6 +91,7 @@ async function handleSubmit(): Promise<void> {
           <input
             id="password"
             v-model="password"
+            data-testid="account-link-password-input"
             type="password"
             required
             class="w-full px-3 py-2 bg-surface-700 border border-surface-500 rounded focus:outline-none focus:ring-2 focus:ring-primary"
@@ -97,6 +100,7 @@ async function handleSubmit(): Promise<void> {
 
         <button
           type="submit"
+          data-testid="account-link-submit-btn"
           class="w-full py-2 bg-primary text-white rounded hover:bg-primary-600 font-medium"
         >
           Link Account
@@ -104,7 +108,12 @@ async function handleSubmit(): Promise<void> {
       </form>
 
       <p class="mt-6 text-center">
-        <a href="/login" class="text-gray-400 hover:underline">Cancel</a>
+        <a
+          href="/login"
+          data-testid="account-link-cancel-link"
+          class="text-gray-400 hover:underline"
+          >Cancel</a
+        >
       </p>
     </div>
   </div>

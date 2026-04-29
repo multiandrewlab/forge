@@ -126,6 +126,71 @@ When a spec could plausibly live in two feature folders, log the decision here s
 
 Once per quarter, run `cd e2e && npx playwright test --grep @no-reset` to list all opt-outs. Any without a clear reason in the test body should be re-evaluated.
 
+## Patterns (introduced by `e2e/specs/auth/`)
+
+These patterns were established by the auth spec batch (issue #46) and are reusable for future feature folders.
+
+### Direct-URL navigation when the click flow can't reach the asserted state
+
+Some pages return 5xx fixture responses that aren't reachable via the production click flow in E2E mode (e.g., `/api/auth/google` is conditionally registered when `GOOGLE_CLIENT_ID` is set; in E2E it 404s, but the always-registered `/google/callback` still returns the 501 stub). Asserting against the actual fixture text requires direct navigation:
+
+```ts
+// e2e/specs/auth/oauth-stub.spec.ts
+await page.goto('/api/auth/google/callback?code=fake.code');
+await expect(page.locator('body')).toContainText('Google OAuth is not configured');
+```
+
+The `page.locator('body')` assertion is a documented exception to the `getByTestId` rule — the response is a JSON body rendered as raw text, with no Vue surface to attach a testid to. Cite the rationale in the spec body.
+
+### Randomized email for `@no-reset` register specs
+
+Specs that opt out of the auto-reset and create new users must use a fresh, unique email per run — hardcoded emails would 409 on the second run. Use `crypto.randomUUID()`:
+
+```ts
+// e2e/specs/auth/register-success.spec.ts
+import { randomUUID } from 'node:crypto';
+const email = `register-${randomUUID()}@example.com`;
+```
+
+### One-shot route interception for retry-on-401 paths
+
+The client retries authed requests through `/api/auth/refresh` when they return 401 and the access token is set (`packages/client/src/lib/api.ts:65-67`). To exercise this without actually expiring a token, intercept ONE matching request to return 401 — Playwright's `times: 1` option auto-detaches the route after the first match so the retry hits the real backend:
+
+```ts
+// e2e/specs/auth/session-refresh.spec.ts
+await page.route('**/api/posts**', (route) => route.fulfill({ status: 401, body: '{}' }), {
+  times: 1,
+});
+```
+
+The `restore-session.ts:16` boot path also fires `/api/auth/refresh` on every authenticated load, so `waitForRequest` resolves on the boot-time refresh and never proves the 401-triggered path was exercised. Count refresh requests instead and assert `>= 2`:
+
+```ts
+let refreshCount = 0;
+page.on('request', (req) => {
+  if (req.method() === 'POST' && req.url().includes('/api/auth/refresh')) refreshCount += 1;
+});
+// ... navigate, then:
+await expect.poll(() => refreshCount).toBeGreaterThanOrEqual(2);
+```
+
+### Browser-native validity assertions for client-side blocks
+
+When a form field has HTML5 validity constraints (`type="email"`, `required`, `minlength`), submission is blocked by the browser before the form's own JS runs — no XHR, no error testid populated. Assert against the input's `validity.valid` JS property:
+
+```ts
+await auth.loginEmail(page).fill(''); // blank required input
+await auth.loginSubmit(page).click();
+await expect(page).toHaveURL('/login'); // submission blocked
+await expect(auth.loginEmail(page)).toHaveJSProperty('validity.valid', false);
+```
+
+The two assertions corroborate ONE concept ("client-side validity blocks submission") and do not violate the one-concept-per-test rule.
+
+## Server rate limit in E2E mode
+
+`POST /api/auth/register` has a strict `max: 3, timeWindow: '1 hour'` rate limit in production. The E2E suite (journey + register tests) fires several registrations per run, so the route now bumps to `max: 10_000` when `E2E_MODE=1` — same pattern `/login` already uses. The production branch is unchanged and still covered by the dedicated rate-limit tests.
+
 ## Commands reference
 
 - `npm run e2e` — headless run, all specs.

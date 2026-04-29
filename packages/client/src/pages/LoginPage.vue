@@ -70,6 +70,7 @@ async function handleSubmit(): Promise<void> {
       <div class="mt-6 text-center">
         <a
           href="/api/auth/google"
+          data-testid="login-google-btn"
           class="inline-block w-full py-2 border border-surface-500 rounded text-center hover:bg-surface-700"
         >
           Sign in with Google

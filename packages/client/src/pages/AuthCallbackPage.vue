@@ -44,7 +44,7 @@ onMounted(async () => {
 
 <template>
   <div class="min-h-screen flex items-center justify-center bg-surface">
-    <div v-if="loading" class="text-center">
+    <div v-if="loading" data-testid="auth-callback-loading" class="text-center">
       <p class="text-lg text-gray-400">Loading...</p>
     </div>
   </div>

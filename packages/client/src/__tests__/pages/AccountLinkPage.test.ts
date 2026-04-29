@@ -107,7 +107,7 @@ describe('AccountLinkPage', () => {
       expect(mockApiFetch).toHaveBeenCalledWith('/api/auth/link-google', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ link_token: 'my-link-token', password: 'password123' }),
+        body: JSON.stringify({ linkToken: 'my-link-token', password: 'password123' }),
       });
     });
 

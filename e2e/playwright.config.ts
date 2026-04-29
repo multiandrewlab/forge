@@ -34,7 +34,14 @@ export default defineConfig({
       command:
         'cd ../packages/server && ENABLE_TEST_ROUTES=1 LLM_PROVIDER=mock E2E_MODE=1 NODE_ENV=test npx tsx src/server.ts',
       url: `${API_BASE}/api/health`,
-      reuseExistingServer: !process.env.CI,
+      // Always reuse existing servers. CI's e2e workflow pre-starts the API
+      // and preview manually (env-var control + curl health-check) before
+      // invoking Playwright, so Playwright must reuse them — otherwise it
+      // tries to bind port 3001/4173 a second time and crashes with "is
+      // already used". Locally, reuse lets contributors keep `npm run dev`
+      // running across e2e runs. The previous `!process.env.CI` polarity
+      // was wrong for both cases.
+      reuseExistingServer: true,
       timeout: 120_000,
       stdout: 'pipe',
       stderr: 'pipe',
@@ -45,7 +52,14 @@ export default defineConfig({
       // attaches to /api/auth/refresh requests proxied through preview.
       command: 'cd ../packages/client && npm run preview -- --port 4173 --host localhost',
       url: PREVIEW_BASE,
-      reuseExistingServer: !process.env.CI,
+      // Always reuse existing servers. CI's e2e workflow pre-starts the API
+      // and preview manually (env-var control + curl health-check) before
+      // invoking Playwright, so Playwright must reuse them — otherwise it
+      // tries to bind port 3001/4173 a second time and crashes with "is
+      // already used". Locally, reuse lets contributors keep `npm run dev`
+      // running across e2e runs. The previous `!process.env.CI` polarity
+      // was wrong for both cases.
+      reuseExistingServer: true,
       timeout: 120_000,
       stdout: 'pipe',
       stderr: 'pipe',
