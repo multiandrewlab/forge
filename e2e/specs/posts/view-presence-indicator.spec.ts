@@ -7,7 +7,7 @@ import { posts } from '../../fixtures/selectors/posts.js';
 // `usePresence` composable.
 const PUBLIC_POST_ID = 'c0000000-0000-0000-0000-000000000099';
 
-// FIXME: server-side presence broadcast gap.
+// FIXME(issue #66): server-side presence broadcast gap.
 //
 // The current server implementation in
 // `packages/server/src/plugins/websocket/handler.ts` records presence on
