@@ -1,7 +1,7 @@
 # Auth + Visibility Enforcement on Read Endpoints — Design
 
 **Date:** 2026-04-29
-**Status:** Draft (pre-design-review-gate)
+**Status:** Draft REV 2 (after design-review-gate iteration 1 — Designer + Security blockers incorporated)
 **Closes:** [#62](https://github.com/multiandrewlab/forge/issues/62)
 **Provenance:** Issue #62 was filed during the issue #47 E2E rollout. The DoD bullet "view: permission private hidden from non-owner" assumed visibility enforcement on `GET /api/posts/:id`, but enforcement does not exist. The audit during this brainstorm widened the scope to all read endpoints.
 
@@ -201,3 +201,166 @@ The e2e spec assertion changes from `getByText('Post not found')` to `posts.forb
 - [x] Out-of-scope items called out (tag count, full UX)
 - [x] Risks + mitigations captured
 - [x] Test surface defined (vitest, bruno, e2e)
+
+---
+
+## REV 2 amendments (design-review-gate iteration 1)
+
+Round 1 verdict: PM/Architect/CTO APPROVED; Designer/Security NEEDS_REVISION (6 blockers). REV 2 incorporates blockers + key suggestions. Numbered sections below SUPERSEDE the corresponding sections above where they conflict.
+
+### Audit additions (Security blockers #1, #2)
+
+The following routes were missed in the original audit and are now in scope:
+
+| #   | Route                                       | Source                          | Action                                                                                                                                                                                                                                                                                                   |
+| --- | ------------------------------------------- | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 6b  | `GET /api/posts/:id/files/:fileId`          | `files.ts:197-262`              | Already in audit row #6, but **also has an optional-auth block at `files.ts:216-244`** that becomes dead code after `preHandler: [app.authenticate]`. Plan must DELETE the optional-auth block, not just guard it.                                                                                       |
+| C   | `POST /api/posts/:id/refresh-preview`       | `posts.ts:250`                  | Auth-required but **does not check ownership** before issuing outbound HTTP fetch on the post URL. Non-owner can trigger SSRF on a private post's URL (existence + URL leak). Add ownership check: `if (post.author_id !== request.user.id) return reply.status(403)`.                                   |
+| D   | `findFeedPosts` with `filter: 'bookmarked'` | `bookmarks.ts:35` → `feed.ts`   | The new feed visibility clause (`(visibility = 'public' OR author_id = $userId)`) MUST also apply to the `bookmarked` filter branch — if a user bookmarked a post that later went private and they're not the owner, the bookmarks list silently filters it (same "filter, don't error" policy as feed). |
+| E   | WebSocket `/ws` handshake auth              | `plugins/websocket/index.ts:47` | The handshake itself must be authenticated. Without recipient identity per socket, the broadcast-time visibility filter is impossible to implement correctly. Plan must verify `connections.ts` stores `userId` per socket; if not, that's a prerequisite step.                                          |
+
+### JWT hardening (Security blockers #3, #4)
+
+Add to scope of this PR (server config, in `packages/server/src/app.ts`):
+
+1. **Pin JWT verify algorithm.** Change `app.register(jwt, { secret: ... })` to:
+
+   ```typescript
+   app.register(jwt, {
+     secret: process.env.JWT_SECRET ?? 'dev-secret-change-in-production',
+     verify: { algorithms: ['HS256'] },
+   });
+   ```
+
+   Closes algorithm-confusion class of attacks.
+
+2. **Fail-fast on missing JWT secret in non-test envs.** Add to `app.ts` startup:
+   ```typescript
+   if (process.env.NODE_ENV !== 'test' && !process.env.JWT_SECRET) {
+     throw new Error('JWT_SECRET environment variable is required outside test environments');
+   }
+   ```
+   Both are co-located in the same file edit; trivial to land in this PR.
+
+### Visibility helper (Architect + CTO suggestion)
+
+Replace the inline 6-route copy-paste check with a single helper at `packages/server/src/lib/visibility.ts`:
+
+```typescript
+import type { FastifyReply } from 'fastify';
+import type { PostRow } from '../db/queries/types.js';
+
+/**
+ * Enforce read-visibility on a post for the calling user.
+ * Returns true if the caller is allowed to read; sends 403 + returns false otherwise.
+ */
+export function assertCanReadPost(
+  post: Pick<PostRow, 'visibility' | 'author_id'>,
+  callerId: string,
+  reply: FastifyReply,
+): boolean {
+  if (post.visibility === 'private' && post.author_id !== callerId) {
+    reply.status(403).send({ error: 'This post is private' });
+    return false;
+  }
+  return true;
+}
+```
+
+Used by `posts.ts`, `comments.ts`, `files.ts`, `posts.ts` (revisions endpoints). One unit test covers all routes' visibility branch via this helper.
+
+### 403 message text (Designer blocker #1)
+
+Standard 403 body: `{ error: 'This post is private' }` — descriptive, matches existing 403 patterns elsewhere (`'Cannot fork a private post'`, `'Only the author can refresh the link preview'`). Bare `'Forbidden'` is rejected.
+
+The frontend's existing regex `/forbidden/i.test(error)` becomes `/private|forbidden/i` — safer fallback. The rendered `{{ error }}` shows the descriptive text.
+
+### Client-side forbidden states (Designer blocker #2)
+
+Add to client changes:
+
+| File                                            | Change                                                                                                                                              |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/client/src/pages/PostViewPage.vue`    | Render `forbidden-page` testid + descriptive message when error matches `/private\|forbidden/i` (mirror PostEditPage:101 pattern)                   |
+| `packages/client/src/pages/PostHistoryPage.vue` | **Currently has no error UI at all.** Add an `error` v-if block + `forbidden-page` testid + descriptive message when revisions endpoint returns 403 |
+
+### Database index (Architect suggestion)
+
+Add migration `packages/server/src/db/migrations/00X-add-posts-visibility-author-index.sql`:
+
+```sql
+CREATE INDEX IF NOT EXISTS idx_posts_visibility_author ON posts(visibility, author_id) WHERE deleted_at IS NULL;
+```
+
+Supports the new feed visibility clause `(p.visibility = 'public' OR p.author_id = $userId)` efficiently. Existing `idx_posts_author_id` is preserved.
+
+### Sub-resource parent fetch (Architect suggestion)
+
+Comments/revisions/files endpoints already call `findPostById` (or equivalent) at the top of their handlers — there is no NEW DB lookup. The visibility check reuses the row already in scope. The plan must explicitly state "reuse existing parent-post fetch; do not add a query" so reviewers don't re-litigate.
+
+### Coverage matrix (CTO suggestion #2)
+
+Plan must include a 6×4 coverage matrix:
+
+| Route                     | public-post-non-owner | private-post-owner | private-post-non-owner | missing-token |
+| ------------------------- | --------------------- | ------------------ | ---------------------- | ------------- |
+| `GET /:id`                | 200                   | 200                | 403                    | 401           |
+| `GET /:id/comments`       | 200                   | 200                | 403                    | 401           |
+| `GET /:id/revisions`      | 200                   | 200                | 403                    | 401           |
+| `GET /:id/revisions/:rev` | 200                   | 200                | 403                    | 401           |
+| `GET /:id/files`          | 200                   | 200                | 403                    | 401           |
+| `GET /:id/files/:fileId`  | 200                   | 200                | 403                    | 401           |
+
+Vitest: 24 unit tests minimum (one per cell). Bruno: at least 1 negative spec per route (private-non-owner → 403).
+
+### WebSocket broadcast filter mechanism (CTO suggestion #3)
+
+Plan-time decision: read `packages/server/src/plugins/websocket/handler.ts` and pick:
+
+- **Per-recipient filter** — for each connected `feed` subscriber, skip event if `post.visibility === 'private' && post.author_id !== subscriberUserId`.
+- **Channel split** — only broadcast public-post events on `feed`; private-post events go to `post:<id>` only.
+
+If `connections.ts` already tracks `userId` per socket, prefer per-recipient. Otherwise prefer channel-split (cheaper, no socket-state addition).
+
+### Forbidden-state UX text (Designer suggestion + PM suggestion)
+
+User-visible string for the forbidden state: **"This post is private. The owner has not shared it with you."**
+
+Renders consistently on `PostViewPage` and `PostHistoryPage`. The `forbidden-page` testid is the e2e anchor; the visible text is the user-facing affordance.
+
+### Bruno coverage minimum (CTO suggestion #4)
+
+New Bruno specs (4 negative + 1 positive):
+
+1. `bruno/posts/get-private-post-as-non-owner.bru` — alice GETs carol's `c…0006` → 403
+2. `bruno/posts/get-private-post-comments-as-non-owner.bru` — same → 403
+3. `bruno/posts/get-private-post-revisions-as-non-owner.bru` — same → 403
+4. `bruno/posts/get-private-post-files-as-non-owner.bru` — same → 403
+5. `bruno/posts/get-private-post-as-owner.bru` (positive) — carol GETs own → 200
+
+### CI grep guard (Security suggestion)
+
+Add a CI step (or pre-commit hook) that greps every `app.get/post/patch/delete/put` call NOT in the public-route whitelist for `preHandler: [app.authenticate]`. Fails CI if a new route lands without auth.
+
+This is **deferred to a follow-up issue** unless trivial to add in this PR (TBD by plan).
+
+### Updated risk row
+
+| Risk                                                                               | Mitigation                                                                                                  |
+| ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `forked_from_id` references private source post → UUID leak in fork's GET response | Acceptable — UUID is opaque; no traversal possible (the source GET will 403). Documented; no change needed. |
+| Tag `post_count` includes private posts → count-only enumeration                   | Acceptable per Q3 brainstorm. Not in this PR. Tracked at follow-up issue (TBD).                             |
+| Bookmarks-list user lost access to a previously-bookmarked post                    | Now covered by audit row D — feed visibility clause applies via `findFeedPosts({filter: 'bookmarked'})`.    |
+| MinIO signed-URL TTL/scope                                                         | Out of scope but verified during plan; signed URLs have TTL by design.                                      |
+| `post:deleted` WebSocket event references unknown ID for non-owner subscribers     | Acceptable — UUID-only is opaque; no leak. Documented.                                                      |
+
+### Updated acceptance criteria
+
+- [x] All audit-additions captured (`files.ts:197` optional-auth block, `refresh-preview` ownership, bookmarks visibility, WS handshake auth)
+- [x] JWT hardening in scope
+- [x] Visibility helper specified
+- [x] 403 message text + frontend regex updated
+- [x] PostHistoryPage forbidden UI added to client changes
+- [x] Database index migration added
+- [x] Coverage matrix specified (6×4 = 24 unit tests minimum)
+- [x] WebSocket broadcast mechanism decision deferred to plan with explicit selection rule
