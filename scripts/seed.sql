@@ -49,7 +49,7 @@ INSERT INTO posts (id, author_id, title, content_type, language, visibility, is_
   ('c0000000-0000-0000-0000-000000000012', 'a0000000-0000-0000-0000-000000000001', 'SQL Performance Tuning', 'document', NULL, 'public', false, 40),
   -- testuser-owned fixture post for Bruno regression tests
   ('c0000000-0000-0000-0000-000000000099', 'a0000000-0000-0000-0000-000000000099', 'Test Fixture Post (testuser-owned)', 'snippet', 'typescript', 'public', false, 0),
-  ('c0000000-0000-0000-0000-000000000098', 'a0000000-0000-0000-0000-000000000099', 'Test Fixture Draft Post (testuser-owned)', 'snippet', 'typescript', 'public', true, 0);
+  ('c0000000-0000-0000-0000-000000000098', 'a0000000-0000-0000-0000-000000000099', 'Forge E2E Draft Sandbox (testuser)', 'snippet', 'typescript', 'public', true, 0);
 
 -- Update link post
 UPDATE posts SET
