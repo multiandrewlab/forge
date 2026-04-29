@@ -1,4 +1,4 @@
-# Auth + Visibility Enforcement Implementation Plan — REV 2
+# Auth + Visibility Enforcement Implementation Plan — REV 3
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -1656,3 +1656,70 @@ REV 2 explicitly evaluates the CI grep guard: a ~10-line workflow step that grep
 - [x] WU8 errorStatus reset across ALL usePosts methods including fetchPostHistory
 - [x] Bruno spec count corrected to 6
 - [x] Helper type tightened to literal union
+
+---
+
+## REV 3 amendments (plan-review-gate iter 2 — Completeness × 2)
+
+Iter 2 verdict: Feasibility PASS, Scope & Alignment PASS, Completeness FAIL × 2 (Bruno parity gap + bookmarks-branch test visibility). REV 3 below SUPERSEDES.
+
+### 1. WU9 Bruno specs — match the 24-cell vitest matrix (6 negative)
+
+The 24-cell vitest matrix covers 6 sub-resource direct-lookup routes (`/:id`, `/:id/comments`, `/:id/revisions`, `/:id/revisions/:rev`, `/:id/files`, `/:id/files/:fileId`). REV 2's Bruno coverage was 4 negative — short by 2 vs. the vitest matrix.
+
+REV 3: WU9 adds 2 more negative specs:
+
+```
+bruno/posts/get-private-post-revision-detail-as-non-owner.bru   (NEW in REV 3)
+bruno/posts/get-private-post-file-detail-as-non-owner.bru        (NEW in REV 3)
+```
+
+Updated WU9 file count: 6 negative + 1 positive + 1 JWT-pin = **8 .bru files**.
+
+Spec templates (alice GETs carol's private post sub-resource, expects 403):
+
+```
+# bruno/posts/get-private-post-revision-detail-as-non-owner.bru
+get {
+  url: {{baseUrl}}/api/posts/c0000000-0000-0000-0000-000000000006/revisions/d0000000-0000-0000-0000-000000000007
+  body: none
+  auth: bearer
+}
+auth:bearer { token: {{accessToken}} }
+assert {
+  res.status: eq 403
+  res.body.error: eq This post is private
+}
+```
+
+The revision UUID `d0000000-...-000000000007` is from `scripts/seed.sql` line 69 (carol's `c…0006` initial revision).
+
+```
+# bruno/posts/get-private-post-file-detail-as-non-owner.bru
+# carol's c…0006 may have no files; the parent-post visibility check fires
+# before the file lookup, so the file UUID is opaque (any UUID works).
+get {
+  url: {{baseUrl}}/api/posts/c0000000-0000-0000-0000-000000000006/files/00000000-0000-0000-0000-000000000000
+  body: none
+  auth: bearer
+}
+auth:bearer { token: {{accessToken}} }
+assert {
+  res.status: eq 403
+  res.body.error: eq This post is private
+}
+```
+
+### 2. WU5 bookmarks-branch test made explicit (Completeness clarification)
+
+WU5 Step 1's `feed-visibility.test.ts` already includes the test case `'does not include other-user private posts in bookmarked filter'` (third `it()` block in the test file). REV 3 confirms this is the explicit coverage of design REV 2 audit row D. WU5 Step 1 is updated:
+
+- The test gets a comment header marking it `EXPLICIT COVERAGE of audit row D`
+- A `beforeAll` is added that inserts a bookmark row for testuser → c…0006 (or asserts/uses an existing seed bookmark)
+
+The test body is unchanged. Plan WU5 Step 2 (run, watch fail) covers all 3 tests; expected fail count: 2 of 3 (the bookmarks test + the default-feed test). Step 4 adds the visibility WHERE clause to feed.ts; expected: all 3 pass.
+
+### Updated acceptance criteria (REV 3)
+
+- [x] WU9 produces 8 .bru files (6 negative + 1 positive + 1 JWT pin) for parity with 24-cell vitest matrix
+- [x] WU5 bookmarks-branch test annotated as "EXPLICIT COVERAGE" of audit row D + beforeAll setup added
