@@ -1,4 +1,4 @@
-# Auth + Visibility Enforcement Implementation Plan
+# Auth + Visibility Enforcement Implementation Plan — REV 2
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -41,8 +41,9 @@ packages/server/src/routes/tags.ts                         (WU4 — auth on /, /
 packages/server/src/routes/search.ts                       (WU4 — auth)
 packages/server/src/routes/user-profiles.ts                (WU4 — auth on /:id)
 packages/server/src/db/queries/feed.ts                     (WU5 — visibility clause)
-packages/server/src/plugins/websocket/broadcast.ts         (WU7 — broadcast filter)
+packages/server/src/plugins/websocket/channels.ts          (WU7 — broadcast filter at channels.ts:50; broadcast.ts is only the getExcludeWs helper)
 packages/server/src/plugins/websocket/handler.ts           (WU7 — pass userId on broadcast)
+packages/server/src/plugins/websocket/index.ts             (WU7 — verify handshake auth)
 packages/client/src/composables/usePosts.ts                (WU8 — errorStatus ref)
 packages/client/src/pages/PostViewPage.vue                 (WU8 — forbidden state)
 packages/client/src/pages/PostHistoryPage.vue              (WU8 — forbidden state)
@@ -1516,3 +1517,142 @@ EOF
 **4. Out-of-scope discipline:** CI grep guard, tag post_count, MinIO TTL deferred with rationale.
 
 **5. Coverage 100% strategy:** Visibility helper has 3 unit tests covering all branches. Each modified route has a per-route test for 401/403/200 branches. Feed filter has 3 tests. WebSocket filter has 2 tests. JWT hardening has 2 tests. Frontend errorStatus has 2 tests. Total: 28+ new unit tests across the WUs. `.coverage-thresholds.json` 100% maintained.
+
+---
+
+## REV 2 amendments (plan-review-gate iter 1 — Completeness FAIL × 4)
+
+Iter 1 verdict: Feasibility PASS, Scope & Alignment PASS, Completeness FAIL on 4 blockers + 1 path mismatch from Feasibility. REV 2 sections SUPERSEDE conflicting items above.
+
+### 1. WU7 path correction + handshake-auth verification (Feasibility path mismatch + Completeness #1)
+
+**Path mismatch fix:** `broadcast.ts` is only 15 lines (the `getExcludeWs` helper). The actual broadcast loop is at `packages/server/src/plugins/websocket/channels.ts:50`. WU7 modifies `channels.ts`, not `broadcast.ts`. The plan's File Structure section is updated accordingly.
+
+**Handshake auth must be verified explicitly.** Add as WU7 Step 0:
+
+```bash
+# Step 0a: Verify the /ws handshake requires auth
+sed -n '40,80p' packages/server/src/plugins/websocket/index.ts
+sed -n '60,110p' packages/server/src/plugins/websocket/handler.ts
+```
+
+The state machine starts in `awaiting-auth` (verified during design-review-gate iter 2). If a future change weakens this, the per-recipient broadcast filter has no recipient identity to compare against — silent regression. Add a unit test:
+
+```typescript
+// packages/server/src/__tests__/websocket/handshake-auth.test.ts
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { buildApp } from '../../app.js';
+import type { FastifyInstance } from 'fastify';
+import WebSocket from 'ws';
+
+describe('WebSocket /ws handshake', () => {
+  let app: FastifyInstance;
+  let port: number;
+
+  beforeAll(async () => {
+    app = await buildApp();
+    await app.listen({ port: 0 });
+    const addr = app.server.address();
+    if (typeof addr === 'object' && addr !== null) port = addr.port;
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  it('rejects WS connections that never send auth frame within timeout', async () => {
+    const ws = new WebSocket(`ws://localhost:${port}/ws`);
+    await new Promise<void>((resolve) => {
+      ws.on('close', (code) => {
+        // Server closes the socket if no auth frame is sent
+        expect(code).toBeGreaterThanOrEqual(1000);
+        resolve();
+      });
+      // Don't send any auth frame; rely on server-side timeout
+      setTimeout(() => ws.close(), 2000);
+    });
+  });
+
+  it('rejects auth frames with invalid JWT', async () => {
+    const ws = new WebSocket(`ws://localhost:${port}/ws`);
+    await new Promise<void>((resolve) => {
+      ws.on('open', () => ws.send(JSON.stringify({ type: 'auth', token: 'invalid-jwt' })));
+      ws.on('message', (data) => {
+        const msg = JSON.parse(data.toString());
+        expect(msg.type === 'error' || msg.type === 'auth:rejected').toBe(true);
+        ws.close();
+        resolve();
+      });
+    });
+  });
+});
+```
+
+Adapt the assertion to the actual server response shape after reading `handler.ts`.
+
+### 2. 24-cell coverage matrix enumerated (Completeness #2)
+
+REV 2 makes the 24-cell matrix explicit. Each of the 6 direct-lookup routes gets 4 unit-test cells:
+
+```
+posts-visibility.test.ts:           4 cells × 4 routes (posts/:id, comments, revisions, revisions/:rev) = 16 tests
+files-visibility.test.ts:           4 cells × 2 routes (files, files/:fileId)                          = 8 tests
+                                                                                                       = 24 tests
+```
+
+WU2 must produce a test file with all 16 tests for the 4 routes; WU3 must produce a test file with all 8 tests for the 2 file routes. The 4 cells per route are:
+
+| Cell | Caller state                                  | Target       | Expected status |
+| ---- | --------------------------------------------- | ------------ | --------------- |
+| 1    | No token                                      | private post | 401             |
+| 2    | Valid token, public post                      | public post  | 200             |
+| 3    | Valid token, private post owned by caller     | private post | 200             |
+| 4    | Valid token, private post NOT owned by caller | private post | 403             |
+
+WU2 Step 6 is updated: instead of "extend with 2 more tests", the test file MUST include all 16 tests (4 routes × 4 cells) at commit time. WU3 Step 5 is updated: the test file MUST include all 8 tests at commit time.
+
+### 3. WU5 refresh-preview test is unconditional (Completeness #3)
+
+Plan WU5 Step 6-7 said "if there's already an ownership check, the test will pass — no code change needed; if not, add it." This is wrong (TDD anti-pattern; tests are regressions, written even when behavior already exists).
+
+REV 2: WU5 Step 5 ALWAYS writes the test; WU5 Step 6 verifies it (red OR green). If green, no implementation change needed but the test stays as a regression. If red, add the ownership check.
+
+The test file must include both 401 (no token) and 403 (non-owner) cells — 2 tests minimum for refresh-preview.
+
+### 4. WU8 errorStatus reset enumeration (Completeness #4)
+
+REV 2 explicitly enumerates the methods in `usePosts.ts` that need `errorStatus.value = null` reset. Read the file and reset in each:
+
+| Method                                                               | Reset errorStatus? | Why                                                                          |
+| -------------------------------------------------------------------- | ------------------ | ---------------------------------------------------------------------------- |
+| `fetchPost`                                                          | YES                | direct-lookup 403 path                                                       |
+| `fetchPostHistory` (or whatever loads revisions for PostHistoryPage) | **YES**            | history-page 403 path — REQUIRED for PostHistoryPage forbidden state to work |
+| `createPost`                                                         | YES                | covers any future 403 (e.g., quota)                                          |
+| `updatePost` (PATCH)                                                 | YES                | 403 if non-owner                                                             |
+| `deletePost`                                                         | YES                | 403 if non-owner                                                             |
+| `forkPost`                                                           | YES                | 403 if source is private                                                     |
+| `refreshPreview`                                                     | YES                | 403 if non-owner                                                             |
+| `saveRevision`                                                       | YES                | 403 if non-owner                                                             |
+
+Plan WU8 Step 1 is updated: read `packages/client/src/composables/usePosts.ts` first to enumerate every existing method that resets `error.value = null`. Add `errorStatus.value = null` reset to **every one of them** (not just `fetchPost`). If `fetchPostHistory` exists as a separate composable or method (verify in code), apply the same change there.
+
+### 5. Bruno spec count clarification (Completeness clarification)
+
+WU9 produces 6 .bru files: 4 negative (posts/comments/revisions/files for non-owner-403) + 1 positive (owner-200) + 1 JWT-pin = 6 files. The plan's "5 Bruno specs" header in the PR-body template is updated to "6 Bruno specs" for accuracy.
+
+### 6. assertCanReadPost type tightening (Completeness clarification)
+
+REV 2 tightens the helper signature from `{ visibility: string; author_id: string }` to `{ visibility: 'public' | 'private'; author_id: string }`. Matches design REV 2 §"Visibility helper" intent (`Pick<PostRow, 'visibility' | 'author_id'>` where PostRow narrows visibility to a union literal). The unit tests in WU1 already use `'public' as const` / `'private' as const` so no test changes needed.
+
+### 7. CI grep guard decision recorded (Completeness clarification)
+
+REV 2 explicitly evaluates the CI grep guard: a ~10-line workflow step that greps every `app.get/post/patch/delete` call outside the public-route whitelist for `preHandler: [app.authenticate]`. **Decision: deferred to follow-up issue** (rationale: trivial to add, but adds CI surface and requires whitelist maintenance; better as its own PR with focused review). To be filed as a separate enhancement issue when this PR is opened.
+
+### Updated acceptance criteria
+
+- [x] WU7 path correction (channels.ts) + handshake auth test
+- [x] 24-cell coverage matrix enumerated; WU2 produces 16 tests, WU3 produces 8
+- [x] WU5 refresh-preview test unconditional (covers 401 + 403)
+- [x] WU8 errorStatus reset across ALL usePosts methods including fetchPostHistory
+- [x] Bruno spec count corrected to 6
+- [x] Helper type tightened to literal union
