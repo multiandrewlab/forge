@@ -13,8 +13,8 @@ const PRIVATE_POST_ID = 'c0000000-0000-0000-0000-000000000006';
 // this spec asserts.
 //
 // Server-side fix is out of scope of issue #47 ("Out of scope: anything
-// under `packages/server/`"). Tracked in a separate security issue; this
-// spec un-fixmes once the API enforces visibility.
+// under `packages/server/`"). Tracked at issue #62; this spec un-fixmes
+// once the API enforces visibility.
 test.fixme("post view: alice cannot see carol's private post and sees a not-found message", async ({
   alice,
 }) => {
