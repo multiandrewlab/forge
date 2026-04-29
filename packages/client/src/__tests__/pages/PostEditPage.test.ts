@@ -30,6 +30,7 @@ vi.mock('@/components/editor/PostEditor.vue', () => ({
       'update:contentType',
       'update:tags',
       'publish',
+      'cancel',
     ],
     template: '<div data-testid="post-editor-stub"></div>',
   },
@@ -568,6 +569,102 @@ describe('PostEditPage', () => {
       expect(mockSaveRevision).toHaveBeenCalledWith('post-abc', 'updated content', null);
       expect(mockPublishPost).toHaveBeenCalledWith('post-abc');
       expect(router.currentRoute.value.name).toBe('post-view');
+    });
+  });
+
+  // ── Cancel ─────────────────────────────────────────────────────
+  // handleCancel reverts in-flight metadata edits by PATCHing the post back
+  // to the snapshot captured on mount, then navigates to the view page.
+  describe('cancel', () => {
+    async function mountWithPost(postOverrides: Partial<PostWithRevision> = {}) {
+      const post = createMockPost(postOverrides);
+      mockFetchPost.mockImplementation(async () => {
+        const store = usePostsStore();
+        store.setPost(post);
+      });
+      mockSaveRevision.mockResolvedValue(undefined);
+      mockUpdatePost.mockResolvedValue(undefined);
+      const wrapper = await mountPage();
+      await flushPromises();
+      return wrapper;
+    }
+
+    it('should revert title to the snapshot captured on mount when cancel fires', async () => {
+      const wrapper = await mountWithPost({ title: 'Original Title' });
+      const editor = wrapper.findComponent({ name: 'PostEditor' });
+
+      // User edits the title — auto-save commits the new value.
+      await editor.vm.$emit('update:title', 'Stomp the title');
+      await flushPromises();
+      mockUpdatePost.mockClear();
+
+      // Cancel fires; handler PATCHes back to the original.
+      await editor.vm.$emit('cancel');
+      await flushPromises();
+
+      expect(mockUpdatePost).toHaveBeenCalledWith(
+        'post-abc',
+        expect.objectContaining({ title: 'Original Title' }),
+      );
+    });
+
+    it('should navigate to post-view after revert PATCH completes', async () => {
+      const wrapper = await mountWithPost();
+      const editor = wrapper.findComponent({ name: 'PostEditor' });
+
+      await editor.vm.$emit('cancel');
+      await flushPromises();
+
+      expect(router.currentRoute.value.name).toBe('post-view');
+      expect(router.currentRoute.value.params.id).toBe('post-abc');
+    });
+
+    it('should clear a pending content debounce timer without flushing it (no saveRevision call)', async () => {
+      const wrapper = await mountWithPost();
+      const editor = wrapper.findComponent({ name: 'PostEditor' });
+
+      // Trigger a content change to start the 2s debounce timer.
+      await editor.vm.$emit('update:modelValue', 'unsaved content');
+      await flushPromises();
+      mockSaveRevision.mockClear();
+
+      await editor.vm.$emit('cancel');
+      await flushPromises();
+
+      // Advance past the 2s debounce window — saveRevision must NOT fire,
+      // proving the timer was cleared (not flushed) by handleCancel.
+      vi.advanceTimersByTime(2000);
+      await flushPromises();
+
+      expect(mockSaveRevision).not.toHaveBeenCalled();
+    });
+
+    it('should run cleanly when no debounce timer is pending', async () => {
+      // Exercises the false branch of `if (debounceTimer)` inside handleCancel
+      // — no content edit was made, so the timer ref stays null.
+      const wrapper = await mountWithPost();
+      const editor = wrapper.findComponent({ name: 'PostEditor' });
+
+      await editor.vm.$emit('cancel');
+      await flushPromises();
+
+      expect(mockUpdatePost).toHaveBeenCalled();
+      expect(router.currentRoute.value.name).toBe('post-view');
+    });
+
+    it('should send language=null when the original language was null', async () => {
+      // Exercises the `originalLanguage.value || null` branch where the
+      // original language is the empty string (post had language=null on load).
+      const wrapper = await mountWithPost({ language: null });
+      const editor = wrapper.findComponent({ name: 'PostEditor' });
+
+      await editor.vm.$emit('cancel');
+      await flushPromises();
+
+      expect(mockUpdatePost).toHaveBeenCalledWith(
+        'post-abc',
+        expect.objectContaining({ language: null }),
+      );
     });
   });
 

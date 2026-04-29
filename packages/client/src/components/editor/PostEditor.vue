@@ -39,6 +39,7 @@ const emit = defineEmits<{
   'update:tags': [value: string[]];
   publish: [];
   'save-draft': [];
+  cancel: [];
 }>();
 
 const filesStore = useFilesStore();
@@ -130,6 +131,14 @@ const markdownPreviewHtml = computed<string>(() => {
         @input="onTitleInput"
       />
       <DraftStatus :status="saveStatus" :last-saved-at="lastSavedAt" />
+      <button
+        type="button"
+        data-testid="post-cancel-btn"
+        class="rounded border border-surface-500 px-4 py-1.5 text-sm font-medium text-gray-300 hover:bg-surface-600 hover:text-white"
+        @click="emit('cancel')"
+      >
+        Cancel
+      </button>
       <button
         data-testid="new-post-save-draft-btn"
         class="rounded border border-surface-500 px-4 py-1.5 text-sm font-medium text-gray-200 hover:bg-surface-600 disabled:cursor-not-allowed disabled:opacity-50"

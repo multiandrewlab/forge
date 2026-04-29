@@ -230,6 +230,54 @@ describe('PostEditor', () => {
     });
   });
 
+  describe('markdown preview computed', () => {
+    // The `markdownPreviewHtml` computed has an early-return when
+    // `isMarkdownPreviewContentType` is false. The template gates the v-html
+    // binding behind a v-if for the same flag, so the early-return branch is
+    // never exercised through normal template flow. Read the computed
+    // directly via the component's setup state to cover the false branch.
+    it('returns an empty string when contentType is not "document"', async () => {
+      const w = mount(PostEditor, { props: { ...defaultProps, contentType: 'snippet' as const } });
+      await nextTick();
+
+      const setupState = (w.vm as Record<string, unknown>).$.devtoolsRawSetupState as
+        | Record<string, { value: string }>
+        | undefined;
+      const computedRef = setupState?.markdownPreviewHtml;
+      expect(computedRef?.value).toBe('');
+    });
+
+    it('returns sanitized HTML when contentType is "document"', async () => {
+      const w = mount(PostEditor, {
+        props: { ...defaultProps, contentType: 'document' as const, modelValue: '# Heading' },
+      });
+      await nextTick();
+
+      const setupState = (w.vm as Record<string, unknown>).$.devtoolsRawSetupState as
+        | Record<string, { value: string }>
+        | undefined;
+      const computedRef = setupState?.markdownPreviewHtml;
+      expect(computedRef?.value).toContain('<h1');
+    });
+  });
+
+  describe('cancel button', () => {
+    it('should render a Cancel button with the post-cancel-btn testid', () => {
+      const button = wrapper.find('[data-testid="post-cancel-btn"]');
+      expect(button.exists()).toBe(true);
+      expect(button.text()).toBe('Cancel');
+    });
+
+    it('should emit cancel when clicked', async () => {
+      const button = wrapper.find('[data-testid="post-cancel-btn"]');
+      await button.trigger('click');
+
+      const emitted = wrapper.emitted('cancel');
+      expect(emitted).toBeTruthy();
+      expect(emitted).toHaveLength(1);
+    });
+  });
+
   describe('event forwarding', () => {
     it('should forward update:modelValue from CodeEditor', async () => {
       const codeEditor = wrapper.findComponent({ name: 'CodeEditor' });
