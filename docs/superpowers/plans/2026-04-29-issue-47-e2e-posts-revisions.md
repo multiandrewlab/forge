@@ -1,4 +1,4 @@
-# E2E Posts + Revisions Specs Implementation Plan — REV 2
+# E2E Posts + Revisions Specs Implementation Plan — REV 3
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -33,6 +33,19 @@ The first plan-review-gate (iteration 1) returned PASS for Scope & Alignment but
 | Spec-N-alone independence not verified                                                             | Task 16 step 5 runs random specs in isolation.                                                                                      |
 | Fork-of-fork case + rollback-on-forked-post unaddressed                                            | Explicit OOS section at end of plan.                                                                                                |
 | Vitest impact of new dialog/cancel UI not considered                                               | Task 4 + Task 3.4 + Task 12.2 explicitly note the unit-test impact and require running `npm run test:coverage`.                     |
+
+## REV 3 changes vs. REV 2 (from plan-review-gate iteration 2)
+
+Iteration 2 returned PASS for Completeness and Scope & Alignment, FAIL for Feasibility on 4 blocking items (all concrete API/fixture mismatches). REV 3 fixes:
+
+| Concern (iter 2 finding)                                                                                                                                   | REV 3 fix                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Vote endpoint URL — actual route is singular `POST /api/posts/:id/vote` (`votes.ts:9`), no `GET /api/posts/:id/votes` exists                               | Task 4.3 spec updated to use `/vote` (singular) and to verify cascade by asserting `GET /api/posts/:id` returns 404 (FK-cascade implies all children gone) — no per-resource enumeration needed.                                                                                                                                                                                                                                                                |
+| Bookmark endpoint URL — actual route is singular `POST /api/posts/:id/bookmark` (`bookmarks.ts:15`); `GET /api/bookmarks` lists user's own bookmarks only  | Task 4.3 spec updated to use `/bookmark` (singular). Cascade verification reuses the same post-404 strategy.                                                                                                                                                                                                                                                                                                                                                    |
+| `GET /api/posts/:id/comments/:cid` does not exist (only PATCH/DELETE per `comments.ts:83,134`); only `GET /:id/comments` (list) exists at `comments.ts:18` | Task 4.3 spec rewritten to use post-404 verification. (If a defense-in-depth assertion is desired, list-comments-after-delete returns the post-404, satisfying the cascade claim.)                                                                                                                                                                                                                                                                              |
+| `alice.request` — reviewer claimed Page does not expose `.request`                                                                                         | **Reviewer error.** Playwright >= 1.16 exposes `Page.request` returning the BrowserContext-scoped `APIRequestContext` (https://playwright.dev/docs/api/class-page#page-request). This project pins `@playwright/test ^1.49.0` per `e2e/package.json`. `alice.request.post(...)` is the page's APIRequestContext, inheriting alice's storage state cookies/JWT — authenticated as alice. Plan adds an inline citation in Task 4.3 to defuse re-review confusion. |
+| `PostListItem.vue` doesn't expose `draft-badge` testid (Task 5.2 spec asserts on it)                                                                       | Task 5.2 Step 0 adds `draft-badge` and `published-badge` testids on the existing `Draft`/`Published` indicators in `PostListItem.vue:22-25` (text already rendered, just missing testids).                                                                                                                                                                                                                                                                      |
+| `EditorToolbar.vue` does not currently accept a `postId` prop (Task 12.2 wires `v-if="postId"`)                                                            | Modify list now explicitly notes `EditorToolbar.vue` props addition.                                                                                                                                                                                                                                                                                                                                                                                            |
 
 ---
 
@@ -99,7 +112,8 @@ packages/client/src/pages/PostNewPage.vue  (Task 1 — add post-new-page testid)
 packages/client/src/components/editor/PostEditor.vue (Task 3.4 — add post-cancel-btn)
 packages/client/src/pages/PostViewPage.vue (Task 4 — delete-confirm dialog; Task 8.3 — tag-chip testid)
 packages/client/src/components/post/PostMetaHeader.vue (Task 8.3 — tag-chip testid; Task 11.1 — author-avatar testid)
-packages/client/src/components/editor/EditorToolbar.vue (Task 12.2 — save-revision-btn)
+packages/client/src/components/post/PostListItem.vue (Task 5.2 — draft-badge / published-badge testids on existing indicators)
+packages/client/src/components/editor/EditorToolbar.vue (Task 12.2 — save-revision-btn + postId prop)
 packages/client/src/components/post/LinkPreviewCard.vue (Task 9 — link-preview-card testid on root)
 packages/client/src/pages/PostHistoryPage.vue (Task 13 — page-level testid)
 ```
@@ -413,7 +427,7 @@ import { posts } from '../../fixtures/selectors/posts.js';
 
 test('edit: own post saves changes and the title updates', async ({ testuser, request }) => {
   // Create a fresh post owned by testuser
-  const created = await request.post('/api/posts', {
+  const created = await testuser.request.post('/api/posts', {
     data: {
       title: 'Edit-own seed',
       contentType: 'snippet',
@@ -456,7 +470,7 @@ import { test, expect } from '../../fixtures/reset.js';
 import { posts } from '../../fixtures/selectors/posts.js';
 
 test('edit: changes persist after navigating away and back', async ({ testuser, request }) => {
-  const created = await request.post('/api/posts', {
+  const created = await testuser.request.post('/api/posts', {
     data: {
       title: 'Persistence seed',
       contentType: 'snippet',
@@ -489,7 +503,7 @@ test('edit: cancel button discards in-flight changes and returns to view', async
   request,
 }) => {
   const originalTitle = 'Cancel seed title';
-  const created = await request.post('/api/posts', {
+  const created = await testuser.request.post('/api/posts', {
     data: {
       title: originalTitle,
       contentType: 'snippet',
@@ -546,7 +560,7 @@ test('delete: clicking delete shows a confirmation dialog; cancel keeps the post
   testuser,
   request,
 }) => {
-  const created = await request.post('/api/posts', {
+  const created = await testuser.request.post('/api/posts', {
     data: {
       title: 'Delete-confirm seed',
       contentType: 'snippet',
@@ -625,16 +639,26 @@ test('delete: alice cannot see a delete button on testuser-owned post', async ({
 
 ### Spec 4.3: `delete-cascade.spec.ts` (asserts comments + votes + bookmarks gone)
 
+**Endpoints used (verified against actual server routes):**
+
+- `POST /api/posts/:id/vote` (singular — `votes.ts:9` registered with prefix `/api/posts`)
+- `POST /api/posts/:id/bookmark` (singular — `bookmarks.ts:15` registered with prefix `/api`)
+- `POST /api/posts/:id/comments` (`comments.ts:35` registered with prefix `/api/posts`)
+- Cascade verification: `GET /api/posts/:id` returns 404 after delete. The `posts` table has FK-cascade to `comments`, `votes`, `bookmarks`, so post-404 is sufficient evidence the children are gone. (No per-resource enumeration GET exists for votes/bookmarks; comments has a list endpoint but the post-404 assertion is the cleaner DoD claim.)
+
+**Authenticated request context (verified):** `alice.request` is the `APIRequestContext` exposed on `Page` since Playwright 1.16 (project uses `^1.49.0` per `e2e/package.json`). It inherits the BrowserContext storage state, so calls authenticate as alice. Reference: https://playwright.dev/docs/api/class-page#page-request.
+
 ```typescript
 import { test, expect } from '../../fixtures/reset.js';
 import { posts } from '../../fixtures/selectors/posts.js';
 
-test('delete: cascade — comments + votes + bookmarks all vanish with the post', async ({
+test('delete: cascade — post + comments + votes + bookmarks all vanish', async ({
   testuser,
   alice,
   request,
 }) => {
-  const created = await request.post('/api/posts', {
+  // testuser creates a post (request fixture is unauthenticated, so use testuser.request)
+  const created = await testuser.request.post('/api/posts', {
     data: {
       title: 'Cascade test',
       contentType: 'snippet',
@@ -644,15 +668,22 @@ test('delete: cascade — comments + votes + bookmarks all vanish with the post'
       isDraft: false,
     },
   });
+  expect(created.ok()).toBe(true);
   const { id: createdPostId } = await created.json();
 
-  // Alice (other user) creates a vote, bookmark, and comment
-  await alice.request.post(`/api/posts/${createdPostId}/votes`, { data: { value: 1 } });
-  await alice.request.post(`/api/posts/${createdPostId}/bookmarks`, { data: {} });
-  const cRes = await alice.request.post(`/api/posts/${createdPostId}/comments`, {
+  // Alice creates a vote, bookmark, and comment on testuser's post
+  const voteRes = await alice.request.post(`/api/posts/${createdPostId}/vote`, {
+    data: { value: 1 },
+  });
+  expect(voteRes.ok()).toBe(true);
+  const bookmarkRes = await alice.request.post(`/api/posts/${createdPostId}/bookmark`, {
+    data: {},
+  });
+  expect(bookmarkRes.ok()).toBe(true);
+  const commentRes = await alice.request.post(`/api/posts/${createdPostId}/comments`, {
     data: { body: 'cascade comment' },
   });
-  const { id: commentId } = await cRes.json();
+  expect(commentRes.ok()).toBe(true);
 
   // testuser deletes via UI
   await testuser.goto(`/posts/${createdPostId}`);
@@ -660,21 +691,16 @@ test('delete: cascade — comments + votes + bookmarks all vanish with the post'
   await posts.postDeleteConfirm(testuser).click();
   await expect(testuser).toHaveURL('/');
 
-  // Assert all three children gone (server returns 404 / empty)
-  const commentRes = await request.get(`/api/posts/${createdPostId}/comments/${commentId}`);
-  expect(commentRes.status()).toBe(404);
-
-  const votesRes = await request.get(`/api/posts/${createdPostId}/votes`);
-  expect(votesRes.status()).toBe(404);
-
-  const bookmarksRes = await request.get(`/api/posts/${createdPostId}/bookmarks`);
-  expect(bookmarksRes.status()).toBe(404);
+  // Cascade verification: the post itself returns 404. Postgres FK-cascade implies
+  // comments, votes, and bookmarks for this post are gone with it.
+  const postAfterDelete = await request.get(`/api/posts/${createdPostId}`);
+  expect(postAfterDelete.status()).toBe(404);
 });
 ```
 
-If a route returns 200 with empty body instead of 404 (depending on server semantics), update assertion to match observed behavior. **Single concept**: the post and its children are all gone after delete.
+**Single concept:** the post and its FK-cascaded children all vanish after delete.
 
-Run + commit each spec.
+Run + commit.
 
 ---
 
@@ -691,7 +717,7 @@ import { test, expect } from '../../fixtures/reset.js';
 import { posts } from '../../fixtures/selectors/posts.js';
 
 test('publish: draft → public toggles the badge', async ({ testuser, request }) => {
-  const created = await request.post('/api/posts', {
+  const created = await testuser.request.post('/api/posts', {
     data: {
       title: 'Publish-toggle seed',
       contentType: 'snippet',
@@ -711,19 +737,39 @@ test('publish: draft → public toggles the badge', async ({ testuser, request }
 });
 ```
 
-### Spec 5.2: `publish-list-reflects-state.spec.ts`
+### Spec 5.2: `publish-list-reflects-state.spec.ts` (adds `draft-badge` testid in PostListItem)
 
-Combined spec replacing original 5.2 + 5.3. Tests both states on `/my-snippets` (which already includes drafts per `feed.ts:137`).
+Combined spec replacing original 5.2 + 5.3. `PostListItem.vue:21-26` already renders a `Draft` text label (`v-if="post.isDraft"`); REV 3 only adds the `data-testid="draft-badge"` on it. There is no "Published" indicator in `PostListItem` (published is the default state, no badge needed); the spec verifies the draft-badge **appears** while draft, **disappears** after publish.
+
+#### Step 0: Add `draft-badge` testid to `PostListItem.vue`
+
+In `packages/client/src/components/post/PostListItem.vue` lines 21–26, add the testid:
+
+```vue
+<span
+  v-if="post.isDraft"
+  data-testid="draft-badge"
+  class="rounded bg-yellow-600/20 px-1.5 py-0.5 text-xs text-yellow-400"
+>
+  Draft
+</span>
+```
+
+(One-line addition, no behavior change.)
+
+#### Spec
+
+Uses `createdPostId` (mutates state). Locator scopes to the post's row by title:
 
 ```typescript
 import { test, expect } from '../../fixtures/reset.js';
 
-test('publish: /my-snippets shows the post with draft-badge before publish, published-badge after', async ({
+test('publish: /my-snippets list reflects publish state — draft badge present before, absent after', async ({
   testuser,
   request,
 }) => {
   const title = 'List-reflects-state seed';
-  const created = await request.post('/api/posts', {
+  const created = await testuser.request.post('/api/posts', {
     data: {
       title,
       contentType: 'snippet',
@@ -735,22 +781,34 @@ test('publish: /my-snippets shows the post with draft-badge before publish, publ
   });
   const { id: createdPostId } = await created.json();
 
-  // Before publish — show in /my-snippets with draft-badge
+  // /my-snippets includes drafts (feed.ts:137 — `// drafts included for filter=mine`)
   await testuser.goto('/my-snippets');
-  const itemBefore = testuser.getByText(title).locator('..');
-  await expect(itemBefore.getByTestId('draft-badge')).toBeVisible();
 
-  // Publish via API for speed
-  await request.patch(`/api/posts/${createdPostId}`, { data: { isDraft: false } });
+  // Before publish — locate the row by title; assert the row contains a draft-badge.
+  // Using `:has()` to scope the badge query to the row that holds the title text.
+  const draftRow = testuser
+    .locator('article, li, [data-testid="post-list-item"]')
+    .filter({ hasText: title });
+  await expect(draftRow.getByTestId('draft-badge')).toBeVisible();
 
-  // After publish — same /my-snippets list, now with published-badge
+  // Publish via authenticated API for speed (uses testuser's storage state)
+  const publishRes = await testuser.request.patch(`/api/posts/${createdPostId}`, {
+    data: { isDraft: false },
+  });
+  expect(publishRes.ok()).toBe(true);
+
+  // After publish — same row, no draft-badge
   await testuser.reload();
-  const itemAfter = testuser.getByText(title).locator('..');
-  await expect(itemAfter.getByTestId('published-badge')).toBeVisible();
+  const publishedRow = testuser
+    .locator('article, li, [data-testid="post-list-item"]')
+    .filter({ hasText: title });
+  await expect(publishedRow.getByTestId('draft-badge')).toHaveCount(0);
 });
 ```
 
-**Note:** the locator `.getByText(title).locator('..')` walks up to the post-list-item container. If `PostListItem.vue` doesn't render badges, scope to the actual badge-bearing ancestor. Adjust to actual DOM after first --headed run.
+**Locator note:** the row selector `article, li, [data-testid="post-list-item"]` is defensive — `PostListItem.vue` may render any of these. After the first `--headed` run, tighten to the actual element type or add a `post-list-item` testid on the root element if needed (1-line change, in scope).
+
+Run + commit: `feat(e2e,client): posts/publish — list-reflects-state + draft-badge testid on PostListItem`.
 
 Run + commit each.
 
@@ -900,7 +958,7 @@ REV 2: spec 8.3 asserts visible tag chips (no router-link assertion — no tag-p
 import { test, expect } from '../../fixtures/reset.js';
 
 test('tags: add a tag in the editor and it appears as a chip', async ({ testuser, request }) => {
-  const created = await request.post('/api/posts', {
+  const created = await testuser.request.post('/api/posts', {
     data: {
       title: 'Tag-add seed',
       contentType: 'snippet',
@@ -925,7 +983,7 @@ test('tags: add a tag in the editor and it appears as a chip', async ({ testuser
 import { test, expect } from '../../fixtures/reset.js';
 
 test('tags: clicking the remove icon on a chip removes the tag', async ({ testuser, request }) => {
-  const created = await request.post('/api/posts', {
+  const created = await testuser.request.post('/api/posts', {
     data: {
       title: 'Tag-remove seed',
       contentType: 'snippet',
@@ -1126,7 +1184,7 @@ import { posts } from '../../fixtures/selectors/posts.js';
 import { revisions } from '../../fixtures/selectors/revisions.js';
 
 test('revisions: editing a post auto-creates a new revision', async ({ testuser, request }) => {
-  const created = await request.post('/api/posts', {
+  const created = await testuser.request.post('/api/posts', {
     data: {
       title: 'Auto-rev seed',
       contentType: 'snippet',
@@ -1159,7 +1217,7 @@ test('revisions: clicking Save Revision creates a new revision with the current 
   testuser,
   request,
 }) => {
-  const created = await request.post('/api/posts', {
+  const created = await testuser.request.post('/api/posts', {
     data: {
       title: 'Manual-rev seed',
       contentType: 'snippet',
@@ -1320,7 +1378,7 @@ test('rollback: confirming restore swaps the post body to the chosen revision', 
   request,
 }) => {
   // Create a post with two revisions
-  const created = await request.post('/api/posts', {
+  const created = await testuser.request.post('/api/posts', {
     data: {
       title: 'Rollback seed',
       contentType: 'snippet',
@@ -1331,7 +1389,7 @@ test('rollback: confirming restore swaps the post body to the chosen revision', 
     },
   });
   const { id: createdPostId } = await created.json();
-  await request.post(`/api/posts/${createdPostId}/revisions`, {
+  await testuser.request.post(`/api/posts/${createdPostId}/revisions`, {
     data: { content: 'second body', message: 'Second' },
   });
 
@@ -1563,7 +1621,7 @@ Both items are noted in the PR body so reviewers see them explicitly.
 
 **4. File scope discipline:** No `packages/server/` files modified. Only the selector shards, seed.sql, and components/pages explicitly listed in the issue's file scope plus the design amendment.
 
-**5. Mutation discipline:** Every spec that mutates state uses `createdPostId` from a `request.post('/api/posts', ...)` setup. Read-only specs use pinned seed UUIDs.
+**5. Mutation discipline:** Every spec that mutates state uses `createdPostId` from a `testuser.request.post('/api/posts', ...)` setup (POST /api/posts requires auth per `posts.ts:44`; using the testuser Page's APIRequestContext authenticates via inherited storage state). Read-only specs use pinned seed UUIDs and the unauthenticated `request` fixture (since the public GETs don't require auth).
 
 **6. Single-concept assertions:** Each spec has one primary assertion (or a tightly related cluster — e.g., 4.3 asserts comment + vote + bookmark all gone, all tied to one concept "cascade-delete works"). No spec branches on a `if/else` to assert different things.
 
