@@ -147,6 +147,23 @@ describe('usePosts', () => {
       });
     });
 
+    it('should extract id from wrapped {post, revision} response', async () => {
+      const mockPost = createMockPost();
+      const wrapped = { post: mockPost, revision: { id: 'rev-x' } };
+      mockApiFetch.mockResolvedValue(new Response(JSON.stringify(wrapped), { status: 201 }));
+
+      const { createPost } = usePosts();
+      const id = await createPost({
+        title: 'Test Post',
+        contentType: ContentType.Snippet,
+        language: 'typescript',
+        visibility: Visibility.Public,
+        content: 'hello',
+      });
+
+      expect(id).toBe('post-1');
+    });
+
     it('should return null and set error on failure', async () => {
       mockApiFetch.mockResolvedValue(
         new Response(JSON.stringify({ error: 'Validation failed' }), { status: 400 }),
@@ -275,6 +292,19 @@ describe('usePosts', () => {
       expect(store.currentPost).toEqual(jsonRoundTrip(mockPost));
     });
 
+    it('should unwrap a {post: ...} response and store the post', async () => {
+      const mockPost = createMockPost();
+      mockApiFetch.mockResolvedValue(
+        new Response(JSON.stringify({ post: mockPost }), { status: 200 }),
+      );
+
+      const { fetchPost } = usePosts();
+      await fetchPost('post-1');
+
+      const store = usePostsStore();
+      expect(store.currentPost).toEqual(jsonRoundTrip(mockPost));
+    });
+
     it('should set error on failure', async () => {
       mockApiFetch.mockResolvedValue(
         new Response(JSON.stringify({ error: 'Not found' }), { status: 404 }),
@@ -335,6 +365,23 @@ describe('usePosts', () => {
 
       const { updatePost } = usePosts();
       await updatePost('post-1', { title: 'Updated Title' });
+
+      const store = usePostsStore();
+      expect(store.currentPost).toEqual(jsonRoundTrip(updatedPost));
+    });
+
+    it('should unwrap a `{ post }` wrapper from the server response', async () => {
+      // The Fastify routes wrap the PATCH response as `{ post: ... }` — same
+      // shape as fetchPost — but earlier versions of updatePost stored the
+      // wrapper directly. That broke fields like forkedFromId that downstream
+      // consumers (e.g. fork-attribution on PostEditPage) rely on.
+      const updatedPost = createMockPost({ title: 'Wrapped Title' });
+      mockApiFetch.mockResolvedValue(
+        new Response(JSON.stringify({ post: updatedPost }), { status: 200 }),
+      );
+
+      const { updatePost } = usePosts();
+      await updatePost('post-1', { title: 'Wrapped Title' });
 
       const store = usePostsStore();
       expect(store.currentPost).toEqual(jsonRoundTrip(updatedPost));
@@ -425,7 +472,7 @@ describe('usePosts', () => {
   });
 
   describe('publishPost', () => {
-    it('should PATCH /api/posts/:id/publish', async () => {
+    it('should POST /api/posts/:id/publish', async () => {
       const publishedPost = createMockPost({ isDraft: false });
       mockApiFetch.mockResolvedValue(new Response(JSON.stringify(publishedPost), { status: 200 }));
 
@@ -433,7 +480,7 @@ describe('usePosts', () => {
       await publishPost('post-1');
 
       expect(mockApiFetch).toHaveBeenCalledWith('/api/posts/post-1/publish', {
-        method: 'PATCH',
+        method: 'POST',
       });
     });
 
@@ -490,6 +537,20 @@ describe('usePosts', () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: 'updated content', message: 'revision message' }),
+      });
+    });
+
+    it('should omit message field from body when message is null', async () => {
+      const mockRevision = createMockRevision();
+      mockApiFetch.mockResolvedValue(new Response(JSON.stringify(mockRevision), { status: 201 }));
+
+      const { saveRevision } = usePosts();
+      await saveRevision('post-1', 'updated content', null);
+
+      expect(mockApiFetch).toHaveBeenCalledWith('/api/posts/post-1/revisions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: 'updated content' }),
       });
     });
 

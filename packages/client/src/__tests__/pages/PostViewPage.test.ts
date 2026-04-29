@@ -13,11 +13,13 @@ import type { User } from '@forge/shared';
 const mockFetchPost = vi.fn();
 const mockDeletePost = vi.fn();
 const mockPostError: Ref<string | null> = ref(null);
+const mockForkPost = vi.fn();
 
 vi.mock('@/composables/usePosts', () => ({
   usePosts: () => ({
     fetchPost: mockFetchPost,
     deletePost: mockDeletePost,
+    forkPost: mockForkPost,
     error: mockPostError,
   }),
 }));
@@ -66,6 +68,31 @@ vi.mock('@/components/post/PresenceIndicator.vue', () => ({
     name: 'PresenceIndicator',
     props: ['postId'],
     template: '<div data-testid="presence-indicator"></div>',
+  },
+}));
+
+// --- Mock PostActions (Phase-4 social bar) ---
+// Includes a `fork` emit so the fork-action wiring on PostViewPage can be
+// exercised without depending on the real PostActions implementation.
+vi.mock('@/components/post/PostActions.vue', () => ({
+  default: {
+    name: 'PostActions',
+    props: ['post'],
+    emits: ['fork'],
+    template:
+      '<div data-testid="post-actions">' +
+      '<button data-testid="post-actions-fork" @click="$emit(\'fork\')">Fork</button>' +
+      'vc:{{ post?.voteCount }}' +
+      '</div>',
+  },
+}));
+
+// --- Mock CommentSection ---
+vi.mock('@/components/post/CommentSection.vue', () => ({
+  default: {
+    name: 'CommentSection',
+    props: ['postId', 'currentUserId'],
+    template: '<div data-testid="comment-section">{{ postId }}|{{ currentUserId }}</div>',
   },
 }));
 
@@ -217,9 +244,40 @@ describe('PostViewPage', () => {
       await flushPromises();
 
       expect(wrapper.text()).toContain('Test Post');
+      const titleEl = wrapper.find('[data-testid="post-title"]');
+      expect(titleEl.exists()).toBe(true);
+      expect(titleEl.text()).toContain('Test Post');
       const codeViewer = wrapper.find('[data-testid="code-viewer"]');
       expect(codeViewer.exists()).toBe(true);
       expect(codeViewer.text()).toContain('const x = 1;');
+    });
+
+    it('should render draft-badge when post.isDraft is true', async () => {
+      const post = createMockPost({ isDraft: true });
+      mockFetchPost.mockImplementation(async () => {
+        mockCurrentPost.value = post;
+      });
+      mockUser.value = createMockUser({ id: 'user-1' });
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      const badge = wrapper.find('[data-testid="draft-badge"]');
+      expect(badge.exists()).toBe(true);
+      expect(badge.text()).toContain('Draft');
+    });
+
+    it('should NOT render draft-badge when post.isDraft is false', async () => {
+      const post = createMockPost({ isDraft: false });
+      mockFetchPost.mockImplementation(async () => {
+        mockCurrentPost.value = post;
+      });
+      mockUser.value = createMockUser({ id: 'user-1' });
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid="draft-badge"]').exists()).toBe(false);
     });
 
     it('should show Edit and Delete buttons for the author', async () => {
@@ -348,6 +406,74 @@ describe('PostViewPage', () => {
 
       expect(mockDeletePost).toHaveBeenCalledWith('post-1');
       expect(router.currentRoute.value.path).toBe('/');
+    });
+  });
+
+  describe('fork action', () => {
+    it('should call forkPost and redirect to the new post-edit page on success', async () => {
+      const post = createMockPost({ authorId: 'user-2' });
+      mockFetchPost.mockImplementation(async () => {
+        mockCurrentPost.value = post;
+      });
+      mockForkPost.mockResolvedValue('new-post-id');
+      mockUser.value = createMockUser({ id: 'user-1' });
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      await wrapper.find('[data-testid="post-actions-fork"]').trigger('click');
+      await flushPromises();
+
+      expect(mockForkPost).toHaveBeenCalledWith('post-1');
+      expect(router.currentRoute.value.path).toBe('/posts/new-post-id/edit');
+    });
+
+    it('should NOT navigate when forkPost returns null', async () => {
+      const post = createMockPost({ authorId: 'user-2' });
+      mockFetchPost.mockImplementation(async () => {
+        mockCurrentPost.value = post;
+      });
+      mockForkPost.mockResolvedValue(null);
+      mockUser.value = createMockUser({ id: 'user-1' });
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      const initialPath = router.currentRoute.value.path;
+      await wrapper.find('[data-testid="post-actions-fork"]').trigger('click');
+      await flushPromises();
+
+      expect(mockForkPost).toHaveBeenCalledWith('post-1');
+      expect(router.currentRoute.value.path).toBe(initialPath);
+    });
+
+    it('should NOT call forkPost when currentPost is null (early-exit guard)', async () => {
+      // Mount with a post so PostActions renders and we can capture the
+      // component instance. Then null currentPost — but the v-if branch
+      // unrenders PostActions, so to drive the `if (!currentPost.value)
+      // return;` guard we have to call handleFork via the captured handle
+      // BEFORE the v-if removes it. The captured emit triggers handleFork in
+      // the same micro-task as the value=null mutation, but Vue's reactivity
+      // is async — so by the time handleFork runs, currentPost is already
+      // null. That's the precise condition we want to assert.
+      mockFetchPost.mockImplementation(async () => {
+        mockCurrentPost.value = createMockPost({ authorId: 'user-2' });
+      });
+      mockUser.value = createMockUser({ id: 'user-1' });
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      const actions = wrapper.findComponent({ name: 'PostActions' });
+      expect(actions.exists()).toBe(true);
+      mockForkPost.mockClear();
+
+      // Emit and null in the same tick so the listener sees currentPost=null.
+      mockCurrentPost.value = null;
+      actions.vm.$emit('fork');
+      await flushPromises();
+
+      expect(mockForkPost).not.toHaveBeenCalled();
     });
   });
 
@@ -493,6 +619,119 @@ describe('PostViewPage', () => {
       await flushPromises();
 
       expect(wrapper.find('[data-testid="presence-indicator"]').exists()).toBe(true);
+    });
+  });
+
+  describe('PostActions + CommentSection wiring', () => {
+    it('renders PostActions with the synthesised PostWithAuthor adapter', async () => {
+      const post = createMockPost({ voteCount: 42 });
+      mockFetchPost.mockImplementation(async () => {
+        mockCurrentPost.value = post;
+      });
+      mockUser.value = createMockUser({ id: post.authorId });
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      const actions = wrapper.find('[data-testid="post-actions"]');
+      expect(actions.exists()).toBe(true);
+      expect(actions.text()).toContain('vc:42');
+    });
+
+    it('does NOT render PostActions when currentPost becomes null', async () => {
+      const post = createMockPost();
+      mockFetchPost.mockImplementation(async () => {
+        mockCurrentPost.value = post;
+      });
+      mockUser.value = createMockUser({ id: post.authorId });
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      // Sanity: PostActions is rendered while the post is present.
+      expect(wrapper.find('[data-testid="post-actions"]').exists()).toBe(true);
+
+      // Clear currentPost — the surrounding v-if unmounts the whole block.
+      mockCurrentPost.value = null;
+      await wrapper.vm.$nextTick();
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid="post-actions"]').exists()).toBe(false);
+    });
+
+    it('renders CommentSection wired to postId + currentUserId', async () => {
+      const post = createMockPost({ id: 'pv-id' });
+      mockFetchPost.mockImplementation(async () => {
+        mockCurrentPost.value = post;
+      });
+      mockUser.value = createMockUser({ id: 'viewer-id' });
+
+      const wrapper = await mountPage('pv-id');
+      await flushPromises();
+
+      const section = wrapper.find('[data-testid="comment-section"]');
+      expect(section.exists()).toBe(true);
+      expect(section.text()).toContain('pv-id');
+      expect(section.text()).toContain('viewer-id');
+    });
+
+    it('passes empty currentUserId to CommentSection when user is null', async () => {
+      const post = createMockPost({ id: 'pv-id' });
+      mockFetchPost.mockImplementation(async () => {
+        mockCurrentPost.value = post;
+      });
+      mockUser.value = null;
+
+      const wrapper = await mountPage('pv-id');
+      await flushPromises();
+
+      const section = wrapper.find('[data-testid="comment-section"]');
+      expect(section.exists()).toBe(true);
+      expect(section.text()).toContain('pv-id');
+    });
+
+    it('synthesises author fields from the latest revision (covers rev-present branch)', async () => {
+      type RevWithMeta = NonNullable<PostWithRevision['revisions']>[number] & {
+        authorDisplayName?: string | null;
+        authorAvatarUrl?: string | null;
+      };
+      const rev: RevWithMeta = {
+        id: 'rev-x',
+        postId: 'post-1',
+        content: 'x',
+        message: null,
+        revisionNumber: 1,
+        createdAt: new Date(),
+        authorDisplayName: 'Display',
+        authorAvatarUrl: 'https://avatar.example/x.png',
+      };
+      const post = createMockPost({
+        revisions: [rev as PostWithRevision['revisions'][number]],
+      });
+      mockFetchPost.mockImplementation(async () => {
+        mockCurrentPost.value = post;
+      });
+      mockUser.value = createMockUser({ id: post.authorId });
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      // With the revision present, postForActions resolves successfully.
+      expect(wrapper.find('[data-testid="post-actions"]').exists()).toBe(true);
+    });
+
+    it('handles no-revision case in postForActions adapter (rev?.field fallback)', async () => {
+      const post = createMockPost({ revisions: [] });
+      mockFetchPost.mockImplementation(async () => {
+        mockCurrentPost.value = post;
+      });
+      mockUser.value = createMockUser({ id: post.authorId });
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      // Even with no revision, postForActions must still resolve (uses ?? fallbacks).
+      expect(wrapper.find('[data-testid="post-actions"]').exists()).toBe(true);
     });
   });
 });

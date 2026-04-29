@@ -1,0 +1,6 @@
+.auth/
+test-results/
+playwright-report/
+forge-e2e-secret
+node_modules/
+dist/

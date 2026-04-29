@@ -10,6 +10,7 @@ interface CreatePostInput {
   contentType: ContentType;
   language: string | null;
   visibility: Visibility;
+  content?: string;
 }
 
 async function parseErrorMessage(response: Response, fallback: string): Promise<string> {
@@ -40,8 +41,13 @@ export function usePosts() {
         return null;
       }
 
-      const data = (await response.json()) as PostWithRevision;
-      return data.id;
+      // Server returns either a bare post or a {post, revision} wrapper when
+      // an inline `content` field is supplied at create time. Handle both.
+      const data = (await response.json()) as
+        | PostWithRevision
+        | { post: PostWithRevision; revision: unknown };
+      const id = 'post' in data ? data.post.id : data.id;
+      return id;
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Failed to create post';
       return null;
@@ -58,8 +64,11 @@ export function usePosts() {
         return;
       }
 
-      const data = (await response.json()) as PostWithRevision;
-      store.setPost(data);
+      // Server wraps the response as `{ post: PostWithRevision }`. Older test
+      // mocks return the bare post — handle both for compatibility.
+      const data = (await response.json()) as PostWithRevision | { post: PostWithRevision };
+      const post = 'post' in data ? data.post : data;
+      store.setPost(post);
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Failed to fetch post';
     }
@@ -79,7 +88,14 @@ export function usePosts() {
         return;
       }
 
-      const updated = (await response.json()) as PostWithRevision;
+      // Server wraps the response as `{ post: PostWithRevision }`. Older test
+      // mocks return the bare post — handle both for compatibility (mirrors
+      // fetchPost). Without unwrapping, setPost would store the wrapper and
+      // currentPost.forkedFromId / .id would become undefined, breaking
+      // downstream consumers that rely on those fields (e.g. fork-attribution
+      // on the post-edit page).
+      const updatedRaw = (await response.json()) as PostWithRevision | { post: PostWithRevision };
+      const updated = 'post' in updatedRaw ? updatedRaw.post : updatedRaw;
       store.setPost(updated);
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Failed to update post';
@@ -108,7 +124,7 @@ export function usePosts() {
     error.value = null;
     try {
       const response = await apiFetch(`/api/posts/${id}/publish`, {
-        method: 'PATCH',
+        method: 'POST',
       });
 
       if (!response.ok) {
@@ -131,10 +147,15 @@ export function usePosts() {
     error.value = null;
     store.setSaveStatus('saving');
     try {
+      // Server's createRevisionSchema treats `message` as optional string —
+      // sending an explicit null fails validation, so we only include the
+      // field when the caller actually has a message to attach.
+      const body: { content: string; message?: string } = { content };
+      if (message !== null) body.message = message;
       const response = await apiFetch(`/api/posts/${postId}/revisions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content, message }),
+        body: JSON.stringify(body),
       });
 
       if (!response.ok) {

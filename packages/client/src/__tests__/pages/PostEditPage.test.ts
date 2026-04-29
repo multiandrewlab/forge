@@ -256,6 +256,64 @@ describe('PostEditPage', () => {
 
       expect(wrapper.text()).toContain('Failed to fetch post');
     });
+
+    it('should tag the error block with data-testid="forbidden-page" when the error is a 403', async () => {
+      // The Phase 6 e2e journey asserts on shell.forbiddenPage to confirm a
+      // permission boundary. Any error containing "forbidden" (case-insensitive)
+      // makes the error block addressable to the test selector.
+      mockError.value = 'Forbidden';
+      mockFetchPost.mockResolvedValue(undefined);
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid="forbidden-page"]').exists()).toBe(true);
+    });
+
+    it('should NOT tag the error block when the error is unrelated to permissions', async () => {
+      mockError.value = 'Failed to fetch post';
+      mockFetchPost.mockResolvedValue(undefined);
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid="forbidden-page"]').exists()).toBe(false);
+    });
+
+    it('should render fork-attribution when the post is a fork', async () => {
+      // When a post has forkedFromId set, the edit page must render an
+      // attribution block with a router-link back to the source post. This is
+      // the surface that the e2e journey (Phase 5) asserts after a fork
+      // redirects the user to /posts/<newId>/edit.
+      const sourceId = 'c0000000-0000-0000-0000-000000000099';
+      const post = createMockPost({ forkedFromId: sourceId });
+      mockFetchPost.mockImplementation(async () => {
+        const store = usePostsStore();
+        store.setPost(post);
+      });
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      const attribution = wrapper.find('[data-testid="fork-attribution"]');
+      expect(attribution.exists()).toBe(true);
+      expect(attribution.text()).toContain('Forked from');
+      // The link target uses the named route, but the resolved href encodes
+      // the source post id — that's the load-bearing back-pointer.
+      const link = attribution.find('a');
+      expect(link.attributes('href')).toContain(sourceId);
+    });
+
+    it('should NOT render fork-attribution when the post is not a fork', async () => {
+      const post = createMockPost({ forkedFromId: null });
+      mockFetchPost.mockImplementation(async () => {
+        const store = usePostsStore();
+        store.setPost(post);
+      });
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid="fork-attribution"]').exists()).toBe(false);
+    });
   });
 
   // ── Loading guard in watchers (lines 46, 57) ──────────────────

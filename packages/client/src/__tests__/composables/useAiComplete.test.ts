@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { createPinia, setActivePinia } from 'pinia';
 
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
@@ -18,6 +19,10 @@ import { useAiComplete } from '../../composables/useAiComplete.js';
 
 describe('useAiComplete', () => {
   beforeEach(() => {
+    // useAiComplete reads the auth store to attach a bearer token to its
+    // SSE fetch (since the AI route is auth-gated server-side); a fresh
+    // Pinia per-test keeps the token unset so requests behave as anonymous.
+    setActivePinia(createPinia());
     vi.useFakeTimers();
     mockFetch.mockReset();
   });
@@ -174,5 +179,23 @@ describe('useAiComplete', () => {
     await vi.runAllTimersAsync();
     expect(c.suggestion.value).toBeNull();
     expect(c.isLoading.value).toBe(false);
+  });
+
+  it('attaches Authorization header when auth store has an access token', async () => {
+    // Lazy-import to ensure the freshly-set Pinia is active before the store is created.
+    const { useAuthStore } = await import('../../stores/auth.js');
+    const authStore = useAuthStore();
+    authStore.$patch({ accessToken: 'tok-abc' });
+    mockFetch.mockResolvedValue(sseStreamOf(['event: done\ndata: {}\n\n']));
+    const c = useAiComplete();
+    c.requestCompletion({ before: '', after: '', language: 'js' });
+    await vi.advanceTimersByTimeAsync(300);
+    await vi.runAllTimersAsync();
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    const callArgs = mockFetch.mock.calls[0];
+    if (!callArgs) throw new Error('fetch was not called');
+    const init = callArgs[1] as RequestInit;
+    const headers = init.headers as Record<string, string>;
+    expect(headers.Authorization).toBe('Bearer tok-abc');
   });
 });

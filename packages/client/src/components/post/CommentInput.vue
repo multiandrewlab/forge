@@ -2,6 +2,7 @@
   <form class="flex flex-col gap-2" @submit.prevent="handleSubmit">
     <textarea
       v-model="body"
+      data-testid="comment-input"
       :placeholder="placeholder"
       class="w-full resize-none rounded border border-gray-600 bg-surface-800 px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:border-primary focus:outline-none"
       rows="3"
@@ -9,6 +10,7 @@
     <div class="flex items-center gap-2">
       <button
         type="submit"
+        data-testid="comment-submit-btn"
         :disabled="!body.trim()"
         class="rounded bg-primary px-3 py-1 text-sm font-medium text-white disabled:opacity-50"
       >

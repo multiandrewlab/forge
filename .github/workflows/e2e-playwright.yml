@@ -1,0 +1,195 @@
+# E2E Playwright workflow
+#
+# IMPORTANT: this workflow uses `pull_request` (NOT `pull_request_target`).
+# `pull_request_target` would expose secrets to fork PRs and let a malicious
+# fork PR exploit ENABLE_TEST_ROUTES against this repo's database. With
+# `pull_request`, fork PRs run with a read-only GITHUB_TOKEN.
+#
+# Initial state: continue-on-error=true, NOT a required check.
+# Promotion to required after 14 consecutive green main runs (tracked in #43).
+
+name: E2E (Playwright)
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+env:
+  ENABLE_TEST_ROUTES: '1'
+  LLM_PROVIDER: 'mock'
+  E2E_MODE: '1'
+  NODE_ENV: 'test'
+  CI: 'true'
+
+jobs:
+  e2e:
+    name: Playwright journey smoke
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    timeout-minutes: 15
+
+    # Pattern mirrors .github/workflows/bruno-regression.yml:
+    #   - postgres user/password = forge/forge (NOT the docker-compose forge_dev value)
+    #   - schema applied via `cd packages/server && npm run migrate:up`
+    #   - seed applied via `psql -f scripts/seed.sql`
+    # Migration 001 already runs `CREATE EXTENSION IF NOT EXISTS uuid-ossp/pg_trgm/unaccent`,
+    # so we do NOT need to apply docker/init-db.sql separately.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: forge
+          POSTGRES_USER: forge
+          POSTGRES_PASSWORD: forge
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U forge"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      minio:
+        image: minio/minio:latest
+        env:
+          MINIO_ROOT_USER: forge_minio
+          MINIO_ROOT_PASSWORD: forge_minio_secret
+        ports:
+          - 9000:9000
+        options: >-
+          --health-cmd "curl -f http://localhost:9000/minio/health/live"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build @forge/shared
+        run: npm run build --workspace=@forge/shared
+
+      - name: Run migrations
+        env:
+          DATABASE_URL: postgres://forge:forge@localhost:5432/forge
+        run: cd packages/server && npm run migrate:up
+
+      - name: Seed database
+        env:
+          DATABASE_URL: postgres://forge:forge@localhost:5432/forge
+        run: psql "$DATABASE_URL" -f scripts/seed.sql
+
+      - name: Build client (production)
+        run: npm run build --workspace=@forge/client
+
+      - name: Start API server
+        env:
+          DATABASE_URL: postgres://forge:forge@localhost:5432/forge
+          MINIO_ENDPOINT: localhost
+          MINIO_PORT: '9000'
+          MINIO_ACCESS_KEY: forge_minio
+          MINIO_SECRET_KEY: forge_minio_secret
+          MINIO_BUCKET: forge-e2e
+          JWT_SECRET: ci-test-secret
+          JWT_REFRESH_SECRET: ci-test-refresh-secret
+          PORT: '3001'
+          # HOST=localhost so the API binds same-host as the preview server below.
+          # This keeps the refresh_token cookie (sameSite: strict) attachable
+          # when the SPA proxies /api/auth/refresh from localhost:4173.
+          HOST: 'localhost'
+        # MinIO bucket auto-creation: the storage plugin's ensureBucket() runs on
+        # server startup (packages/server/src/plugins/storage.ts), which creates
+        # the `forge-e2e` bucket if absent. No `mc mb` step needed. If the
+        # journey's upload sub-test ever fails with NoSuchBucket, add an explicit
+        # bucket-create step here.
+        run: |
+          mkdir -p "$RUNNER_TEMP"
+          cd packages/server
+          nohup npx tsx src/server.ts > "$RUNNER_TEMP/server.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/server.pid"
+          # Wait up to 60s for /api/health
+          for i in {1..60}; do
+            if curl -fsS http://localhost:3001/api/health >/dev/null 2>&1; then
+              echo "API ready after ${i}s"
+              break
+            fi
+            sleep 1
+          done
+
+      - name: Start Vite preview
+        run: |
+          cd packages/client
+          # --host localhost (NOT 127.0.0.1) so the preview origin is same-site
+          # with the API origin. See Task 3.5 / playwright.config.ts comments.
+          nohup npm run preview -- --port 4173 --host localhost > "$RUNNER_TEMP/preview.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/preview.pid"
+          for i in {1..60}; do
+            if curl -fsS http://localhost:4173/ >/dev/null 2>&1; then
+              echo "Preview ready after ${i}s"
+              break
+            fi
+            sleep 1
+          done
+
+      - name: Install Playwright Chromium
+        run: |
+          cd e2e
+          npx playwright install --with-deps chromium
+
+      - name: Run journey smoke
+        env:
+          API_URL: http://localhost:3001
+          PREVIEW_URL: http://localhost:4173
+          MINIO_HEALTH_URL: http://localhost:9000/minio/health/live
+        run: npm run e2e -- --reporter=github,html,list
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: e2e/playwright-report/
+          retention-days: 14
+
+      - name: Upload server + preview logs (debug)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-server-logs
+          path: |
+            ${{ runner.temp }}/server.log
+            ${{ runner.temp }}/preview.log
+          retention-days: 7
+
+      # Default GITHUB_TOKEN write perms for `pull_request` cover issues:write
+      # (PR comments use the issues API). If repo branch protection tightens
+      # this, add `permissions: { issues: write, pull-requests: write,
+      # contents: read }` at the job level.
+      - name: Comment on PR with artifact link
+        if: failure() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = [
+              ':red_circle: **E2E Playwright failed.**',
+              '',
+              `Report artifact: ${runUrl}#artifacts (look for \`playwright-report\`).`,
+              `Server logs: \`e2e-server-logs\`.`,
+              '',
+              '_This check is currently `continue-on-error: true` and does not block merge._',
+            ].join('\n');
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body,
+            });

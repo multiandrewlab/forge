@@ -1,4 +1,5 @@
 <script setup lang="ts">
+/* global HTMLInputElement */
 import { ref, computed, watch } from 'vue';
 import type { ContentType, Visibility, AiCompleteRequest, AiGenerateRequest } from '@forge/shared';
 import type { EditorView } from '@codemirror/view';
@@ -35,10 +36,15 @@ const emit = defineEmits<{
   'update:contentType': [value: ContentType];
   'update:tags': [value: string[]];
   publish: [];
+  'save-draft': [];
 }>();
 
 const filesStore = useFilesStore();
 const isDragging = ref(false);
+// Local list of files attached pre-creation (no postId yet). Mirrors the
+// staged-files concept but lives in the component so the new-post page can
+// preview attachments before the post exists.
+const localStagedFiles = ref<{ name: string; size: number }[]>([]);
 const showFileSidebar = computed(() => filesStore.stagedFiles.length > 0);
 
 function handleDrop(e: DragEvent): void {
@@ -53,6 +59,19 @@ function handleDrop(e: DragEvent): void {
 async function handleFileUpload(file: File): Promise<void> {
   if (!props.postId) return;
   await filesStore.uploadFile(props.postId, file);
+}
+
+function handleLocalFileChange(event: Event): void {
+  const input = event.target as HTMLInputElement;
+  const files = input.files;
+  if (!files || files.length === 0) return;
+  for (const file of Array.from(files)) {
+    if (props.postId) {
+      void filesStore.uploadFile(props.postId, file);
+    } else {
+      localStagedFiles.value.push({ name: file.name, size: file.size });
+    }
+  }
 }
 
 const editorRef = ref<{ view: EditorView | null } | null>(null);
@@ -90,7 +109,7 @@ const isAiGenerateContentType = computed(() => AI_GENERATE_CONTENT_TYPES.has(pro
   <div class="flex h-full flex-col rounded-lg border border-surface-500 bg-surface">
     <div class="flex items-center gap-3 border-b border-surface-500 px-4 py-3">
       <input
-        data-testid="title-input"
+        data-testid="new-post-title-input"
         :value="title"
         type="text"
         placeholder="Snippet title..."
@@ -99,7 +118,14 @@ const isAiGenerateContentType = computed(() => AI_GENERATE_CONTENT_TYPES.has(pro
       />
       <DraftStatus :status="saveStatus" :last-saved-at="lastSavedAt" />
       <button
-        data-testid="publish-button"
+        data-testid="new-post-save-draft-btn"
+        class="rounded border border-surface-500 px-4 py-1.5 text-sm font-medium text-gray-200 hover:bg-surface-600"
+        @click="emit('save-draft')"
+      >
+        Save Draft
+      </button>
+      <button
+        data-testid="new-post-publish-btn"
         class="rounded bg-primary px-4 py-1.5 text-sm font-medium text-white hover:bg-primary-600"
         @click="emit('publish')"
       >
@@ -118,6 +144,29 @@ const isAiGenerateContentType = computed(() => AI_GENERATE_CONTENT_TYPES.has(pro
         @update:content-type="(val) => emit('update:contentType', val)"
         @update:tags="(val) => emit('update:tags', val)"
       />
+      <!--
+        Always-available file attach input. Hidden in the layout (label is the
+        accessible affordance) but visible-to-Playwright via getByTestId. When
+        no postId exists yet (new-post page), uploads are staged locally and
+        rendered as preview tiles. Once the post is created, real uploads flow
+        through filesStore.
+      -->
+      <input
+        data-testid="file-upload-input"
+        type="file"
+        class="sr-only"
+        @change="handleLocalFileChange"
+      />
+      <div v-if="localStagedFiles.length > 0" class="mt-2 flex flex-wrap gap-2">
+        <div
+          v-for="(file, idx) in localStagedFiles"
+          :key="`${file.name}-${idx}`"
+          data-testid="file-upload-preview"
+          class="rounded border border-surface-500 bg-surface-700 px-2 py-1 text-xs text-gray-300"
+        >
+          {{ file.name }}
+        </div>
+      </div>
     </div>
 
     <div
@@ -139,7 +188,7 @@ const isAiGenerateContentType = computed(() => AI_GENERATE_CONTENT_TYPES.has(pro
           <FileUpload @upload="handleFileUpload" />
         </template>
       </FileSidebar>
-      <div class="flex-1 relative">
+      <div data-testid="new-post-body-editor" class="flex-1 relative">
         <CodeEditor
           ref="editorRef"
           :model-value="modelValue"

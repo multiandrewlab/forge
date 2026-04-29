@@ -63,19 +63,19 @@ describe('RegisterPage', () => {
 
     it('should render display name input', async () => {
       const wrapper = await mountRegisterPage();
-      const nameInput = wrapper.find('input[data-testid="display-name"]');
+      const nameInput = wrapper.find('input[data-testid="register-name-input"]');
       expect(nameInput.exists()).toBe(true);
     });
 
     it('should render password input', async () => {
       const wrapper = await mountRegisterPage();
-      const passwordInput = wrapper.find('input[data-testid="password"]');
+      const passwordInput = wrapper.find('input[data-testid="register-password-input"]');
       expect(passwordInput.exists()).toBe(true);
     });
 
     it('should render confirm password input', async () => {
       const wrapper = await mountRegisterPage();
-      const confirmInput = wrapper.find('input[data-testid="confirm-password"]');
+      const confirmInput = wrapper.find('input[data-testid="register-confirm-password-input"]');
       expect(confirmInput.exists()).toBe(true);
     });
 
@@ -97,9 +97,11 @@ describe('RegisterPage', () => {
       const wrapper = await mountRegisterPage();
 
       await wrapper.find('input[type="email"]').setValue('not-an-email');
-      await wrapper.find('input[data-testid="display-name"]').setValue('Test');
-      await wrapper.find('input[data-testid="password"]').setValue('password1');
-      await wrapper.find('input[data-testid="confirm-password"]').setValue('password1');
+      await wrapper.find('input[data-testid="register-name-input"]').setValue('Test');
+      await wrapper.find('input[data-testid="register-password-input"]').setValue('password1');
+      await wrapper
+        .find('input[data-testid="register-confirm-password-input"]')
+        .setValue('password1');
       await wrapper.find('form').trigger('submit');
       await flushPromises();
 
@@ -111,9 +113,11 @@ describe('RegisterPage', () => {
       const wrapper = await mountRegisterPage();
 
       await wrapper.find('input[type="email"]').setValue('test@example.com');
-      await wrapper.find('input[data-testid="display-name"]').setValue('Test');
-      await wrapper.find('input[data-testid="password"]').setValue('password1');
-      await wrapper.find('input[data-testid="confirm-password"]').setValue('different1');
+      await wrapper.find('input[data-testid="register-name-input"]').setValue('Test');
+      await wrapper.find('input[data-testid="register-password-input"]').setValue('password1');
+      await wrapper
+        .find('input[data-testid="register-confirm-password-input"]')
+        .setValue('different1');
       await wrapper.find('form').trigger('submit');
       await flushPromises();
 
@@ -125,9 +129,9 @@ describe('RegisterPage', () => {
       const wrapper = await mountRegisterPage();
 
       await wrapper.find('input[type="email"]').setValue('test@example.com');
-      await wrapper.find('input[data-testid="display-name"]').setValue('Test');
-      await wrapper.find('input[data-testid="password"]').setValue('short1');
-      await wrapper.find('input[data-testid="confirm-password"]').setValue('short1');
+      await wrapper.find('input[data-testid="register-name-input"]').setValue('Test');
+      await wrapper.find('input[data-testid="register-password-input"]').setValue('short1');
+      await wrapper.find('input[data-testid="register-confirm-password-input"]').setValue('short1');
       await wrapper.find('form').trigger('submit');
       await flushPromises();
 
@@ -138,9 +142,11 @@ describe('RegisterPage', () => {
       const wrapper = await mountRegisterPage();
 
       await wrapper.find('input[type="email"]').setValue('test@example.com');
-      await wrapper.find('input[data-testid="display-name"]').setValue('Test');
-      await wrapper.find('input[data-testid="password"]').setValue('passwordonly');
-      await wrapper.find('input[data-testid="confirm-password"]').setValue('passwordonly');
+      await wrapper.find('input[data-testid="register-name-input"]').setValue('Test');
+      await wrapper.find('input[data-testid="register-password-input"]').setValue('passwordonly');
+      await wrapper
+        .find('input[data-testid="register-confirm-password-input"]')
+        .setValue('passwordonly');
       await wrapper.find('form').trigger('submit');
       await flushPromises();
 
@@ -154,9 +160,11 @@ describe('RegisterPage', () => {
       const wrapper = await mountRegisterPage();
 
       await wrapper.find('input[type="email"]').setValue('new@example.com');
-      await wrapper.find('input[data-testid="display-name"]').setValue('New User');
-      await wrapper.find('input[data-testid="password"]').setValue('password1');
-      await wrapper.find('input[data-testid="confirm-password"]').setValue('password1');
+      await wrapper.find('input[data-testid="register-name-input"]').setValue('New User');
+      await wrapper.find('input[data-testid="register-password-input"]').setValue('password1');
+      await wrapper
+        .find('input[data-testid="register-confirm-password-input"]')
+        .setValue('password1');
       await wrapper.find('form').trigger('submit');
       await flushPromises();
 
@@ -177,9 +185,11 @@ describe('RegisterPage', () => {
       const wrapper = await mountRegisterPage();
 
       await wrapper.find('input[type="email"]').setValue('new@example.com');
-      await wrapper.find('input[data-testid="display-name"]').setValue('New User');
-      await wrapper.find('input[data-testid="password"]').setValue('password1');
-      await wrapper.find('input[data-testid="confirm-password"]').setValue('password1');
+      await wrapper.find('input[data-testid="register-name-input"]').setValue('New User');
+      await wrapper.find('input[data-testid="register-password-input"]').setValue('password1');
+      await wrapper
+        .find('input[data-testid="register-confirm-password-input"]')
+        .setValue('password1');
       await wrapper.find('form').trigger('submit');
       await flushPromises();
 
@@ -195,9 +205,11 @@ describe('RegisterPage', () => {
       const wrapper = await mountRegisterPage();
 
       await wrapper.find('input[type="email"]').setValue('existing@example.com');
-      await wrapper.find('input[data-testid="display-name"]').setValue('Test');
-      await wrapper.find('input[data-testid="password"]').setValue('password1');
-      await wrapper.find('input[data-testid="confirm-password"]').setValue('password1');
+      await wrapper.find('input[data-testid="register-name-input"]').setValue('Test');
+      await wrapper.find('input[data-testid="register-password-input"]').setValue('password1');
+      await wrapper
+        .find('input[data-testid="register-confirm-password-input"]')
+        .setValue('password1');
       await wrapper.find('form').trigger('submit');
       await flushPromises();
 

@@ -177,17 +177,17 @@ describe('PostEditor', () => {
 
   describe('title input', () => {
     it('should render a title input', () => {
-      const input = wrapper.find('[data-testid="title-input"]');
+      const input = wrapper.find('[data-testid="new-post-title-input"]');
       expect(input.exists()).toBe(true);
     });
 
     it('should display the current title value', () => {
-      const input = wrapper.find('[data-testid="title-input"]');
+      const input = wrapper.find('[data-testid="new-post-title-input"]');
       expect((input.element as HTMLInputElement).value).toBe('My Snippet');
     });
 
     it('should emit update:title when title changes', async () => {
-      const input = wrapper.find('[data-testid="title-input"]');
+      const input = wrapper.find('[data-testid="new-post-title-input"]');
       await input.setValue('New Title');
 
       const emitted = wrapper.emitted('update:title');
@@ -198,16 +198,33 @@ describe('PostEditor', () => {
 
   describe('publish button', () => {
     it('should render a Publish Snippet button', () => {
-      const button = wrapper.find('[data-testid="publish-button"]');
+      const button = wrapper.find('[data-testid="new-post-publish-btn"]');
       expect(button.exists()).toBe(true);
       expect(button.text()).toBe('Publish Snippet');
     });
 
     it('should emit publish when clicked', async () => {
-      const button = wrapper.find('[data-testid="publish-button"]');
+      const button = wrapper.find('[data-testid="new-post-publish-btn"]');
       await button.trigger('click');
 
       const emitted = wrapper.emitted('publish');
+      expect(emitted).toBeTruthy();
+      expect(emitted).toHaveLength(1);
+    });
+  });
+
+  describe('save draft button', () => {
+    it('should render a Save Draft button', () => {
+      const button = wrapper.find('[data-testid="new-post-save-draft-btn"]');
+      expect(button.exists()).toBe(true);
+      expect(button.text()).toBe('Save Draft');
+    });
+
+    it('should emit save-draft when clicked', async () => {
+      const button = wrapper.find('[data-testid="new-post-save-draft-btn"]');
+      await button.trigger('click');
+
+      const emitted = wrapper.emitted('save-draft');
       expect(emitted).toBeTruthy();
       expect(emitted).toHaveLength(1);
     });
@@ -340,10 +357,10 @@ describe('PostEditor', () => {
       await nextTick();
       await flushPromises();
 
-      expect(w.find('[data-testid="title-input"]').exists()).toBe(true);
+      expect(w.find('[data-testid="new-post-title-input"]').exists()).toBe(true);
       expect(w.find('[data-testid="editor-toolbar-stub"]').exists()).toBe(true);
       expect(w.find('[data-testid="code-editor-stub"]').exists()).toBe(true);
-      expect(w.find('[data-testid="publish-button"]').exists()).toBe(true);
+      expect(w.find('[data-testid="new-post-publish-btn"]').exists()).toBe(true);
       expect(w.find('[data-testid="ai-generate-toggle"]').exists()).toBe(true);
     });
   });
@@ -530,7 +547,16 @@ describe('PostEditor', () => {
 
     it('should call filesStore.uploadFile when FileUpload emits upload', async () => {
       const filesStore = useFilesStore();
-      filesStore.stagedFiles.push({ id: 'f1', postId: 'p1', revisionId: null, filename: 'a.ts', mimeType: 'text/plain', fileSize: 10, sortOrder: 0, createdAt: new Date() } as PostFile);
+      filesStore.stagedFiles.push({
+        id: 'f1',
+        postId: 'p1',
+        revisionId: null,
+        filename: 'a.ts',
+        mimeType: 'text/plain',
+        fileSize: 10,
+        sortOrder: 0,
+        createdAt: new Date(),
+      } as PostFile);
       const uploadSpy = vi.spyOn(filesStore, 'uploadFile').mockResolvedValue(null);
 
       const w = mount(PostEditor, {
@@ -549,7 +575,16 @@ describe('PostEditor', () => {
 
     it('should not upload via FileUpload when postId is missing', async () => {
       const filesStore = useFilesStore();
-      filesStore.stagedFiles.push({ id: 'f1', postId: 'p1', revisionId: null, filename: 'a.ts', mimeType: 'text/plain', fileSize: 10, sortOrder: 0, createdAt: new Date() } as PostFile);
+      filesStore.stagedFiles.push({
+        id: 'f1',
+        postId: 'p1',
+        revisionId: null,
+        filename: 'a.ts',
+        mimeType: 'text/plain',
+        fileSize: 10,
+        sortOrder: 0,
+        createdAt: new Date(),
+      } as PostFile);
       const uploadSpy = vi.spyOn(filesStore, 'uploadFile').mockResolvedValue(null);
 
       const w = mount(PostEditor, {
@@ -585,6 +620,66 @@ describe('PostEditor', () => {
       expect(uploadSpy).toHaveBeenCalledTimes(2);
       expect(uploadSpy).toHaveBeenCalledWith('post-123', mockFile1);
       expect(uploadSpy).toHaveBeenCalledWith('post-123', mockFile2);
+    });
+  });
+
+  describe('local file input (file-upload-input)', () => {
+    function setInputFiles(input: HTMLInputElement, files: File[]): void {
+      Object.defineProperty(input, 'files', {
+        value: {
+          length: files.length,
+          item: (i: number) => files[i] ?? null,
+          [Symbol.iterator]: function* () {
+            for (const f of files) yield f;
+          },
+        },
+        configurable: true,
+      });
+    }
+
+    it('returns early when no files are selected', async () => {
+      const filesStore = useFilesStore();
+      const uploadSpy = vi.spyOn(filesStore, 'uploadFile').mockResolvedValue(null);
+
+      const w = mount(PostEditor, { props: { ...defaultProps, postId: 'post-123' } });
+      await flushPromises();
+
+      const input = w.find('[data-testid="file-upload-input"]').element as HTMLInputElement;
+      setInputFiles(input, []);
+      await w.find('[data-testid="file-upload-input"]').trigger('change');
+
+      expect(uploadSpy).not.toHaveBeenCalled();
+    });
+
+    it('uploads via filesStore when postId is provided', async () => {
+      const filesStore = useFilesStore();
+      const uploadSpy = vi.spyOn(filesStore, 'uploadFile').mockResolvedValue(null);
+
+      const w = mount(PostEditor, { props: { ...defaultProps, postId: 'post-123' } });
+      await flushPromises();
+
+      const file = new File(['hi'], 'note.txt', { type: 'text/plain' });
+      const input = w.find('[data-testid="file-upload-input"]').element as HTMLInputElement;
+      setInputFiles(input, [file]);
+      await w.find('[data-testid="file-upload-input"]').trigger('change');
+
+      expect(uploadSpy).toHaveBeenCalledWith('post-123', file);
+    });
+
+    it('stages locally when postId is missing (new-post flow)', async () => {
+      const filesStore = useFilesStore();
+      const uploadSpy = vi.spyOn(filesStore, 'uploadFile').mockResolvedValue(null);
+
+      const w = mount(PostEditor, { props: { ...defaultProps } }); // no postId
+      await flushPromises();
+
+      const file = new File(['hi'], 'staged.txt', { type: 'text/plain' });
+      const input = w.find('[data-testid="file-upload-input"]').element as HTMLInputElement;
+      setInputFiles(input, [file]);
+      await w.find('[data-testid="file-upload-input"]').trigger('change');
+
+      expect(uploadSpy).not.toHaveBeenCalled();
+      expect(w.find('[data-testid="file-upload-preview"]').exists()).toBe(true);
     });
   });
 });

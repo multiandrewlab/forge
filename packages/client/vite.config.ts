@@ -3,6 +3,17 @@ import vue from '@vitejs/plugin-vue';
 import tailwindcss from '@tailwindcss/vite';
 import { resolve } from 'path';
 
+const apiProxy = {
+  '/api': {
+    target: 'http://localhost:3001',
+    changeOrigin: true,
+  },
+  '/ws': {
+    target: 'ws://localhost:3001',
+    ws: true,
+  },
+};
+
 export default defineConfig({
   plugins: [vue(), tailwindcss()],
   resolve: {
@@ -12,15 +23,10 @@ export default defineConfig({
   },
   server: {
     port: 3000,
-    proxy: {
-      '/api': {
-        target: 'http://localhost:3001',
-        changeOrigin: true,
-      },
-      '/ws': {
-        target: 'ws://localhost:3001',
-        ws: true,
-      },
-    },
+    proxy: apiProxy,
+  },
+  preview: {
+    port: 4173,
+    proxy: apiProxy,
   },
 });

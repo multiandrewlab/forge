@@ -9,7 +9,7 @@ import type { SaveStatus } from '@/stores/posts';
 
 const router = useRouter();
 const route = useRoute();
-const { createPost, saveRevision, error } = usePosts();
+const { createPost, saveRevision, publishPost, error } = usePosts();
 
 const title = ref('');
 const content = ref('');
@@ -50,12 +50,39 @@ async function handlePublish(): Promise<void> {
     contentType: contentType.value,
     language: language.value || null,
     visibility: visibility.value,
+    // Server requires `content` for non-link posts at create time. The follow-up
+    // saveRevision is what stores the editable revision history; createPost
+    // creates the initial revision atomically.
+    content: content.value || undefined,
   });
   if (id) {
     if (content.value) {
       await saveRevision(id, content.value, null);
     }
-    router.push({ name: 'post-edit', params: { id } });
+    // The new-post create path persists the post as a draft (server default);
+    // honour the user's "Publish" intent by flipping the draft flag before
+    // routing to the read-only view (where the published-badge surfaces).
+    await publishPost(id);
+    router.push({ name: 'post-view', params: { id } });
+  }
+}
+
+async function handleSaveDraft(): Promise<void> {
+  // createPost defaults isDraft=true server-side, so this lands the user on
+  // the read-only view of their fresh draft. The journey smoke uses this to
+  // assert the draft badge renders before transitioning to publish.
+  const id = await createPost({
+    title: title.value || 'Untitled',
+    contentType: contentType.value,
+    language: language.value || null,
+    visibility: visibility.value,
+    content: content.value || undefined,
+  });
+  if (id) {
+    if (content.value) {
+      await saveRevision(id, content.value, null);
+    }
+    router.push({ name: 'post-view', params: { id } });
   }
 }
 </script>
@@ -85,6 +112,7 @@ async function handlePublish(): Promise<void> {
         :last-saved-at="null"
         @update:language="onLanguageChange"
         @publish="handlePublish"
+        @save-draft="handleSaveDraft"
       />
     </div>
   </div>

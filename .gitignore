@@ -30,3 +30,9 @@ packages/server/.env
 
 # Git worktrees
 .worktrees/
+
+# E2E artifacts (mirrored in e2e/.gitignore)
+e2e/.auth/
+e2e/test-results/
+e2e/playwright-report/
+forge-e2e-secret

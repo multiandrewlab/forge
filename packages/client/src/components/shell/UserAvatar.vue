@@ -1,7 +1,11 @@
 <!-- packages/client/src/components/shell/UserAvatar.vue -->
 <template>
   <div class="relative">
-    <button class="flex items-center gap-2 rounded-lg p-2 hover:bg-gray-700" @click="open = !open">
+    <button
+      data-testid="user-menu-trigger"
+      class="flex items-center gap-2 rounded-lg p-2 hover:bg-gray-700"
+      @click="open = !open"
+    >
       <div
         class="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-bold text-white"
       >
@@ -16,6 +20,7 @@
       <button
         v-for="item in menuItems"
         :key="item.label"
+        :data-testid="item.testid"
         class="block w-full px-4 py-2 text-left text-sm text-gray-300 hover:bg-gray-700"
         @click="
           item.action();
@@ -50,9 +55,13 @@ const initials = computed(() => {
 });
 
 const menuItems = [
-  { label: 'Profile', action: () => {} }, // TODO: profile page
-  { label: 'My Snippets', action: () => router.push('/my-snippets') },
-  { label: 'Settings', action: () => {} }, // TODO: settings page
-  { label: 'Logout', action: () => logout().then(() => router.push('/login')) },
+  { label: 'Profile', testid: 'profile-action', action: () => {} }, // TODO: profile page
+  { label: 'My Snippets', testid: 'my-snippets-action', action: () => router.push('/my-snippets') },
+  { label: 'Settings', testid: 'settings-action', action: () => {} }, // TODO: settings page
+  {
+    label: 'Logout',
+    testid: 'logout-action',
+    action: () => logout().then(() => router.push('/login')),
+  },
 ];
 </script>

@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { setActivePinia, createPinia } from 'pinia';
 import { useFeedStore } from '../../stores/feed.js';
-import type { PostWithAuthor, VoteResponse } from '@forge/shared';
+import { usePostsStore } from '../../stores/posts.js';
+import type { PostWithAuthor, PostWithRevision, VoteResponse } from '@forge/shared';
 
 const mockPost: PostWithAuthor = {
   id: '1',
@@ -306,6 +307,95 @@ describe('useVotes', () => {
 
       // voteCount should be unchanged
       expect(store.posts[0].voteCount).toBe(5);
+    });
+  });
+
+  describe('syncCurrentPostVoteCount (post-view reactivity)', () => {
+    function makePostWithRevision(id: string, voteCount: number): PostWithRevision {
+      return {
+        id,
+        authorId: 'u1',
+        title: 'PV',
+        contentType: 'snippet',
+        language: null,
+        visibility: 'public',
+        isDraft: false,
+        forkedFromId: null,
+        linkUrl: null,
+        linkPreview: null,
+        voteCount,
+        viewCount: 0,
+        deletedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        revisions: [],
+      };
+    }
+
+    it('updates currentPost.voteCount on vote() when ids match', async () => {
+      const postsStore = usePostsStore();
+      postsStore.setPost(makePostWithRevision('1', 0));
+
+      const voteResponse: VoteResponse = { voteCount: 1, userVote: 1 };
+      mockApiFetch.mockResolvedValue(mockResponse(voteResponse));
+
+      const { vote } = useVotes();
+      await vote('1', 1);
+
+      expect(postsStore.currentPost?.voteCount).toBe(1);
+    });
+
+    it('does NOT update currentPost when ids differ', async () => {
+      const postsStore = usePostsStore();
+      postsStore.setPost(makePostWithRevision('OTHER', 7));
+
+      const voteResponse: VoteResponse = { voteCount: 99, userVote: 1 };
+      mockApiFetch.mockResolvedValue(mockResponse(voteResponse));
+
+      const { vote } = useVotes();
+      await vote('1', 1);
+
+      expect(postsStore.currentPost?.voteCount).toBe(7);
+    });
+
+    it('is a no-op when currentPost is null', async () => {
+      const postsStore = usePostsStore();
+      // currentPost defaults to null
+
+      const voteResponse: VoteResponse = { voteCount: 3, userVote: 1 };
+      mockApiFetch.mockResolvedValue(mockResponse(voteResponse));
+
+      const { vote } = useVotes();
+      await expect(vote('1', 1)).resolves.toBeUndefined();
+      expect(postsStore.currentPost).toBeNull();
+    });
+
+    it('updates currentPost.voteCount on removeVote() when ids match', async () => {
+      const postsStore = usePostsStore();
+      postsStore.setPost(makePostWithRevision('1', 5));
+
+      const voteResponse: VoteResponse = { voteCount: 4, userVote: null };
+      mockApiFetch.mockResolvedValue(mockResponse(voteResponse));
+
+      const { removeVote } = useVotes();
+      await removeVote('1');
+
+      expect(postsStore.currentPost?.voteCount).toBe(4);
+    });
+
+    it('updates currentPost.voteCount when websocket vote:updated for the same post', () => {
+      const postsStore = usePostsStore();
+      postsStore.setPost(makePostWithRevision('1', 0));
+
+      mockSubscribe.mockImplementation((_channel: string, handler: (event: unknown) => void) => {
+        handler({ type: 'vote:updated', channel: 'post:1', data: { voteCount: 17 } });
+        return vi.fn();
+      });
+
+      const { subscribeRealtime } = useVotes();
+      subscribeRealtime('1');
+
+      expect(postsStore.currentPost?.voteCount).toBe(17);
     });
   });
 });

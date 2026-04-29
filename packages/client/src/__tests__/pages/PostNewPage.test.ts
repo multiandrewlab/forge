@@ -30,6 +30,7 @@ vi.mock('@/components/editor/PostEditor.vue', () => ({
       'update:contentType',
       'update:tags',
       'publish',
+      'save-draft',
     ],
     template: '<div data-testid="post-editor-stub"></div>',
   },
@@ -37,12 +38,14 @@ vi.mock('@/components/editor/PostEditor.vue', () => ({
 
 const mockCreatePost = vi.fn();
 const mockSaveRevision = vi.fn();
+const mockPublishPost = vi.fn();
 const mockError: Ref<string | null> = ref(null);
 
 vi.mock('@/composables/usePosts', () => ({
   usePosts: () => ({
     createPost: mockCreatePost,
     saveRevision: mockSaveRevision,
+    publishPost: mockPublishPost,
     error: mockError,
   }),
 }));
@@ -67,6 +70,11 @@ function createTestRouter(): Router {
         name: 'post-edit',
         component: { template: '<div>Edit</div>' },
       },
+      {
+        path: '/posts/:id',
+        name: 'post-view',
+        component: { template: '<div>View</div>' },
+      },
     ],
   });
 }
@@ -81,6 +89,7 @@ describe('PostNewPage', () => {
     router = createTestRouter();
     mockCreatePost.mockReset();
     mockSaveRevision.mockReset();
+    mockPublishPost.mockReset();
     mockDetectLanguage.mockReset();
     mockError.value = null;
   });
@@ -170,9 +179,10 @@ describe('PostNewPage', () => {
 
   // ── Publish / Create ──────────────────────────────────────────
   describe('publish', () => {
-    it('should call createPost and redirect to edit page on successful publish', async () => {
+    it('should call createPost, publishPost, and redirect to view page on successful publish', async () => {
       mockCreatePost.mockResolvedValue('post-123');
       mockSaveRevision.mockResolvedValue(undefined);
+      mockPublishPost.mockResolvedValue(undefined);
       const wrapper = await mountPage();
 
       const editor = wrapper.findComponent({ name: 'PostEditor' });
@@ -186,7 +196,8 @@ describe('PostNewPage', () => {
           visibility: 'public',
         }),
       );
-      expect(router.currentRoute.value.name).toBe('post-edit');
+      expect(mockPublishPost).toHaveBeenCalledWith('post-123');
+      expect(router.currentRoute.value.name).toBe('post-view');
       expect(router.currentRoute.value.params.id).toBe('post-123');
     });
 
@@ -204,6 +215,7 @@ describe('PostNewPage', () => {
     it('should skip saveRevision when content is empty on publish', async () => {
       mockCreatePost.mockResolvedValue('post-789');
       mockSaveRevision.mockResolvedValue(undefined);
+      mockPublishPost.mockResolvedValue(undefined);
       const wrapper = await mountPage();
 
       // Do NOT emit any content update — content stays empty string
@@ -213,7 +225,8 @@ describe('PostNewPage', () => {
 
       // saveRevision must NOT have been called because content is ''
       expect(mockSaveRevision).not.toHaveBeenCalled();
-      expect(router.currentRoute.value.name).toBe('post-edit');
+      expect(mockPublishPost).toHaveBeenCalledWith('post-789');
+      expect(router.currentRoute.value.name).toBe('post-view');
       expect(router.currentRoute.value.params.id).toBe('post-789');
     });
 
@@ -244,6 +257,82 @@ describe('PostNewPage', () => {
       await flushPromises();
 
       expect(mockCreatePost).toHaveBeenCalledWith(expect.objectContaining({ title: 'My Title' }));
+    });
+  });
+
+  // ── Save Draft ────────────────────────────────────────────────
+  describe('save draft', () => {
+    it('should call createPost and redirect to view page on save-draft', async () => {
+      mockCreatePost.mockResolvedValue('post-draft-1');
+      mockSaveRevision.mockResolvedValue(undefined);
+      const wrapper = await mountPage();
+
+      const editor = wrapper.findComponent({ name: 'PostEditor' });
+      await editor.vm.$emit('save-draft');
+      await flushPromises();
+
+      expect(mockCreatePost).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Untitled',
+          contentType: 'snippet',
+          visibility: 'public',
+        }),
+      );
+      expect(router.currentRoute.value.name).toBe('post-view');
+      expect(router.currentRoute.value.params.id).toBe('post-draft-1');
+    });
+
+    it('should not redirect when createPost returns null on save-draft', async () => {
+      mockCreatePost.mockResolvedValue(null);
+      const wrapper = await mountPage();
+
+      const editor = wrapper.findComponent({ name: 'PostEditor' });
+      await editor.vm.$emit('save-draft');
+      await flushPromises();
+
+      expect(router.currentRoute.value.name).toBe('post-new');
+    });
+
+    it('should skip saveRevision when content is empty on save-draft', async () => {
+      mockCreatePost.mockResolvedValue('post-draft-2');
+      mockSaveRevision.mockResolvedValue(undefined);
+      const wrapper = await mountPage();
+
+      const editor = wrapper.findComponent({ name: 'PostEditor' });
+      await editor.vm.$emit('save-draft');
+      await flushPromises();
+
+      expect(mockSaveRevision).not.toHaveBeenCalled();
+      expect(router.currentRoute.value.name).toBe('post-view');
+      expect(router.currentRoute.value.params.id).toBe('post-draft-2');
+    });
+
+    it('should call saveRevision when content is non-empty on save-draft', async () => {
+      mockCreatePost.mockResolvedValue('post-draft-3');
+      mockSaveRevision.mockResolvedValue(undefined);
+      const wrapper = await mountPage();
+
+      const editor = wrapper.findComponent({ name: 'PostEditor' });
+      await editor.vm.$emit('update:modelValue', 'draft body');
+      await flushPromises();
+
+      await editor.vm.$emit('save-draft');
+      await flushPromises();
+
+      expect(mockSaveRevision).toHaveBeenCalledWith('post-draft-3', 'draft body', null);
+    });
+
+    it('should use entered title rather than "Untitled" on save-draft when provided', async () => {
+      mockCreatePost.mockResolvedValue('post-draft-4');
+      mockSaveRevision.mockResolvedValue(undefined);
+      const wrapper = await mountPage();
+
+      const editor = wrapper.findComponent({ name: 'PostEditor' });
+      await editor.vm.$emit('update:title', 'My Draft');
+      await editor.vm.$emit('save-draft');
+      await flushPromises();
+
+      expect(mockCreatePost).toHaveBeenCalledWith(expect.objectContaining({ title: 'My Draft' }));
     });
   });
 

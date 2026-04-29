@@ -15,9 +15,9 @@ CASCADE;
 -- testuser (Bruno regression test user — password: "password123")
 -- Regenerate hash: cd packages/server && node -e 'import("bcryptjs").then(b => b.default.hash("password123", 12).then(h => console.log(h)))'
 INSERT INTO users (id, email, display_name, avatar_url, auth_provider, password_hash) VALUES
-  ('a0000000-0000-0000-0000-000000000001', 'alice@example.com', 'Alice Chen', 'https://i.pravatar.cc/150?u=alice', 'local', '$2b$12$LJ3m4ys3Lk0TSwHjRB0oaOQEbeSYW8.mGJCNB0QfLX5a5HLDhwNiy'),
+  ('a0000000-0000-0000-0000-000000000001', 'alice@example.com', 'Alice Chen', 'https://i.pravatar.cc/150?u=alice', 'local', '$2b$12$jrcHUcVQnE.swctPk5GnreW9hkkyFqh8A9p2GnEaRrbxEaxXESYw2'),
   ('a0000000-0000-0000-0000-000000000002', 'bob@example.com', 'Bob Martinez', 'https://i.pravatar.cc/150?u=bob', 'google', NULL),
-  ('a0000000-0000-0000-0000-000000000003', 'carol@example.com', 'Carol Davis', NULL, 'local', '$2b$12$LJ3m4ys3Lk0TSwHjRB0oaOQEbeSYW8.mGJCNB0QfLX5a5HLDhwNiy'),
+  ('a0000000-0000-0000-0000-000000000003', 'carol@example.com', 'Carol Davis', NULL, 'local', '$2b$12$jrcHUcVQnE.swctPk5GnreW9hkkyFqh8A9p2GnEaRrbxEaxXESYw2'),
   ('a0000000-0000-0000-0000-000000000099', 'testuser@example.com', 'Test User', NULL, 'local', '$2b$12$jrcHUcVQnE.swctPk5GnreW9hkkyFqh8A9p2GnEaRrbxEaxXESYw2');
 
 -- ============================================================

@@ -27,7 +27,7 @@ async function handleSubmit(): Promise<void> {
 
       <div
         v-if="error"
-        data-testid="error-message"
+        data-testid="login-error-message"
         class="mb-4 p-3 bg-red-900/30 border border-red-500 rounded text-red-400 text-sm"
       >
         {{ error }}
@@ -39,6 +39,7 @@ async function handleSubmit(): Promise<void> {
           <input
             id="email"
             v-model="email"
+            data-testid="login-email-input"
             type="email"
             required
             class="w-full px-3 py-2 bg-surface-700 border border-surface-500 rounded focus:outline-none focus:ring-2 focus:ring-primary"
@@ -50,6 +51,7 @@ async function handleSubmit(): Promise<void> {
           <input
             id="password"
             v-model="password"
+            data-testid="login-password-input"
             type="password"
             required
             class="w-full px-3 py-2 bg-surface-700 border border-surface-500 rounded focus:outline-none focus:ring-2 focus:ring-primary"
@@ -58,6 +60,7 @@ async function handleSubmit(): Promise<void> {
 
         <button
           type="submit"
+          data-testid="login-submit-btn"
           class="w-full py-2 bg-primary text-white rounded hover:bg-primary-600 font-medium"
         >
           Sign In

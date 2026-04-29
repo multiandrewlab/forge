@@ -83,7 +83,22 @@ async function handlePublish(): Promise<void> {
       </router-link>
 
       <div
+        v-if="currentPost?.forkedFromId"
+        data-testid="fork-attribution"
+        class="mb-4 text-xs text-gray-500"
+      >
+        Forked from
+        <router-link
+          :to="{ name: 'post-view', params: { id: currentPost.forkedFromId } }"
+          class="text-primary hover:underline"
+        >
+          source post
+        </router-link>
+      </div>
+
+      <div
         v-if="error"
+        :data-testid="/forbidden/i.test(error) ? 'forbidden-page' : undefined"
         class="mb-4 p-3 bg-red-900/30 border border-red-500 rounded text-red-400 text-sm"
       >
         {{ error }}

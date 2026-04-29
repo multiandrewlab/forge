@@ -1,6 +1,7 @@
 import { ref, type Ref } from 'vue';
 import type { AiCompleteRequest } from '@forge/shared';
 import { parseSseStream } from '@/lib/ai/sse-stream';
+import { useAuthStore } from '@/stores/auth';
 
 const DEBOUNCE_MS = 300;
 
@@ -49,11 +50,20 @@ export function useAiComplete(): UseAiCompleteReturn {
     let buffer = '';
     let errored = false;
     try {
+      // /api/ai/complete is auth-gated (`app.aiGate` in packages/server).
+      // We can't use `apiFetch` here because it buffers the body via .json(),
+      // but we still need the bearer token attached so the server doesn't 401.
+      const authStore = useAuthStore();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (authStore.accessToken) {
+        headers.Authorization = `Bearer ${authStore.accessToken}`;
+      }
       const res = await fetch('/api/ai/complete', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(input),
         signal: controller.signal,
+        credentials: 'include',
       });
       if (!res.ok || !res.body) {
         errored = true;

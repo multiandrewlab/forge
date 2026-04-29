@@ -1,0 +1,18 @@
+{
+  "name": "@forge/e2e",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:debug": "playwright test --debug"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0",
+    "@types/node": "^22.0.0"
+  },
+  "dependencies": {
+    "@forge/shared": "*"
+  }
+}

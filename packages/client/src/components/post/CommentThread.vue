@@ -27,7 +27,9 @@
 
         <!-- Display mode -->
         <template v-else>
-          <p class="mt-1 text-sm text-gray-200 whitespace-pre-wrap">{{ node.body }}</p>
+          <p data-testid="comment-body" class="mt-1 text-sm text-gray-200 whitespace-pre-wrap">
+            {{ node.body }}
+          </p>
           <div class="mt-1 flex items-center gap-2">
             <button
               data-testid="reply-btn"
