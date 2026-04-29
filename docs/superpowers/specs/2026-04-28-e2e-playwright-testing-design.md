@@ -13,6 +13,7 @@ This design adds a third layer — Playwright — sized at ~135 specs across 12 
 The suite is delivered as 9 sequential GitHub issues (1a server seams, 1b scaffolding, 1c auth specs, then 6 feature batches and 1 polish), each filed in advance with full TDD plans, acceptance criteria, and agent instructions. CI starts non-blocking and flips to blocking after 14 consecutive green main runs (no calendar bound).
 
 **Revision-2 changes** vs. revision-1:
+
 - Mock LLM provider relocated to match real codebase (`packages/server/src/plugins/langchain/`) and shaped as a LangChain `BaseChatModel` implementation with `AsyncLocalStorage`-based per-request script selection.
 - Reset endpoint truncate list replaced with "shells out to `seed.sql`" — no parallel list to drift.
 - Boot fail-fast located at top of `packages/server/src/server.ts` (already coverage-excluded).
@@ -26,22 +27,22 @@ The suite is delivered as 9 sequential GitHub issues (1a server seams, 1b scaffo
 
 ## Design Decisions
 
-| Decision | Choice | Rationale |
-| --- | --- | --- |
-| Coverage depth | Feature-complete (~135 specs) | Bruno already covers API status codes; Playwright targets UI behavior the API layer can't see. |
-| External LLM | Mock as fourth case in `createChatModel()` switch, gated by env allowlist | Reuses the existing provider seam; solves the Bruno CI `OPENAI_API_KEY` gap as a side benefit. |
-| External Postgres / MinIO | Real, via docker-compose | Already deterministic, already wired in Bruno. |
-| External OAuth | Tested in current 501/401 stub state | No real Google credentials in CI; production OAuth flow tested manually. |
-| DB isolation | `POST /api/__test__/reset` shelling out to `scripts/seed.sql` in `beforeEach`, workers capped at 4 | Single source of truth for seeded state; no hand-maintained truncate list. |
-| Test endpoint access control | `ENABLE_TEST_ROUTES=1` (separate from `E2E_MODE`) + `X-E2E-Secret` header + NODE_ENV allowlist + bind-address check | Defense in depth; single-flag gate is too thin for an endpoint that wipes the DB. |
-| Auth strategy | Multi-user `storageState` saved at global setup using existing seeded users | testuser primary, alice as cross-user, carol as third. No new seed users. |
-| Suite location | New top-level `e2e/` workspace | Matches Bruno's sibling pattern; keeps Playwright deps out of client/server. |
-| Spec organization | Feature-folders + one journey smoke | Mirrors Bruno layout. |
-| CI integration | New workflow, non-blocking initially → blocking after 14 consecutive green main runs | Flaky E2E suites that block PRs poison adoption. |
-| Selector convention | `data-testid` only for selection (kebab-case, role-suffixed for interactive); content assertions may use `toContainText`. Selectors sharded per feature folder. | Decouples specs from copy/styling; sharded to avoid central-file merge conflicts. |
-| Reset opt-out | Playwright tag `@no-reset` checked via `testInfo.tags` in `beforeEach` | Documented Playwright pattern; survives without inventing new fixture-option declarations. |
-| Rollout | 9 sequential issues filed in advance (1a/1b/1c + 2..7 + polish) | Reviewable PR cadence; foundation split into three independently reviewable PRs. |
-| Visual regression | Out of scope | Explicit choice — feature-complete level B, not exhaustive level C. |
+| Decision                     | Choice                                                                                                                                                          | Rationale                                                                                      |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Coverage depth               | Feature-complete (~135 specs)                                                                                                                                   | Bruno already covers API status codes; Playwright targets UI behavior the API layer can't see. |
+| External LLM                 | Mock as fourth case in `createChatModel()` switch, gated by env allowlist                                                                                       | Reuses the existing provider seam; solves the Bruno CI `OPENAI_API_KEY` gap as a side benefit. |
+| External Postgres / MinIO    | Real, via docker-compose                                                                                                                                        | Already deterministic, already wired in Bruno.                                                 |
+| External OAuth               | Tested in current 501/401 stub state                                                                                                                            | No real Google credentials in CI; production OAuth flow tested manually.                       |
+| DB isolation                 | `POST /api/__test__/reset` shelling out to `scripts/seed.sql` in `beforeEach`, workers capped at 4                                                              | Single source of truth for seeded state; no hand-maintained truncate list.                     |
+| Test endpoint access control | `ENABLE_TEST_ROUTES=1` (separate from `E2E_MODE`) + `X-E2E-Secret` header + NODE_ENV allowlist + bind-address check                                             | Defense in depth; single-flag gate is too thin for an endpoint that wipes the DB.              |
+| Auth strategy                | Multi-user `storageState` saved at global setup using existing seeded users                                                                                     | testuser primary, alice as cross-user, carol as third. No new seed users.                      |
+| Suite location               | New top-level `e2e/` workspace                                                                                                                                  | Matches Bruno's sibling pattern; keeps Playwright deps out of client/server.                   |
+| Spec organization            | Feature-folders + one journey smoke                                                                                                                             | Mirrors Bruno layout.                                                                          |
+| CI integration               | New workflow, non-blocking initially → blocking after 14 consecutive green main runs                                                                            | Flaky E2E suites that block PRs poison adoption.                                               |
+| Selector convention          | `data-testid` only for selection (kebab-case, role-suffixed for interactive); content assertions may use `toContainText`. Selectors sharded per feature folder. | Decouples specs from copy/styling; sharded to avoid central-file merge conflicts.              |
+| Reset opt-out                | Playwright tag `@no-reset` checked via `testInfo.tags` in `beforeEach`                                                                                          | Documented Playwright pattern; survives without inventing new fixture-option declarations.     |
+| Rollout                      | 9 sequential issues filed in advance (1a/1b/1c + 2..7 + polish)                                                                                                 | Reviewable PR cadence; foundation split into three independently reviewable PRs.               |
+| Visual regression            | Out of scope                                                                                                                                                    | Explicit choice — feature-complete level B, not exhaustive level C.                            |
 
 ## Architecture
 
@@ -93,6 +94,7 @@ No layer overlaps. Bruno asserts API contracts, Playwright asserts UI behavior o
 ```
 
 External services that exist in production but are stubbed/mocked here:
+
 - **OpenAI / Ollama / Vertex** → `LLM_PROVIDER=mock`, deterministic SSE chunks per `X-Mock-Script` request header.
 - **Google OAuth** → unchanged 501/401 stub state.
 
@@ -110,7 +112,10 @@ Three new files plus modifications. All gated by environment allowlists. Product
 ```ts
 // Approximate shape — full implementation in TDD step
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { BaseChatModel, type BaseChatModelParams } from '@langchain/core/language_models/chat_models';
+import {
+  BaseChatModel,
+  type BaseChatModelParams,
+} from '@langchain/core/language_models/chat_models';
 import { AIMessageChunk } from '@langchain/core/messages';
 import type { ChatGenerationChunk } from '@langchain/core/outputs';
 import { mockScripts, DEFAULT_SCRIPT_KEY } from './mock-scripts.js';
@@ -118,7 +123,9 @@ import { mockScripts, DEFAULT_SCRIPT_KEY } from './mock-scripts.js';
 export const mockScriptStorage = new AsyncLocalStorage<string>();
 
 export class ChatMock extends BaseChatModel<BaseChatModelParams> {
-  _llmType(): string { return 'mock'; }
+  _llmType(): string {
+    return 'mock';
+  }
 
   async *_streamResponseChunks(): AsyncGenerator<ChatGenerationChunk> {
     const key = mockScriptStorage.getStore() ?? DEFAULT_SCRIPT_KEY;
@@ -128,7 +135,9 @@ export class ChatMock extends BaseChatModel<BaseChatModelParams> {
     }
   }
 
-  async _generate() { throw new Error('mock provider only supports streaming'); }
+  async _generate() {
+    throw new Error('mock provider only supports streaming');
+  }
 }
 ```
 
@@ -217,6 +226,7 @@ The reset endpoint takes a Postgres advisory lock (`pg_advisory_lock(0xE2E_RESET
 **File:** `packages/server/scripts/seed-guard.ts` (new) called from `npm run seed`.
 
 The current `seed` script is `psql $DATABASE_URL -f ../../scripts/seed.sql`. This becomes a small Node wrapper that:
+
 1. Parses `DATABASE_URL`, refuses to proceed unless host is `localhost`, `127.0.0.1`, `::1`, or matches `host.docker.internal` (CI containers).
 2. Allows override via `ALLOW_DESTRUCTIVE_SEED=1` for explicit ops use.
 3. Then shells out to `psql`.
@@ -225,18 +235,18 @@ Vitest unit tests cover the URL-parsing branches at 100%.
 
 ### 4. Coverage strategy (explicit)
 
-| File | Coverage approach |
-| --- | --- |
-| `packages/server/src/plugins/langchain/mock-provider.ts` | Vitest unit tests covering: each script key in registry, default fallback, AsyncLocalStorage threading, the `_generate()` throw. |
-| `packages/server/src/plugins/langchain/mock-scripts.ts` | Vitest unit tests asserting the registry shape and DEFAULT_SCRIPT_KEY existence. |
-| `packages/server/src/plugins/langchain/provider.ts` (`mock` case added) | Existing test pattern extended; mock case + production-throw branch covered. |
-| `packages/server/src/plugins/langchain/index.ts` (mockScriptHeaderHook) | Vitest unit tests with mock Fastify request. |
-| `packages/server/src/routes/__test__.ts` | Vitest unit tests calling `registerTestRoutes(app)` directly with a Fastify test instance; covers all gating branches and the secret-mismatch path. |
-| `packages/server/src/lib/env-guards.ts` | Vitest unit tests covering `isE2EFlagSet`, `assertProductionGuards`, all env-string variants. |
-| `packages/server/scripts/seed-guard.ts` | Vitest unit tests covering URL host parsing branches. |
-| `packages/server/src/server.ts` | Already in `vitest.config.ts` exclude list; the boot guard delegates to `assertProductionGuards()` (covered separately). |
-| `e2e/**` | Already excluded by `vitest.config.ts` `coverage.include` (which globs only `packages/*/src/**`). No change needed. |
-| `packages/shared/src/llm/mock-scripts.ts` (the type-only shared key) | Type-only file; either a `.d.ts` (type-only files are excluded) or a small re-export covered by an explicit type test. |
+| File                                                                    | Coverage approach                                                                                                                                   |
+| ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/server/src/plugins/langchain/mock-provider.ts`                | Vitest unit tests covering: each script key in registry, default fallback, AsyncLocalStorage threading, the `_generate()` throw.                    |
+| `packages/server/src/plugins/langchain/mock-scripts.ts`                 | Vitest unit tests asserting the registry shape and DEFAULT_SCRIPT_KEY existence.                                                                    |
+| `packages/server/src/plugins/langchain/provider.ts` (`mock` case added) | Existing test pattern extended; mock case + production-throw branch covered.                                                                        |
+| `packages/server/src/plugins/langchain/index.ts` (mockScriptHeaderHook) | Vitest unit tests with mock Fastify request.                                                                                                        |
+| `packages/server/src/routes/__test__.ts`                                | Vitest unit tests calling `registerTestRoutes(app)` directly with a Fastify test instance; covers all gating branches and the secret-mismatch path. |
+| `packages/server/src/lib/env-guards.ts`                                 | Vitest unit tests covering `isE2EFlagSet`, `assertProductionGuards`, all env-string variants.                                                       |
+| `packages/server/scripts/seed-guard.ts`                                 | Vitest unit tests covering URL host parsing branches.                                                                                               |
+| `packages/server/src/server.ts`                                         | Already in `vitest.config.ts` exclude list; the boot guard delegates to `assertProductionGuards()` (covered separately).                            |
+| `e2e/**`                                                                | Already excluded by `vitest.config.ts` `coverage.include` (which globs only `packages/*/src/**`). No change needed.                                 |
+| `packages/shared/src/llm/mock-scripts.ts` (the type-only shared key)    | Type-only file; either a `.d.ts` (type-only files are excluded) or a small re-export covered by an explicit type test.                              |
 
 ## E2E suite scaffolding
 
@@ -303,11 +313,11 @@ e2e/                                # new top-level workspace (added to root pac
 
 Three users from the existing seed.sql (no new users added):
 
-| Fixture | Seed user | UUID | Use |
-| --- | --- | --- | --- |
-| `testuser` | `testuser@example.com` | `a0000000-…-99` | Primary actor (matches Bruno bootstrap). |
-| `alice` | `alice@example.com` | `a0000000-…-01` | Cross-user permission tests (other-user posts, etc.). |
-| `carol` | `carol@example.com` | `a0000000-…-03` | Third-party in 3-actor flows (e.g., comment thread with replies from multiple users). Used sparingly. |
+| Fixture    | Seed user              | UUID            | Use                                                                                                   |
+| ---------- | ---------------------- | --------------- | ----------------------------------------------------------------------------------------------------- |
+| `testuser` | `testuser@example.com` | `a0000000-…-99` | Primary actor (matches Bruno bootstrap).                                                              |
+| `alice`    | `alice@example.com`    | `a0000000-…-01` | Cross-user permission tests (other-user posts, etc.).                                                 |
+| `carol`    | `carol@example.com`    | `a0000000-…-03` | Third-party in 3-actor flows (e.g., comment thread with replies from multiple users). Used sparingly. |
 
 ```ts
 // fixtures/auth.ts
@@ -348,14 +358,17 @@ Specs opt out via Playwright's tag mechanism: `test('register fresh account', { 
 ### Selector convention
 
 #### Naming
+
 - **Interactive elements**: kebab-case + role suffix (`reply-btn`, `cancel-btn`, `tag-input`, `dark-mode-toggle`, `nav-search-link`).
 - **Content / state elements**: bare kebab nouns (`error-message`, `empty-state`, `post-title`, `comment-thread`).
 - This matches the most common existing pattern (`reply-btn`, `cancel-btn`, `restore-confirm`, `search-close-btn`) while allowing short content-only nouns. Documented in `e2e/README.md`. PR reviewers enforce.
 
 #### Sharded registry
+
 ALL specs reference elements by `data-testid` attributes resolved through `fixtures/selectors/<feature>.ts`. One file per feature folder + a `shell.ts` for cross-cutting selectors (nav, error toast, modals). Issue #2 (posts) only modifies `selectors/posts.ts` and `selectors/shell.ts` (if a new shared selector is needed). Issue #3 only modifies its own files. Merge conflicts are local to the feature.
 
 #### Selection vs assertion
+
 - **Selection** (locating, clicking): MUST use `getByTestId(...)` from the sharded registry. No CSS, no text-matching for click targets.
 - **Content assertion**: `expect(locator).toContainText('Welcome back')` is allowed and encouraged for asserting UI copy against fixture/canonical strings. Documented as the rule in `e2e/README.md`.
 
@@ -376,22 +389,22 @@ Documented in `e2e/README.md`:
 
 Target ~135 specs. Counts are per-folder ±15% (not just total) to avoid one folder ballooning while another atrophies.
 
-| Folder | Specs | Coverage focus |
-| --- | --- | --- |
-| `_journey.spec.ts` | 1 spec, 6 `test.describe.serial` blocks | register → login → create draft → AI autocomplete → upload file → publish → search → vote → bookmark → comment inline → fork → diff → logout → relogin as alice → permission denied → done. Phased blocks make traces easier to debug. |
-| `auth/` | ~14 | login (success / wrong-password / unknown-email / empty / redirect-after), register (success / duplicate-email / weak-password / email-validation), logout, session refresh, OAuth-stub flow (asserts the 501 toast and the link page's 401 message — concrete, not hand-wavy), account-link page, redirect-when-authenticated guards. |
-| `posts/` | ~22 | new (draft saves, required fields, markdown renders), view (public, draft-private, missing-id, permission), edit (own, cannot-edit-others, persists, cancel), delete (confirm, own-only, cascade), publish toggle, fork (creates linked copy, edits independent), multi-file post upload + preview, tags add/remove. |
-| `revisions/` | ~10 | create (auto-on-edit, manual), list (chronological, empty), view-by-number, side-by-side diff, inline diff, rollback, permission. |
-| `comments/` | ~14 | top-level / reply / nested-reply / inline-on-revision-line, edit (own only, edit window), delete (own only), empty state, comment-on-deleted-post, mention notifications if implemented. |
-| `voting/` | ~7 | upvote, downvote, switch, remove, score updates in feed/post-view, error-path (already voted), permission. |
-| `bookmarks/` | ~5 | toggle on/off, bookmarks page list, empty state, persists across sessions. |
-| `tags/` | ~9 | popular-tags render, subscribe / unsubscribe, subscribed-tag-feed filter, tag page, my-subscriptions list, click-tag-from-post, search-by-tag. |
-| `search/` | ~12 | plain query, no-results, fuzzy match, AI-search toggle, structured filters (tag / author / date / type), result click, Cmd+K, pagination, recent searches. |
-| `playground/` | ~10 | open prompt, fill template variables, run (SSE streams), copy-to-clipboard, variable validation, save-as-fork, missing-variable error, mock-script selection. |
-| `files/` | ~11 | drag-drop upload, picker upload, multi-file, preview (json / yaml / md / code / image), download, replace, remove, oversize rejection, mime rejection, in-post rendering. |
-| `ai/` | ~8 | autocomplete (token-typing, accept, dismiss), generate-from-prompt, error during stream, mid-stream cancel, mock-script selection per test, streaming UI states. |
-| `shell/` | ~12 | top nav, sidebar nav, dark-mode persists, keyboard shortcuts (Cmd+K, n, /, ?), error toast on 5xx, error boundary, 404 page, 401 redirects, breadcrumbs, mobile responsive smoke. |
-| **Total** | **~135** | |
+| Folder             | Specs                                   | Coverage focus                                                                                                                                                                                                                                                                                                                         |
+| ------------------ | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `_journey.spec.ts` | 1 spec, 6 `test.describe.serial` blocks | register → login → create draft → AI autocomplete → upload file → publish → search → vote → bookmark → comment inline → fork → diff → logout → relogin as alice → permission denied → done. Phased blocks make traces easier to debug.                                                                                                 |
+| `auth/`            | ~14                                     | login (success / wrong-password / unknown-email / empty / redirect-after), register (success / duplicate-email / weak-password / email-validation), logout, session refresh, OAuth-stub flow (asserts the 501 toast and the link page's 401 message — concrete, not hand-wavy), account-link page, redirect-when-authenticated guards. |
+| `posts/`           | ~22                                     | new (draft saves, required fields, markdown renders), view (public, draft-private, missing-id, permission), edit (own, cannot-edit-others, persists, cancel), delete (confirm, own-only, cascade), publish toggle, fork (creates linked copy, edits independent), multi-file post upload + preview, tags add/remove.                   |
+| `revisions/`       | ~10                                     | create (auto-on-edit, manual), list (chronological, empty), view-by-number, side-by-side diff, inline diff, rollback, permission.                                                                                                                                                                                                      |
+| `comments/`        | ~14                                     | top-level / reply / nested-reply / inline-on-revision-line, edit (own only, edit window), delete (own only), empty state, comment-on-deleted-post, mention notifications if implemented.                                                                                                                                               |
+| `voting/`          | ~7                                      | upvote, downvote, switch, remove, score updates in feed/post-view, error-path (already voted), permission.                                                                                                                                                                                                                             |
+| `bookmarks/`       | ~5                                      | toggle on/off, bookmarks page list, empty state, persists across sessions.                                                                                                                                                                                                                                                             |
+| `tags/`            | ~9                                      | popular-tags render, subscribe / unsubscribe, subscribed-tag-feed filter, tag page, my-subscriptions list, click-tag-from-post, search-by-tag.                                                                                                                                                                                         |
+| `search/`          | ~12                                     | plain query, no-results, fuzzy match, AI-search toggle, structured filters (tag / author / date / type), result click, Cmd+K, pagination, recent searches.                                                                                                                                                                             |
+| `playground/`      | ~10                                     | open prompt, fill template variables, run (SSE streams), copy-to-clipboard, variable validation, save-as-fork, missing-variable error, mock-script selection.                                                                                                                                                                          |
+| `files/`           | ~11                                     | drag-drop upload, picker upload, multi-file, preview (json / yaml / md / code / image), download, replace, remove, oversize rejection, mime rejection, in-post rendering.                                                                                                                                                              |
+| `ai/`              | ~8                                      | autocomplete (token-typing, accept, dismiss), generate-from-prompt, error during stream, mid-stream cancel, mock-script selection per test, streaming UI states.                                                                                                                                                                       |
+| `shell/`           | ~12                                     | top nav, sidebar nav, dark-mode persists, keyboard shortcuts (Cmd+K, n, /, ?), error toast on 5xx, error boundary, 404 page, 401 redirects, breadcrumbs, mobile responsive smoke.                                                                                                                                                      |
+| **Total**          | **~135**                                |                                                                                                                                                                                                                                                                                                                                        |
 
 ### Runtime budget
 
@@ -440,6 +453,7 @@ The workflow uses `pull_request` (not `pull_request_target`) — confirmed and c
 **Single criterion: 14 consecutive green main-branch runs after foundation merge.** No time-bound OR clause. Tracked via the pinned tracking issue (counter incremented in a comment after each green main run; reset to zero on any red run).
 
 When the counter hits 14:
+
 - Branch protection: workflow becomes a required check.
 - `CLAUDE.md` is updated in a follow-up PR (filed by issue #4 or whichever issue is current at the time) to add Playwright as a third blocking gate alongside coverage and Bruno.
 - Artifact retention bumps to 30 days.
@@ -460,18 +474,18 @@ A post-step parses `playwright-report/results.json`. If a spec fails twice conse
 
 Filed in order via `/metaswarm:create-issue`, each blocked by the previous, sharing the `e2e-rollout` label. The foundation is split into three reviewable PRs (1a/1b/1c) per CTO blocker.
 
-| # | Title | Scope | Specs | CI |
-| --- | --- | --- | --- | --- |
-| 1a | Server seams: mock LLM provider + reset endpoint + seed guard + Bruno CI fix | All Server-side additions in this design (mock-provider, mock-scripts, env-guards, `__test__.ts` route, seed-guard, server.ts boot fail-fast, `bruno-regression.yml` env vars, `bruno/ai/complete.bru` assertion update, `bruno/README.md` note) | 0 (no E2E specs yet) | n/a |
-| 1b | E2E scaffolding + journey smoke + new CI workflow | `e2e/` workspace, Playwright config, fixtures, support, selector shards, `_journey.spec.ts`, the new `e2e-playwright.yml` workflow non-blocking | ~1 (journey only) | non-blocking |
-| 1c | E2E auth specs | `e2e/specs/auth/` only | ~14 | non-blocking |
-| 2 | E2E posts + revisions | `posts/` + `revisions/` | ~32 | non-blocking |
-| 3 | E2E comments + voting + bookmarks | three folders | ~26 | non-blocking |
-| 4 | E2E tags + search | two folders + flip-to-blocking decision (`CLAUDE.md` update if 14-run gate hit) | ~21 | non-blocking → blocking |
-| 5 | E2E playground + AI | two folders, exercises mock LLM | ~18 | blocking |
-| 6 | E2E files + multi-file posts | `files/`, MinIO-heavy | ~11 | blocking |
-| 7 | E2E shell + accessibility | shell folder | ~12 | blocking |
-| 8 | E2E polish | auto-flake-issue tooling, fixme-budget guard, decide on webkit/mobile, doc updates | 0 | blocking |
+| #   | Title                                                                        | Scope                                                                                                                                                                                                                                            | Specs                | CI                      |
+| --- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------- | ----------------------- |
+| 1a  | Server seams: mock LLM provider + reset endpoint + seed guard + Bruno CI fix | All Server-side additions in this design (mock-provider, mock-scripts, env-guards, `__test__.ts` route, seed-guard, server.ts boot fail-fast, `bruno-regression.yml` env vars, `bruno/ai/complete.bru` assertion update, `bruno/README.md` note) | 0 (no E2E specs yet) | n/a                     |
+| 1b  | E2E scaffolding + journey smoke + new CI workflow                            | `e2e/` workspace, Playwright config, fixtures, support, selector shards, `_journey.spec.ts`, the new `e2e-playwright.yml` workflow non-blocking                                                                                                  | ~1 (journey only)    | non-blocking            |
+| 1c  | E2E auth specs                                                               | `e2e/specs/auth/` only                                                                                                                                                                                                                           | ~14                  | non-blocking            |
+| 2   | E2E posts + revisions                                                        | `posts/` + `revisions/`                                                                                                                                                                                                                          | ~32                  | non-blocking            |
+| 3   | E2E comments + voting + bookmarks                                            | three folders                                                                                                                                                                                                                                    | ~26                  | non-blocking            |
+| 4   | E2E tags + search                                                            | two folders + flip-to-blocking decision (`CLAUDE.md` update if 14-run gate hit)                                                                                                                                                                  | ~21                  | non-blocking → blocking |
+| 5   | E2E playground + AI                                                          | two folders, exercises mock LLM                                                                                                                                                                                                                  | ~18                  | blocking                |
+| 6   | E2E files + multi-file posts                                                 | `files/`, MinIO-heavy                                                                                                                                                                                                                            | ~11                  | blocking                |
+| 7   | E2E shell + accessibility                                                    | shell folder                                                                                                                                                                                                                                     | ~12                  | blocking                |
+| 8   | E2E polish                                                                   | auto-flake-issue tooling, fixme-budget guard, decide on webkit/mobile, doc updates                                                                                                                                                               | 0                    | blocking                |
 
 Plus a **tracking issue** (filed first as `[E2E rollout 0/9] tracking`) acting as the index — links to all 9 sub-issues, the design doc commit SHA, the green-run counter, the flip-to-blocking decision log, and the running spec count.
 
@@ -575,22 +589,22 @@ Per CLAUDE.md, after the agent reads this issue, the orchestrator presents the s
 
 ## Risks & mitigations
 
-| Risk | Mitigation |
-| --- | --- |
-| Reset endpoint accidentally shipped to prod | Six-layer defense (boot fail-fast on NODE_ENV allowlist, strict env parsing, bind-address guard, route-registration gate, X-E2E-Secret per-request header, Origin/CORS check). Vitest tests assert each gate independently. |
-| Seed script run against prod DB | `seed-guard.ts` refuses non-localhost DATABASE_URL without `ALLOW_DESTRUCTIVE_SEED=1`. |
-| `LLM_PROVIDER=mock` in production | Boot fail-fast + provider-creation throw if NODE_ENV=production. |
-| Mock LLM drift from real provider wire format | Mock is a `BaseChatModel` impl using LangChain's official chunk types; provider interface enforces parity at TypeScript level. Vitest tests assert the chunk shape. |
-| Storage state JWT leaked via git | Default location is `os.tmpdir()`; repo location is opt-in via `E2E_STORAGE_IN_REPO=1`. Pre-commit hook refuses to stage `*.auth.json` or `e2e-secret`. |
-| Worker-collision on shared seed data | Postgres advisory lock around `seed.sql` execution serializes resets across workers. Worst case ~800ms cumulative wait per `beforeEach` cohort. |
-| `data-testid` central-registry merge conflicts | Sharded by feature folder; each PR touches only its own shard + (rarely) shell.ts. |
-| Foundation PR too large to review | Split into 1a (server, no specs) / 1b (rig + journey) / 1c (auth specs). Each independently reviewable. |
-| Bruno CI fix coupling to foundation | Acceptable: the fix can't exist before the mock provider exists. Documented in the PR description. |
-| Bruno test contract change (real → mock) | Documented in PR; `ai/complete.bru` assertion updated explicitly; README troubleshooting note replaced. |
-| Stability gate gameable | Single criterion (14 green main runs); rollback criterion (3 red in 7 days) keeps the loop closed. |
-| Test routes exploitable from forks via CI | Workflow uses `pull_request` (not `pull_request_target`); GITHUB_TOKEN scoped read-only for fork PRs. |
-| `data-testid` naming inconsistency | Single canonical convention (kebab-case + role suffix for interactive, bare nouns for content) documented in README. |
-| `_journey.spec.ts` failure trace too large | Phased into `test.describe.serial` blocks per phase (auth, draft, publish, social, fork, permission); failures isolate to a phase. |
+| Risk                                           | Mitigation                                                                                                                                                                                                                  |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Reset endpoint accidentally shipped to prod    | Six-layer defense (boot fail-fast on NODE_ENV allowlist, strict env parsing, bind-address guard, route-registration gate, X-E2E-Secret per-request header, Origin/CORS check). Vitest tests assert each gate independently. |
+| Seed script run against prod DB                | `seed-guard.ts` refuses non-localhost DATABASE_URL without `ALLOW_DESTRUCTIVE_SEED=1`.                                                                                                                                      |
+| `LLM_PROVIDER=mock` in production              | Boot fail-fast + provider-creation throw if NODE_ENV=production.                                                                                                                                                            |
+| Mock LLM drift from real provider wire format  | Mock is a `BaseChatModel` impl using LangChain's official chunk types; provider interface enforces parity at TypeScript level. Vitest tests assert the chunk shape.                                                         |
+| Storage state JWT leaked via git               | Default location is `os.tmpdir()`; repo location is opt-in via `E2E_STORAGE_IN_REPO=1`. Pre-commit hook refuses to stage `*.auth.json` or `e2e-secret`.                                                                     |
+| Worker-collision on shared seed data           | Postgres advisory lock around `seed.sql` execution serializes resets across workers. Worst case ~800ms cumulative wait per `beforeEach` cohort.                                                                             |
+| `data-testid` central-registry merge conflicts | Sharded by feature folder; each PR touches only its own shard + (rarely) shell.ts.                                                                                                                                          |
+| Foundation PR too large to review              | Split into 1a (server, no specs) / 1b (rig + journey) / 1c (auth specs). Each independently reviewable.                                                                                                                     |
+| Bruno CI fix coupling to foundation            | Acceptable: the fix can't exist before the mock provider exists. Documented in the PR description.                                                                                                                          |
+| Bruno test contract change (real → mock)       | Documented in PR; `ai/complete.bru` assertion updated explicitly; README troubleshooting note replaced.                                                                                                                     |
+| Stability gate gameable                        | Single criterion (14 green main runs); rollback criterion (3 red in 7 days) keeps the loop closed.                                                                                                                          |
+| Test routes exploitable from forks via CI      | Workflow uses `pull_request` (not `pull_request_target`); GITHUB_TOKEN scoped read-only for fork PRs.                                                                                                                       |
+| `data-testid` naming inconsistency             | Single canonical convention (kebab-case + role suffix for interactive, bare nouns for content) documented in README.                                                                                                        |
+| `_journey.spec.ts` failure trace too large     | Phased into `test.describe.serial` blocks per phase (auth, draft, publish, social, fork, permission); failures isolate to a phase.                                                                                          |
 
 ## Acceptance criteria for the design
 
@@ -605,3 +619,110 @@ Per CLAUDE.md, after the agent reads this issue, the orchestrator presents the s
 - [x] Defense-in-depth on the destructive test endpoint (six layers).
 - [x] Coverage strategy concrete per file.
 - [x] Test-author DX details (opt-out mechanism, sharded selectors, naming convention, selection-vs-assertion rule).
+
+---
+
+## Amendment 2026-04-29 — Issue #47 scope clarification
+
+Drafted during pre-plan brainstorm for [Issue #47 (E2E posts + revisions)](https://github.com/multiandrewlab/forge/issues/47), after foundation work (#44/#45/#46) shipped to `main`. The original design was committed 2026-04-28 15:44; foundation PR #61 merged 2026-04-29 morning. This section captures drift between the original design's assumptions and the on-disk reality, plus scope decisions made during the brainstorm.
+
+### Drift findings
+
+1. **Foundation already shipped most testids and the posts selector shard.**
+   - `e2e/fixtures/selectors/posts.ts` exists with 17 entries (issue #47 says "(new)" — actually "(extend)").
+   - `PostEditor.vue` carries `new-post-title-input`, `new-post-save-draft-btn`, `new-post-publish-btn`, `editor-drop-zone`, `new-post-body-editor`, `file-upload-input`, `file-upload-preview`.
+   - `PostViewPage.vue` carries `post-title`, `draft-badge`, `published-badge`.
+   - `PostEditPage.vue` carries `fork-attribution`, conditional `forbidden-page`.
+   - `PostActions.vue` carries `fork-btn`, `upvote-btn`, `vote-score`, `bookmark-toggle-btn`, `bookmark-on-icon`.
+   - `PostMetaHeader.vue` carries `fork-attribution`.
+   - `PostListItem.vue` carries `fork-count`, `link-icon`.
+   - `EditorToolbar.vue` carries `language-select`, `content-type-select`, `visibility-toggle`, `tag-input`, `tag-item`, `tag-remove`.
+   - `RevisionDiffViewer.vue` is fully covered (`diff-viewer`, `mode-inline`, `mode-side-by-side`, `diff-added/-removed/-unchanged`, `diff-side-by-side`, `side-left`, `side-right`).
+   - `RevisionTimeline.vue` carries `revision-item`, `author-avatar`.
+   - `RestoreButton.vue` carries `restore-trigger`, `restore-dialog`, `restore-cancel`, `restore-confirm`.
+   - **Implication:** issue #47's "modify ~22 component files for testids" line overstates the work. Real testid additions are small (4 gaps, see below).
+
+2. **Three feature surfaces landed post-design and are visible on every post page.**
+   - **Link previews (#6 / PR-merged):** `LinkPreviewCard.vue` with `image-placeholder`, `refresh-preview` testids. Renders on link-type posts.
+   - **WASM code execution (#8 / #42):** `CodeRunner.vue`, `RunButton.vue`, `ExecutionOutput.vue` with `code-runner`, `run-play`, `run-spinner`, `run-stop`, `execution-output`, `output-line-${i}`, `status-bar`, `clear-button`. Renders on snippet-type posts.
+   - **User profiles (#7):** Author avatar/name links to `/users/:id`. Presence indicator (`presence-avatar`, `presence-overflow`) renders on edit page.
+   - These are NOT in the original design's coverage matrix or in #47's DoD.
+
+3. **Seed data fixtures are insufficient for several DoD items as written.**
+   - Testuser owns only `c0000000-…-000000000099` (public, not draft) with 1 revision (`d…0099`), no votes/bookmarks, 1 comment.
+   - DoD items affected: publish-toggle (no testuser draft), revision chronological list (only 1 testuser revision), cascade-delete (sparse artifacts).
+
+### Scope decisions
+
+**Decision A — feature-surface coverage in scope of `posts/`** (chosen during brainstorm).
+The three new feature surfaces (link-preview, code-runner, profile-avatar) get full spec coverage inside `posts/`. Rationale: they're rendered on every post page; specs that exercise post pages need to assert their presence/absence and basic correctness rather than ignore them.
+
+**Decision B — hybrid seed strategy** (chosen during brainstorm; aligns with issue #47's own guidance).
+Extend `scripts/seed.sql` for _fixed_ read fixtures shared across multiple specs. Use `createdPostId` (API-driven `beforeEach` setup) for mutation specs. Avoids per-spec seed dependencies for mutations and keeps seed deterministic for reads.
+
+### Updated coverage matrix for #47
+
+| Folder        | Spec count | Delta vs. original       | Sub-coverage                                                             |
+| ------------- | ---------- | ------------------------ | ------------------------------------------------------------------------ |
+| `posts/`      | ~28–30     | +6–7                     | original 22 + link-preview (~2) + code-runner (~2) + profile-avatar (~2) |
+| `revisions/`  | ~10        | unchanged                | per original DoD                                                         |
+| **Total #47** | **~38–40** | **+6–8 vs. original 32** |                                                                          |
+
+### Seed data additions
+
+Append to `scripts/seed.sql` (additive only — no existing rows mutated, preserving Bruno fixture invariants):
+
+- **`c0000000-0000-0000-0000-000000000098`** — testuser draft snippet (typescript, public, `is_draft=true`) for publish-toggle specs.
+- **`d0000000-0000-0000-0000-000000000098`** — initial revision of `c…0098`.
+- **2 extra revisions on `c…0099`** (revision_number 2 and 3, both testuser-authored) → 3 revisions total for chronological-list / view-by-number / diff specs.
+- **1 vote on `c…0099` from alice** (`value=1`) — for cascade-delete observability.
+- **1 bookmark on `c…0099` from alice** — for cascade-delete observability.
+
+### Component testid gaps (TDD-driven during spec implementation)
+
+Per #47's agent instructions ("write spec, watch fail, add testid + selector, watch pass"), these get added as specs require them, not upfront:
+
+- `post-delete-btn` + delete confirmation dialog (`post-delete-confirm`, `post-delete-cancel`) — likely in `PostMetaHeader.vue` or a new `DeletePostDialog.vue`.
+- `post-cancel-btn` for editor discard/cancel — likely in `PostEditor.vue`.
+- `tag-link` for tag chips on `PostViewPage.vue` (distinct from `tag-item` which is the editor-toolbar chip).
+- Page-level testid on `PostHistoryPage.vue` (e.g., `post-history-page`) for navigation assertions.
+
+### Selector shard plan
+
+**`e2e/fixtures/selectors/posts.ts` — extend** (not new):
+Add `postDeleteBtn`, `postDeleteConfirm`, `postDeleteCancel`, `postCancelBtn`, `tagLink`, `linkPreviewCard`, `linkPreviewRefresh`, `codeRunner`, `runPlay`, `runStop`, `executionOutput`, `clearOutputBtn`, `authorAvatar`, `presenceAvatar`.
+
+**`e2e/fixtures/selectors/revisions.ts` — new shard:**
+Mostly aliases to existing testids in `components/history/*` (`revisionItem`, `modeInline`, `modeSideBySide`, `diffAdded`, `diffRemoved`, `diffUnchanged`, `restoreTrigger`, `restoreConfirm`, `restoreCancel`, `restoreDialog`).
+
+### File scope amendment
+
+| Original (issue #47 text)                   | Amended (reality)                                                    |
+| ------------------------------------------- | -------------------------------------------------------------------- |
+| `e2e/fixtures/selectors/posts.ts` (new)     | extend                                                               |
+| `e2e/fixtures/selectors/revisions.ts` (new) | new (unchanged)                                                      |
+| `PostNewPage.vue` (modify – testid)         | likely no change                                                     |
+| `PostViewPage.vue` (modify – testid)        | modify (`tag-link`)                                                  |
+| `PostEditPage.vue` (modify – testid)        | likely no change                                                     |
+| `PostHistoryPage.vue` (modify – testid)     | modify (page-level testid)                                           |
+| `components/post/**` (modify – testid)      | modify only `PostMetaHeader.vue` (`post-delete-btn` + dialog wiring) |
+| `components/editor/**` (modify – testid)    | modify only `PostEditor.vue` (`post-cancel-btn`)                     |
+| `components/history/**` (modify – testid)   | likely no change                                                     |
+| **Added**                                   | `scripts/seed.sql` (extend, additive)                                |
+
+### Risks & mitigations (additions)
+
+| Risk                                                                        | Mitigation                                                                                                                                                                                                |
+| --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Spec count climbs past +20% from original 32 (now 38–40)                    | Plan-review-gate flags scope; if reviewer escalates, split feature-surface specs (link-preview / code-runner / profile-avatar) into a follow-up issue and revert `posts/` to ~22.                         |
+| Seed extension breaks Bruno fixture invariants                              | Additive-only: testuser's `c…0099` keeps its current author/visibility/draft/title; new revisions/vote/bookmark don't change Bruno's existing reads. New `c…0098` is a separate post Bruno doesn't query. |
+| `createdPostId` setup steps make specs slow                                 | Use `request` fixture for direct API calls (no UI), parallelize with `workers: 4`; runtime budget per design (4 min local for both folders) still applies.                                                |
+| Feature-surface specs duplicate coverage that later rollout issues will own | This is intentional for #47 — verify presence/basic behavior on post pages now; deeper coverage (e.g., link-preview SSRF blocking, code-runner sandbox isolation) lives in their own rollout folders.     |
+
+### Acceptance for the amendment
+
+- [x] Drift findings documented with concrete file paths.
+- [x] Both scope decisions (A: feature surfaces; B: hybrid seed) recorded with rationale.
+- [x] Updated coverage matrix and seed additions concrete enough to plan against.
+- [x] File scope re-aligned to reality.
+- [x] Risks specific to the amended scope captured.
