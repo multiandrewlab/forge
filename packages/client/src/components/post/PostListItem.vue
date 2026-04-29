@@ -1,5 +1,6 @@
 <template>
   <div
+    data-testid="post-list-item"
     class="cursor-pointer border-b border-gray-700 p-4 transition-colors hover:bg-gray-800"
     :class="{ 'bg-gray-800': selected }"
     @click="handleClick"
@@ -20,6 +21,7 @@
       <span class="text-xs text-gray-500">{{ timeAgo(post.createdAt) }}</span>
       <span
         v-if="post.isDraft"
+        data-testid="draft-badge"
         class="rounded bg-yellow-600/20 px-1.5 py-0.5 text-xs text-yellow-400"
       >
         Draft
