@@ -10,7 +10,7 @@ import type { SearchPostRow } from '../db/queries/search.js';
 const TRIGRAM_FALLBACK_THRESHOLD = 5;
 
 export async function searchRoutes(app: FastifyInstance): Promise<void> {
-  app.get('/search', async (request, reply) => {
+  app.get('/search', { preHandler: [app.authenticate] }, async (request, reply) => {
     const parsed = searchQuerySchema.safeParse(request.query);
     if (!parsed.success) {
       return reply
@@ -41,39 +41,27 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
       let aiFilters: AiSearchFilters | undefined;
 
       if (ai === true) {
-        let useAi = true;
-
-        // Step 1: Try to verify auth — if fails, fall back
-        try {
-          await request.jwtVerify();
-        } catch {
-          useAi = false;
-        }
-
-        // Step 2: Try to acquire a rate-limit slot
-        if (useAi) {
-          const slot = app.aiAcquire(request.user.id);
-          if (!slot) {
-            useAi = false;
-          } else {
-            // Step 3: Run the AI chain — any failure gracefully falls back
-            try {
-              const chain = createSearchChain(app.aiProvider());
-              const filters = await runSearchChain(chain, trimmedQ);
-              if (filters !== null) {
-                aiFilters = filters;
-                effectiveQuery = filters.textQuery;
-                searchOptions = {
-                  contentType: (filters.contentType as typeof type) ?? undefined,
-                  tag: filters.tags[0] ?? undefined,
-                  limit,
-                };
-              }
-            } catch {
-              // Chain error: fall back to original query and options
-            } finally {
-              slot.release();
+        // preHandler [app.authenticate] guarantees request.user is defined.
+        // Try to acquire a rate-limit slot — if not available, fall back to plain search.
+        const slot = app.aiAcquire(request.user.id);
+        if (slot) {
+          // Run the AI chain — any failure gracefully falls back to plain search
+          try {
+            const chain = createSearchChain(app.aiProvider());
+            const filters = await runSearchChain(chain, trimmedQ);
+            if (filters !== null) {
+              aiFilters = filters;
+              effectiveQuery = filters.textQuery;
+              searchOptions = {
+                contentType: (filters.contentType as typeof type) ?? undefined,
+                tag: filters.tags[0] ?? undefined,
+                limit,
+              };
             }
+          } catch {
+            // Chain error: fall back to original query and options
+          } finally {
+            slot.release();
           }
         }
       }

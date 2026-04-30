@@ -28,8 +28,8 @@ function toTag(row: TagRow): { id: string; name: string; postCount: number } {
 }
 
 export async function tagRoutes(app: FastifyInstance): Promise<void> {
-  // GET / — list/search tags (accepts ?q=prefix&limit=N), no auth required
-  app.get('/', async (request, reply) => {
+  // GET / — list/search tags (accepts ?q=prefix&limit=N), requires auth
+  app.get('/', { preHandler: [app.authenticate] }, async (request, reply) => {
     const parsed = searchSchema.safeParse(request.query);
     if (!parsed.success) {
       return reply
@@ -42,8 +42,8 @@ export async function tagRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ tags: rows.map(toTag) });
   });
 
-  // GET /popular — top tags by post_count (accepts ?limit=N), no auth required
-  app.get('/popular', async (request, reply) => {
+  // GET /popular — top tags by post_count (accepts ?limit=N), requires auth
+  app.get('/popular', { preHandler: [app.authenticate] }, async (request, reply) => {
     const parsed = popularSchema.safeParse(request.query);
     if (!parsed.success) {
       return reply

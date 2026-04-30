@@ -67,10 +67,16 @@ function makeUserRow(overrides: Partial<SearchUserRow> = {}): SearchUserRow {
 
 describe('search routes', () => {
   let app: FastifyInstance;
+  let token: string;
 
   beforeAll(async () => {
     app = await buildApp();
     await app.ready();
+    token = app.jwt.sign({
+      id: 'a0000000-0000-0000-0000-000000000099',
+      email: 'testuser@example.com',
+      displayName: 'Test User',
+    });
   });
 
   afterAll(async () => {
@@ -88,6 +94,7 @@ describe('search routes', () => {
         method: 'GET',
         url: '/api/search',
         query: { q: '   ' },
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(res.statusCode).toBe(200);
@@ -115,6 +122,7 @@ describe('search routes', () => {
         method: 'GET',
         url: '/api/search',
         query: { q: 'react' },
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(res.statusCode).toBe(200);
@@ -144,6 +152,7 @@ describe('search routes', () => {
         method: 'GET',
         url: '/api/search',
         query: { q: 'react' },
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(res.statusCode).toBe(200);
@@ -168,6 +177,7 @@ describe('search routes', () => {
         method: 'GET',
         url: '/api/search',
         query: { q: 'react', fuzzy: 'true' },
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(res.statusCode).toBe(200);
@@ -188,6 +198,7 @@ describe('search routes', () => {
         method: 'GET',
         url: '/api/search',
         query: { q: 'react', type: 'snippet', tag: 'javascript' },
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(res.statusCode).toBe(200);
@@ -203,6 +214,7 @@ describe('search routes', () => {
         method: 'GET',
         url: '/api/search',
         query: { q: 'react', type: 'bogus' },
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(res.statusCode).toBe(400);
@@ -219,6 +231,7 @@ describe('search routes', () => {
         method: 'GET',
         url: '/api/search',
         query: { q: 'react' },
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(res.statusCode).toBe(500);
@@ -236,6 +249,7 @@ describe('search routes', () => {
         method: 'GET',
         url: '/api/search',
         query: { q: 'alice' },
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(res.statusCode).toBe(200);
@@ -259,6 +273,7 @@ describe('search routes', () => {
         method: 'GET',
         url: '/api/search',
         query: { q: 'react' },
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(res.statusCode).toBe(200);
@@ -278,6 +293,7 @@ describe('search routes', () => {
         method: 'GET',
         url: '/api/search',
         query: { q: 'react' },
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(res.statusCode).toBe(200);
@@ -295,6 +311,7 @@ describe('search routes', () => {
         method: 'GET',
         url: '/api/search',
         query: { q: 'react', limit: '3' },
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(res.statusCode).toBe(200);
@@ -312,6 +329,7 @@ describe('search routes', () => {
         method: 'GET',
         url: '/api/search',
         query: { q: 'react' },
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(res.statusCode).toBe(500);
@@ -358,23 +376,17 @@ describe('search routes', () => {
         );
       });
 
-      it('falls back to plain search when not authenticated (no Authorization header)', async () => {
-        mockSearchPostsByTsvector.mockResolvedValueOnce(
-          Array.from({ length: 5 }, (_, i) => makePostRow({ id: `id-${i}` })),
-        );
-        mockSearchUsers.mockResolvedValueOnce([]);
-
+      it('returns 401 when not authenticated (preHandler enforces auth before AI logic)', async () => {
         const res = await app.inject({
           method: 'GET',
           url: '/api/search',
           query: { q: 'react hooks', ai: 'true' },
         });
 
-        expect(res.statusCode).toBe(200);
-        // Chain should NOT have been called — fell back immediately
+        expect(res.statusCode).toBe(401);
+        // preHandler short-circuits before any handler logic — chain & DB never called
         expect(mockRunSearchChain).not.toHaveBeenCalled();
-        // Plain search uses original query
-        expect(mockSearchPostsByTsvector).toHaveBeenCalledWith('react hooks', expect.any(Object));
+        expect(mockSearchPostsByTsvector).not.toHaveBeenCalled();
       });
 
       it('falls back to plain search when chain returns null (chain failure)', async () => {

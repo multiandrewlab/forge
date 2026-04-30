@@ -14,8 +14,8 @@ const querySchema = z.object({
 });
 
 export async function userProfileRoutes(app: FastifyInstance): Promise<void> {
-  // GET /:id — public user profile with stats, badges, and paginated posts
-  app.get('/:id', async (request, reply) => {
+  // GET /:id — user profile with stats, badges, and paginated posts (requires auth)
+  app.get('/:id', { preHandler: [app.authenticate] }, async (request, reply) => {
     const paramsParsed = paramsSchema.safeParse(request.params);
     if (!paramsParsed.success) {
       return reply

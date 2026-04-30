@@ -51,10 +51,16 @@ const sampleProfile: UserProfileResponse = {
 
 describe('user profile routes', () => {
   let app: FastifyInstance;
+  let token: string;
 
   beforeAll(async () => {
     app = await buildApp();
     await app.ready();
+    token = app.jwt.sign({
+      id: 'a0000000-0000-0000-0000-000000000099',
+      email: 'testuser@example.com',
+      displayName: 'Test User',
+    });
   });
 
   afterAll(async () => {
@@ -74,6 +80,7 @@ describe('user profile routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: `/api/users/${validUserId}`,
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(200);
@@ -90,6 +97,7 @@ describe('user profile routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/users/not-a-uuid',
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(400);
@@ -103,6 +111,7 @@ describe('user profile routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: `/api/users/${validUserId}`,
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(404);
@@ -116,6 +125,7 @@ describe('user profile routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: `/api/users/${validUserId}?limit=10`,
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(200);
@@ -126,6 +136,7 @@ describe('user profile routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: `/api/users/${validUserId}?limit=100`,
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(400);
@@ -139,6 +150,7 @@ describe('user profile routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: `/api/users/${validUserId}`,
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(200);
@@ -152,6 +164,7 @@ describe('user profile routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: `/api/users/${validUserId}?cursor=${encodeURIComponent(cursorValue)}`,
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(200);
@@ -166,6 +179,7 @@ describe('user profile routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: `/api/users/${validUserId}?limit=0`,
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(400);

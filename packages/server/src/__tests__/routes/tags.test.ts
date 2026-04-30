@@ -58,6 +58,7 @@ describe('tag routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/tags',
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(200);
@@ -75,6 +76,7 @@ describe('tag routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/tags?q=type',
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(200);
@@ -89,6 +91,7 @@ describe('tag routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/tags?limit=1',
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(200);
@@ -100,6 +103,7 @@ describe('tag routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/tags?limit=100',
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(400);
@@ -111,6 +115,7 @@ describe('tag routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/tags?limit=0',
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(400);
@@ -121,6 +126,7 @@ describe('tag routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: `/api/tags?q=${longQuery}`,
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(400);
@@ -132,6 +138,7 @@ describe('tag routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/tags?q=nonexistent',
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(200);
@@ -139,15 +146,13 @@ describe('tag routes', () => {
       expect(body.tags).toEqual([]);
     });
 
-    it('does not require authentication', async () => {
-      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
-
+    it('returns 401 without auth', async () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/tags',
       });
 
-      expect(response.statusCode).toBe(200);
+      expect(response.statusCode).toBe(401);
     });
   });
 
@@ -160,6 +165,7 @@ describe('tag routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/tags/popular',
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(200);
@@ -175,6 +181,7 @@ describe('tag routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/tags/popular?limit=1',
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(200);
@@ -186,6 +193,7 @@ describe('tag routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/tags/popular?limit=100',
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(400);
@@ -195,20 +203,19 @@ describe('tag routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/tags/popular?limit=0',
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(400);
     });
 
-    it('does not require authentication', async () => {
-      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
-
+    it('returns 401 without auth', async () => {
       const response = await app.inject({
         method: 'GET',
         url: '/api/tags/popular',
       });
 
-      expect(response.statusCode).toBe(200);
+      expect(response.statusCode).toBe(401);
     });
   });
 
