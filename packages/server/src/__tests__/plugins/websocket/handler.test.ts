@@ -181,7 +181,8 @@ describe('handleConnection', () => {
     // Subscribe
     fakeSocket._handlers['message'](JSON.stringify({ type: 'subscribe', channel: 'post:1' }));
 
-    expect(deps.channels.subscribe).toHaveBeenCalledWith('post:1', fakeSocket);
+    // 3rd arg is the authenticated userId (WU7 — recipient tracking for visibility filter)
+    expect(deps.channels.subscribe).toHaveBeenCalledWith('post:1', fakeSocket, 'user-1');
   });
 
   // ── Edge case 6: Authenticated unsubscribe ─────────────────────────

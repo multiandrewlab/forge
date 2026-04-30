@@ -7,7 +7,11 @@ meta {
 get {
   url: {{baseUrl}}/api/posts/{{postId}}/revisions/{{revisionNumber}}
   body: none
-  auth: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
 }
 
 assert {
@@ -15,5 +19,6 @@ assert {
 }
 
 docs {
-  Returns a single revision by its revision number. No auth required.
+  Returns a single revision by its revision number. Auth is required after
+  #62 (WU4); the seeded {{postId}} is testuser-owned and public.
 }

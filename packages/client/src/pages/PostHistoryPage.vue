@@ -16,8 +16,23 @@
       </router-link>
     </div>
 
+    <!-- Forbidden state (WU8 of issue #62). The history view previously had
+         no error UI; a 403 from GET /api/posts/:id/revisions silently rendered
+         an empty timeline. We now branch on errorStatus === 403 so the user
+         sees an explicit "private post" surface that mirrors PostViewPage. -->
+    <div
+      v-if="errorStatus === 403"
+      data-testid="forbidden-page"
+      class="my-6 rounded border border-surface-500 bg-surface-700 p-4 text-center"
+    >
+      <h2 class="text-xl font-semibold text-white">This post is private</h2>
+      <p class="mt-2 text-sm text-gray-400">
+        {{ error || 'The owner has not shared it with you.' }}
+      </p>
+    </div>
+
     <!-- Loading -->
-    <div v-if="loading" class="flex items-center justify-center py-12">
+    <div v-else-if="loading" class="flex items-center justify-center py-12">
       <p class="text-sm text-gray-400">Loading revisions...</p>
     </div>
 
@@ -78,7 +93,7 @@ import type { PostRevision } from '@forge/shared';
 
 const route = useRoute();
 const postId = route.params.id as string;
-const { fetchRevisions, restoreRevision, fetchPost, currentPost } = usePosts();
+const { fetchRevisions, restoreRevision, fetchPost, currentPost, error, errorStatus } = usePosts();
 
 const revisions = ref<PostRevision[]>([]);
 const selectedIds = ref<string[]>([]);

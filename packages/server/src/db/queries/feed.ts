@@ -139,6 +139,13 @@ export async function findFeedPosts(input: FindFeedPostsInput): Promise<FindFeed
     conditions.push('p.is_draft = false');
   }
 
+  // Visibility filter: callers see public posts plus their own private posts.
+  // Skip for filter=mine (already author-scoped). Applies to default + bookmarked.
+  if (filter !== 'mine') {
+    const userParam = nextParam(userId);
+    conditions.push(`(p.visibility = 'public' OR p.author_id = ${userParam})`);
+  }
+
   if (type !== undefined) {
     conditions.push(`p.content_type = ${nextParam(type)}`);
   }

@@ -496,9 +496,7 @@ describe('file routes', () => {
     });
 
     it('returns 401 for staged files (no revisionId) without auth', async () => {
-      // findPostById
-      mockQuery.mockResolvedValueOnce({ rows: [samplePostRow], rowCount: 1 });
-
+      // preHandler short-circuits before any DB call — no mocks needed
       const response = await app.inject({
         method: 'GET',
         url: `/api/posts/${postId}/files`,
@@ -526,7 +524,7 @@ describe('file routes', () => {
       expect(response.statusCode).toBe(403);
     });
 
-    it('lists files for a specific revision (public post, no auth required)', async () => {
+    it('lists files for a specific revision (public post, with auth)', async () => {
       // findPostById — public, not draft
       mockQuery.mockResolvedValueOnce({ rows: [samplePostRow], rowCount: 1 });
       // revision-to-post association check
@@ -537,6 +535,7 @@ describe('file routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: `/api/posts/${postId}/files?revisionId=${revisionId}`,
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(200);
@@ -554,6 +553,7 @@ describe('file routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: `/api/posts/${postId}/files?revisionId=${revisionId}`,
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(404);
@@ -568,19 +568,14 @@ describe('file routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: `/api/posts/${postId}/files?revisionId=${revisionId}`,
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(404);
     });
 
     it('returns 401 for revision files on private post without auth', async () => {
-      const privatePost = { ...samplePostRow, visibility: 'private' };
-
-      // findPostById — private post
-      mockQuery.mockResolvedValueOnce({ rows: [privatePost], rowCount: 1 });
-      // revision-to-post association check
-      mockQuery.mockResolvedValueOnce({ rows: [{ post_id: postId }], rowCount: 1 });
-
+      // preHandler short-circuits before any DB call — no mocks needed
       const response = await app.inject({
         method: 'GET',
         url: `/api/posts/${postId}/files?revisionId=${revisionId}`,
@@ -597,10 +592,8 @@ describe('file routes', () => {
       });
       const privatePost = { ...samplePostRow, visibility: 'private' };
 
-      // findPostById — private post
+      // findPostById — private post (assertCanReadPost short-circuits before revision lookup)
       mockQuery.mockResolvedValueOnce({ rows: [privatePost], rowCount: 1 });
-      // revision-to-post association check
-      mockQuery.mockResolvedValueOnce({ rows: [{ post_id: postId }], rowCount: 1 });
 
       const response = await app.inject({
         method: 'GET',
@@ -611,7 +604,10 @@ describe('file routes', () => {
       expect(response.statusCode).toBe(403);
     });
 
-    it('returns 403 for revision files on draft post when non-owner', async () => {
+    it('lists revision files for non-owner on public draft post (visibility check passes)', async () => {
+      // After WU3, draft-blocking on read is removed (matches WU2's posts.ts behavior).
+      // assertCanReadPost only enforces visibility === 'private'; drafts are reachable
+      // to authenticated callers if visibility is public.
       const otherToken = app.jwt.sign({
         id: otherUserId,
         email: 'other@example.com',
@@ -623,6 +619,8 @@ describe('file routes', () => {
       mockQuery.mockResolvedValueOnce({ rows: [draftPost], rowCount: 1 });
       // revision-to-post association check
       mockQuery.mockResolvedValueOnce({ rows: [{ post_id: postId }], rowCount: 1 });
+      // findFilesByRevisionId
+      mockQuery.mockResolvedValueOnce({ rows: [sampleCommittedFileRow], rowCount: 1 });
 
       const response = await app.inject({
         method: 'GET',
@@ -630,7 +628,7 @@ describe('file routes', () => {
         headers: { authorization: `Bearer ${otherToken}` },
       });
 
-      expect(response.statusCode).toBe(403);
+      expect(response.statusCode).toBe(200);
     });
 
     it('allows owner to access revision files on private post', async () => {
@@ -666,6 +664,7 @@ describe('file routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: `/api/posts/${postId}/files?revisionId=latest`,
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(200);
@@ -687,6 +686,7 @@ describe('file routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: `/api/posts/${postId}/files?revisionId=latest`,
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(200);
@@ -695,16 +695,7 @@ describe('file routes', () => {
     });
 
     it('returns 401 for latest revision on private post without auth', async () => {
-      const privatePost = { ...samplePostRow, visibility: 'private' };
-
-      // findPostById — private post
-      mockQuery.mockResolvedValueOnce({ rows: [privatePost], rowCount: 1 });
-      // findRevisionsByPostId
-      mockQuery.mockResolvedValueOnce({
-        rows: [{ id: revisionId, post_id: postId, revision_number: 1 }],
-        rowCount: 1,
-      });
-
+      // preHandler short-circuits before any DB call — no mocks needed
       const response = await app.inject({
         method: 'GET',
         url: `/api/posts/${postId}/files?revisionId=latest`,
@@ -721,13 +712,8 @@ describe('file routes', () => {
       });
       const privatePost = { ...samplePostRow, visibility: 'private' };
 
-      // findPostById — private post
+      // findPostById — private post (assertCanReadPost short-circuits before revision lookup)
       mockQuery.mockResolvedValueOnce({ rows: [privatePost], rowCount: 1 });
-      // findRevisionsByPostId
-      mockQuery.mockResolvedValueOnce({
-        rows: [{ id: revisionId, post_id: postId, revision_number: 1 }],
-        rowCount: 1,
-      });
 
       const response = await app.inject({
         method: 'GET',
@@ -759,6 +745,7 @@ describe('file routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: `/api/posts/${postId}/files?revisionId=latest`,
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(404);
@@ -768,7 +755,7 @@ describe('file routes', () => {
   // ─── GET /api/posts/:id/files/:fileId ──────────────────────────────
 
   describe('GET /api/posts/:id/files/:fileId', () => {
-    it('returns inline content for committed file on public post (no auth)', async () => {
+    it('returns inline content for committed file on public post (with auth)', async () => {
       // sampleFileRow has revision_id: null (staged) — use sampleCommittedFileRow for committed
       // findPostById — public post
       mockQuery.mockResolvedValueOnce({ rows: [samplePostRow], rowCount: 1 });
@@ -778,6 +765,7 @@ describe('file routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: `/api/posts/${postId}/files/${fileId}`,
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(200);
@@ -804,11 +792,7 @@ describe('file routes', () => {
     });
 
     it('returns 401 for staged file without auth', async () => {
-      // findPostById
-      mockQuery.mockResolvedValueOnce({ rows: [samplePostRow], rowCount: 1 });
-      // query for file — staged (revision_id: null)
-      mockQuery.mockResolvedValueOnce({ rows: [sampleFileRow], rowCount: 1 });
-
+      // preHandler short-circuits before any DB call — no mocks needed
       const response = await app.inject({
         method: 'GET',
         url: `/api/posts/${postId}/files/${fileId}`,
@@ -839,13 +823,7 @@ describe('file routes', () => {
     });
 
     it('returns 401 for committed file on private post without auth', async () => {
-      const privatePost = { ...samplePostRow, visibility: 'private' };
-
-      // findPostById — private post
-      mockQuery.mockResolvedValueOnce({ rows: [privatePost], rowCount: 1 });
-      // query for file — committed
-      mockQuery.mockResolvedValueOnce({ rows: [sampleCommittedFileRow], rowCount: 1 });
-
+      // preHandler short-circuits before any DB call — no mocks needed
       const response = await app.inject({
         method: 'GET',
         url: `/api/posts/${postId}/files/${fileId}`,
@@ -862,10 +840,8 @@ describe('file routes', () => {
       });
       const privatePost = { ...samplePostRow, visibility: 'private' };
 
-      // findPostById — private post
+      // findPostById — private post (assertCanReadPost short-circuits before file lookup)
       mockQuery.mockResolvedValueOnce({ rows: [privatePost], rowCount: 1 });
-      // query for file — committed
-      mockQuery.mockResolvedValueOnce({ rows: [sampleCommittedFileRow], rowCount: 1 });
 
       const response = await app.inject({
         method: 'GET',
@@ -893,7 +869,8 @@ describe('file routes', () => {
       expect(response.statusCode).toBe(200);
     });
 
-    it('returns 403 for committed file on draft post when non-owner', async () => {
+    it('returns committed file on public draft post for non-owner (visibility check passes)', async () => {
+      // After WU3, draft-blocking on read is removed (matches WU2's posts.ts behavior).
       const otherToken = app.jwt.sign({
         id: otherUserId,
         email: 'other@example.com',
@@ -901,7 +878,7 @@ describe('file routes', () => {
       });
       const draftPost = { ...samplePostRow, is_draft: true };
 
-      // findPostById — draft post
+      // findPostById — draft post (public visibility)
       mockQuery.mockResolvedValueOnce({ rows: [draftPost], rowCount: 1 });
       // query for file — committed
       mockQuery.mockResolvedValueOnce({ rows: [sampleCommittedFileRow], rowCount: 1 });
@@ -912,7 +889,7 @@ describe('file routes', () => {
         headers: { authorization: `Bearer ${otherToken}` },
       });
 
-      expect(response.statusCode).toBe(403);
+      expect(response.statusCode).toBe(200);
     });
 
     it('redirects to signed URL for object-stored committed files (public post)', async () => {
@@ -929,6 +906,7 @@ describe('file routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: `/api/posts/${postId}/files/${fileId}`,
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(302);
@@ -942,6 +920,7 @@ describe('file routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: `/api/posts/${postId}/files/${fileId}`,
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(404);
@@ -976,6 +955,7 @@ describe('file routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: `/api/posts/${postId}/files/${fileId}`,
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(200);
@@ -997,6 +977,7 @@ describe('file routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: `/api/posts/${postId}/files/${fileId}`,
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(404);

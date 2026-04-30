@@ -7,7 +7,11 @@ meta {
 get {
   url: {{baseUrl}}/api/posts/{{postId}}/comments
   body: none
-  auth: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
 }
 
 assert {
@@ -22,5 +26,6 @@ docs {
 
   Response: { comments: Comment[] }
 
-  Requires {{postId}} from Create Post or Get Feed.
+  Requires {{postId}} from Create Post or Get Feed. Auth is required after
+  #62 (WU4); the seeded {{postId}} is testuser-owned and public.
 }

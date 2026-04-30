@@ -26,9 +26,16 @@ export function usePosts() {
   const store = usePostsStore();
   const { currentPost, isDirty, saveStatus, lastSavedAt } = storeToRefs(store);
   const error = ref<string | null>(null);
+  // WU8 of issue #62: track the HTTP status of the most recent failed
+  // response. View components branch on errorStatus === 403 to render a
+  // dedicated "forbidden" surface instead of the generic error banner.
+  // Reset alongside `error` at the top of every method, then populated
+  // from the non-OK response status before `error` is assigned.
+  const errorStatus = ref<number | null>(null);
 
   async function createPost(input: CreatePostInput): Promise<string | null> {
     error.value = null;
+    errorStatus.value = null;
     try {
       const response = await apiFetch('/api/posts', {
         method: 'POST',
@@ -37,6 +44,7 @@ export function usePosts() {
       });
 
       if (!response.ok) {
+        errorStatus.value = response.status;
         error.value = await parseErrorMessage(response, 'Failed to create post');
         return null;
       }
@@ -56,10 +64,12 @@ export function usePosts() {
 
   async function fetchPost(id: string): Promise<void> {
     error.value = null;
+    errorStatus.value = null;
     try {
       const response = await apiFetch(`/api/posts/${id}`);
 
       if (!response.ok) {
+        errorStatus.value = response.status;
         error.value = await parseErrorMessage(response, 'Failed to fetch post');
         return;
       }
@@ -76,6 +86,7 @@ export function usePosts() {
 
   async function updatePost(id: string, data: Partial<CreatePostInput>): Promise<void> {
     error.value = null;
+    errorStatus.value = null;
     try {
       const response = await apiFetch(`/api/posts/${id}`, {
         method: 'PATCH',
@@ -84,6 +95,7 @@ export function usePosts() {
       });
 
       if (!response.ok) {
+        errorStatus.value = response.status;
         error.value = await parseErrorMessage(response, 'Failed to update post');
         return;
       }
@@ -104,12 +116,14 @@ export function usePosts() {
 
   async function deletePost(id: string): Promise<void> {
     error.value = null;
+    errorStatus.value = null;
     try {
       const response = await apiFetch(`/api/posts/${id}`, {
         method: 'DELETE',
       });
 
       if (!response.ok) {
+        errorStatus.value = response.status;
         error.value = await parseErrorMessage(response, 'Failed to delete post');
         return;
       }
@@ -122,12 +136,14 @@ export function usePosts() {
 
   async function publishPost(id: string): Promise<void> {
     error.value = null;
+    errorStatus.value = null;
     try {
       const response = await apiFetch(`/api/posts/${id}/publish`, {
         method: 'POST',
       });
 
       if (!response.ok) {
+        errorStatus.value = response.status;
         error.value = await parseErrorMessage(response, 'Failed to publish post');
         return;
       }
@@ -146,6 +162,7 @@ export function usePosts() {
     stagedFileIds?: string[],
   ): Promise<void> {
     error.value = null;
+    errorStatus.value = null;
     store.setSaveStatus('saving');
     try {
       // Server's createRevisionSchema treats `message` as optional string —
@@ -164,6 +181,7 @@ export function usePosts() {
       });
 
       if (!response.ok) {
+        errorStatus.value = response.status;
         error.value = await parseErrorMessage(response, 'Failed to save revision');
         store.setSaveStatus('error');
         return;
@@ -178,10 +196,12 @@ export function usePosts() {
 
   async function fetchRevisions(postId: string): Promise<PostRevision[]> {
     error.value = null;
+    errorStatus.value = null;
     try {
       const response = await apiFetch(`/api/posts/${postId}/revisions`);
 
       if (!response.ok) {
+        errorStatus.value = response.status;
         error.value = await parseErrorMessage(response, 'Failed to fetch revisions');
         return [];
       }
@@ -199,12 +219,14 @@ export function usePosts() {
     revisionNumber: number,
   ): Promise<PostRevision | null> {
     error.value = null;
+    errorStatus.value = null;
     try {
       const response = await apiFetch(`/api/posts/${postId}/revisions/${revisionNumber}/restore`, {
         method: 'POST',
       });
 
       if (!response.ok) {
+        errorStatus.value = response.status;
         error.value = await parseErrorMessage(response, 'Failed to restore revision');
         return null;
       }
@@ -219,12 +241,14 @@ export function usePosts() {
 
   async function forkPost(sourcePostId: string): Promise<string | null> {
     error.value = null;
+    errorStatus.value = null;
     try {
       const response = await apiFetch(`/api/posts/${sourcePostId}/fork`, {
         method: 'POST',
       });
 
       if (!response.ok) {
+        errorStatus.value = response.status;
         error.value = await parseErrorMessage(response, 'Failed to fork post');
         return null;
       }
@@ -243,6 +267,7 @@ export function usePosts() {
     saveStatus,
     lastSavedAt,
     error,
+    errorStatus,
     createPost,
     fetchPost,
     updatePost,

@@ -33,8 +33,12 @@ export async function buildApp() {
 
   await app.register(cors);
   await app.register(cookie);
+  if (process.env.NODE_ENV !== 'test' && !process.env.JWT_SECRET) {
+    throw new Error('JWT_SECRET environment variable is required outside test environments');
+  }
   await app.register(jwt, {
     secret: process.env.JWT_SECRET ?? 'dev-secret-change-in-production',
+    verify: { algorithms: ['HS256'] },
   });
 
   // Only register Google OAuth if credentials are configured

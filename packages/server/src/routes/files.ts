@@ -12,6 +12,7 @@ import {
 import { findRevisionsByPostId } from '../db/queries/revisions.js';
 import { query } from '../db/connection.js';
 import { sanitizeFilename, routeStorage, toPostFile, stagingKey } from '../services/files.js';
+import { assertCanReadPost } from '../lib/visibility.js';
 import type { PostFileRow } from '../db/queries/types.js';
 
 export async function fileRoutes(app: FastifyInstance): Promise<void> {
@@ -120,7 +121,7 @@ export async function fileRoutes(app: FastifyInstance): Promise<void> {
   );
 
   // ─── GET /:id/files — list files for a revision (or staged) ─────────
-  app.get('/:id/files', async (request, reply) => {
+  app.get('/:id/files', { preHandler: [app.authenticate] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const { revisionId } = request.query as { revisionId?: string };
 
@@ -130,25 +131,14 @@ export async function fileRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(404).send({ error: 'Post not found' });
     }
 
-    // Resolve authenticated user (optional — public routes don't require auth)
-    let userId: string | undefined;
-    try {
-      await request.jwtVerify();
-      userId = request.user.id;
-    } catch {
-      // unauthenticated — allowed for public resources
-    }
+    // Visibility gate: only owner can read private posts
+    if (!assertCanReadPost(post, request.user.id, reply)) return;
 
-    const isOwner = userId !== undefined && post.author_id === userId;
-    const isPublic = post.visibility === 'public' && !post.is_draft;
-
+    const isOwner = post.author_id === request.user.id;
     let files: PostFileRow[];
 
     if (!revisionId) {
       // Staged files — only visible to post owner
-      if (!userId) {
-        return reply.status(401).send({ error: 'Unauthorized' });
-      }
       if (!isOwner) {
         return reply.status(403).send({ error: 'Forbidden' });
       }
@@ -159,13 +149,6 @@ export async function fileRoutes(app: FastifyInstance): Promise<void> {
       const latestRevision = revisions[0];
       if (!latestRevision) {
         return reply.status(404).send({ error: 'No revisions found' });
-      }
-      // Authorization: follow post visibility
-      if (!isPublic && !isOwner) {
-        if (!userId) {
-          return reply.status(401).send({ error: 'Unauthorized' });
-        }
-        return reply.status(403).send({ error: 'Forbidden' });
       }
       files = await findFilesByRevisionId(latestRevision.id);
     } else {
@@ -180,13 +163,6 @@ export async function fileRoutes(app: FastifyInstance): Promise<void> {
       if (revisionCheck.rows[0].post_id !== id) {
         return reply.status(404).send({ error: 'Revision does not belong to this post' });
       }
-      // Authorization: follow post visibility
-      if (!isPublic && !isOwner) {
-        if (!userId) {
-          return reply.status(401).send({ error: 'Unauthorized' });
-        }
-        return reply.status(403).send({ error: 'Forbidden' });
-      }
       files = await findFilesByRevisionId(revisionId);
     }
 
@@ -194,7 +170,7 @@ export async function fileRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // ─── GET /:id/files/:fileId — get file content or redirect ─────────
-  app.get('/:id/files/:fileId', async (request, reply) => {
+  app.get('/:id/files/:fileId', { preHandler: [app.authenticate] }, async (request, reply) => {
     const { id, fileId } = request.params as { id: string; fileId: string };
 
     // Check post exists
@@ -202,6 +178,9 @@ export async function fileRoutes(app: FastifyInstance): Promise<void> {
     if (!post) {
       return reply.status(404).send({ error: 'Post not found' });
     }
+
+    // Visibility gate fires BEFORE file lookup so we don't leak existence on private posts
+    if (!assertCanReadPost(post, request.user.id, reply)) return;
 
     // Find the file (either staged or committed)
     const result = await query<PostFileRow>(
@@ -213,34 +192,9 @@ export async function fileRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(404).send({ error: 'File not found' });
     }
 
-    // Resolve authenticated user (optional — public routes don't require auth)
-    let userId: string | undefined;
-    try {
-      await request.jwtVerify();
-      userId = request.user.id;
-    } catch {
-      // unauthenticated — allowed for public resources
-    }
-
-    const isOwner = userId !== undefined && post.author_id === userId;
-    const isPublic = post.visibility === 'public' && !post.is_draft;
-
-    if (file.revision_id === null) {
-      // Staged file — only visible to post owner
-      if (!userId) {
-        return reply.status(401).send({ error: 'Unauthorized' });
-      }
-      if (!isOwner) {
-        return reply.status(403).send({ error: 'Forbidden' });
-      }
-    } else {
-      // Committed file — follow post visibility
-      if (!isPublic && !isOwner) {
-        if (!userId) {
-          return reply.status(401).send({ error: 'Unauthorized' });
-        }
-        return reply.status(403).send({ error: 'Forbidden' });
-      }
+    // Staged file — only visible to post owner
+    if (file.revision_id === null && post.author_id !== request.user.id) {
+      return reply.status(403).send({ error: 'Forbidden' });
     }
 
     // Inline file: return content directly

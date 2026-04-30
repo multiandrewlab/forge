@@ -29,6 +29,7 @@ import { findTagByName, createTag, addPostTag } from '../db/queries/tags.js';
 import { getExcludeWs } from '../plugins/websocket/broadcast.js';
 import { fetchLinkPreview } from '../services/link-preview.js';
 import { ContentType } from '@forge/shared';
+import { assertCanReadPost } from '../lib/visibility.js';
 
 const feedQuerySchema = z.object({
   sort: z.enum(['trending', 'recent', 'top', 'personalized']).default('recent'),
@@ -145,13 +146,15 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // GET /:id — post + latest revision
-  app.get('/:id', async (request, reply) => {
+  app.get('/:id', { preHandler: [app.authenticate] }, async (request, reply) => {
     const { id } = request.params as { id: string };
 
     const row = await findPostWithLatestRevision(id);
     if (!row) {
       return reply.status(404).send({ error: 'Post not found' });
     }
+
+    if (!assertCanReadPost(row, request.user.id, reply)) return;
 
     return reply.send({ post: toPostWithRevision(row) });
   });
@@ -166,7 +169,7 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
     }
 
     if (existing.author_id !== request.user.id) {
-      return reply.status(403).send({ error: 'Forbidden' });
+      return reply.status(403).send({ error: 'You can only edit your own posts' });
     }
 
     const parsed = updatePostSchema.safeParse(request.body);
@@ -205,7 +208,7 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
     }
 
     if (existing.author_id !== request.user.id) {
-      return reply.status(403).send({ error: 'Forbidden' });
+      return reply.status(403).send({ error: 'You can only delete your own posts' });
     }
 
     await softDeletePost(id);
@@ -224,7 +227,7 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
     }
 
     if (existing.author_id !== request.user.id) {
-      return reply.status(403).send({ error: 'Forbidden' });
+      return reply.status(403).send({ error: 'You can only publish your own posts' });
     }
 
     const publishedRow = await publishPost(id);
@@ -378,7 +381,7 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
     }
 
     if (existing.author_id !== request.user.id) {
-      return reply.status(403).send({ error: 'Forbidden' });
+      return reply.status(403).send({ error: 'You can only add revisions to your own posts' });
     }
 
     const parsed = createRevisionSchema.safeParse(request.body);
@@ -555,7 +558,7 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // GET /:id/revisions — list revisions
-  app.get('/:id/revisions', async (request, reply) => {
+  app.get('/:id/revisions', { preHandler: [app.authenticate] }, async (request, reply) => {
     const { id } = request.params as { id: string };
 
     const existing = await findPostById(id);
@@ -563,12 +566,14 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(404).send({ error: 'Post not found' });
     }
 
+    if (!assertCanReadPost(existing, request.user.id, reply)) return;
+
     const rows = await findRevisionsWithAuthorByPostId(id);
     return reply.send({ revisions: rows.map(toRevision) });
   });
 
   // GET /:id/revisions/:rev — get specific revision
-  app.get('/:id/revisions/:rev', async (request, reply) => {
+  app.get('/:id/revisions/:rev', { preHandler: [app.authenticate] }, async (request, reply) => {
     const { id, rev } = request.params as { id: string; rev: string };
 
     const revisionNumber = Number(rev);
@@ -580,6 +585,8 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
     if (!existing) {
       return reply.status(404).send({ error: 'Post not found' });
     }
+
+    if (!assertCanReadPost(existing, request.user.id, reply)) return;
 
     const revisionRow = await findRevision(id, revisionNumber);
     if (!revisionRow) {
@@ -607,7 +614,9 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
       }
 
       if (existing.author_id !== request.user.id) {
-        return reply.status(403).send({ error: 'Forbidden' });
+        return reply
+          .status(403)
+          .send({ error: 'You can only restore revisions on your own posts' });
       }
 
       const targetRevision = await findRevision(id, revisionNumber);

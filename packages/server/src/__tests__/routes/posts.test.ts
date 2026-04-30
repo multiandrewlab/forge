@@ -456,6 +456,7 @@ describe('post routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: `/api/posts/${postId}`,
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(200);
@@ -472,6 +473,7 @@ describe('post routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: `/api/posts/${postId}`,
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(404);
@@ -544,7 +546,7 @@ describe('post routes', () => {
 
       expect(response.statusCode).toBe(403);
       const body = response.json();
-      expect(body.error).toBe('Forbidden');
+      expect(body.error).toBe('You can only edit your own posts');
     });
 
     it('returns 404 when post not found', async () => {
@@ -634,6 +636,7 @@ describe('post routes', () => {
       });
 
       expect(response.statusCode).toBe(403);
+      expect(response.json().error).toBe('You can only delete your own posts');
     });
 
     it('returns 404 when post not found', async () => {
@@ -718,6 +721,7 @@ describe('post routes', () => {
       });
 
       expect(response.statusCode).toBe(403);
+      expect(response.json().error).toBe('You can only publish your own posts');
     });
 
     it('returns 404 when post not found', async () => {
@@ -829,6 +833,7 @@ describe('post routes', () => {
       });
 
       expect(response.statusCode).toBe(403);
+      expect(response.json().error).toBe('You can only add revisions to your own posts');
     });
 
     it('returns 400 for invalid body', async () => {
@@ -1168,6 +1173,7 @@ describe('post routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: `/api/posts/${postId}/revisions`,
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(200);
@@ -1186,6 +1192,7 @@ describe('post routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: `/api/posts/${postId}/revisions`,
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(404);
@@ -1204,6 +1211,7 @@ describe('post routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: `/api/posts/${postId}/revisions/1`,
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(200);
@@ -1221,6 +1229,7 @@ describe('post routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: `/api/posts/${postId}/revisions/99`,
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(404);
@@ -1234,6 +1243,7 @@ describe('post routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: `/api/posts/${postId}/revisions/1`,
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(404);
@@ -1245,6 +1255,7 @@ describe('post routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: `/api/posts/${postId}/revisions/abc`,
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(400);
@@ -1321,7 +1332,7 @@ describe('post routes', () => {
         headers: { authorization: `Bearer ${otherToken}` },
       });
       expect(response.statusCode).toBe(403);
-      expect(response.json().error).toBe('Forbidden');
+      expect(response.json().error).toBe('You can only restore revisions on your own posts');
     });
 
     it('returns 404 when target revision does not exist', async () => {

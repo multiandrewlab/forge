@@ -1,0 +1,25 @@
+meta {
+  name: Get Private Post Files as Non-Owner
+  type: http
+  seq: 104
+}
+
+get {
+  url: {{baseUrl}}/api/posts/c0000000-0000-0000-0000-000000000006/files
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+assert {
+  res.status: eq 403
+  res.body.error: eq This post is private
+}
+
+docs {
+  WU9 of #62 — visibility regression. Listing files attached to a private
+  post must return 403 for non-owners.
+}

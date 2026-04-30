@@ -1,0 +1,38 @@
+meta {
+  name: Get Private Post as Owner
+  type: http
+  seq: 106
+}
+
+get {
+  url: {{baseUrl}}/api/posts/c0000000-0000-0000-0000-000000000006
+  body: none
+  auth: bearer
+}
+
+script:pre-request {
+  // Login as carol explicitly for this spec — testuser is not the owner of
+  // c…0006 and would receive a 403. Carol owns the private post and must
+  // succeed with 200.
+  const axios = require("axios");
+  const baseUrl = bru.getEnvVar("baseUrl");
+  const loginRes = await axios.post(`${baseUrl}/api/auth/login`, {
+    email: "carol@example.com",
+    password: "password123",
+  });
+  bru.setVar("carolToken", loginRes.data.accessToken);
+}
+
+auth:bearer {
+  token: {{carolToken}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  WU9 of #62 — visibility positive. Carol owns the private post c…0006 and
+  must be able to GET it (HTTP 200). Logs in as carol@example.com inline so
+  the global testuser bootstrap does not interfere.
+}

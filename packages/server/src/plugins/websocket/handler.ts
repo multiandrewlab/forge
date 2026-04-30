@@ -187,6 +187,7 @@ export function handleConnection(
         deps.channels.subscribe(
           result.data.channel,
           socket as unknown as Parameters<typeof deps.channels.subscribe>[1],
+          userId,
         );
       }
       return;

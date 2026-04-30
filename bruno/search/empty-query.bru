@@ -7,7 +7,11 @@ meta {
 get {
   url: {{baseUrl}}/api/search?q=
   body: none
-  auth: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
 }
 
 assert {
@@ -20,7 +24,7 @@ assert {
 }
 
 docs {
-  Empty query returns zero results. No auth required.
+  Empty query returns zero results. Auth is required after #62 (WU4).
   The server trims q and returns an empty response when the trimmed value is "".
   Query params:
   - q: empty string

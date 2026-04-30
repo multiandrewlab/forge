@@ -7,7 +7,11 @@ meta {
 get {
   url: {{baseUrl}}/api/search?q=react&type=snippet
   body: none
-  auth: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
 }
 
 assert {
@@ -19,7 +23,7 @@ assert {
 }
 
 docs {
-  Search with content type filter. No auth required.
+  Search with content type filter. Auth is required after #62 (WU4).
   Query params:
   - q: search term (required)
   - type: content type filter (snippet | prompt | document | link)

@@ -16,7 +16,7 @@ import type { PostFile, PostWithRevision } from '@forge/shared';
 
 const route = useRoute();
 const router = useRouter();
-const { fetchPost, deletePost, forkPost, error } = usePosts();
+const { fetchPost, deletePost, forkPost, error, errorStatus } = usePosts();
 const store = usePostsStore();
 const filesStore = useFilesStore();
 const { currentPost } = storeToRefs(store);
@@ -123,8 +123,24 @@ async function handleFork(): Promise<void> {
         &larr; Back to Workspace
       </router-link>
 
+      <!-- WU8 of issue #62: dedicated forbidden surface for private/unshared
+           posts. The server now returns 403 with a descriptive message; we
+           branch on `errorStatus === 403` so the user sees "This post is
+           private" instead of the generic red error banner that previously
+           rendered for every non-OK response. -->
       <div
-        v-if="error"
+        v-if="errorStatus === 403"
+        data-testid="forbidden-page"
+        class="mb-4 p-4 bg-surface-700 border border-surface-500 rounded text-center"
+      >
+        <h2 class="text-xl font-semibold text-white">This post is private</h2>
+        <p class="mt-2 text-sm text-gray-400">
+          {{ error || 'The owner has not shared it with you.' }}
+        </p>
+      </div>
+
+      <div
+        v-else-if="error"
         class="mb-4 p-3 bg-red-900/30 border border-red-500 rounded text-red-400 text-sm"
       >
         {{ error }}
