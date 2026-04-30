@@ -115,6 +115,73 @@ describe('rate-limit plugin', () => {
     });
   });
 
+  describe('POST /api/auth/refresh rate limit', () => {
+    it('returns 429 after exceeding 30 requests per minute (production cap)', async () => {
+      delete process.env.E2E_MODE;
+      const freshApp = await buildApp();
+      await freshApp.ready();
+
+      // Make 30 allowed requests (they will fail with 401 since no token, but not 429)
+      for (let i = 0; i < 30; i++) {
+        const response = await freshApp.inject({
+          method: 'POST',
+          url: '/api/auth/refresh',
+        });
+        expect(response.statusCode).not.toBe(429);
+      }
+
+      // The 31st request should be rate limited
+      const response = await freshApp.inject({
+        method: 'POST',
+        url: '/api/auth/refresh',
+      });
+
+      expect(response.statusCode).toBe(429);
+
+      await freshApp.close();
+    });
+
+    it('lifts the cap when E2E_MODE=1 (no 429 over the prod cap)', async () => {
+      process.env.E2E_MODE = '1';
+      const freshApp = await buildApp();
+      await freshApp.ready();
+
+      // Fire 50 requests — 20 over the 30/min production cap
+      for (let i = 0; i < 50; i++) {
+        const response = await freshApp.inject({
+          method: 'POST',
+          url: '/api/auth/refresh',
+        });
+        expect(response.statusCode).not.toBe(429);
+      }
+
+      await freshApp.close();
+      delete process.env.E2E_MODE;
+    });
+  });
+
+  describe('POST /api/posts/:id/files rate limit', () => {
+    it('lifts the 30/min cap when E2E_MODE=1', async () => {
+      process.env.E2E_MODE = '1';
+      const freshApp = await buildApp();
+      await freshApp.ready();
+
+      // Fire 50 requests — over the 30/min production cap. Without auth they
+      // 401, but the rate-limiter runs before auth so we'd see 429 if the
+      // E2E_MODE branch is missing.
+      for (let i = 0; i < 50; i++) {
+        const response = await freshApp.inject({
+          method: 'POST',
+          url: '/api/posts/abc/files',
+        });
+        expect(response.statusCode).not.toBe(429);
+      }
+
+      await freshApp.close();
+      delete process.env.E2E_MODE;
+    });
+  });
+
   describe('global rate limit ceiling', () => {
     afterAll(() => {
       delete process.env.E2E_MODE;

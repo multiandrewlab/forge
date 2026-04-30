@@ -25,6 +25,14 @@
 
     <!-- Single-file layout (existing) -->
     <div v-else class="mt-4 flex-1">
+      <LinkPreviewCard
+        v-if="fullPost?.linkUrl"
+        class="mb-3"
+        :link-url="fullPost.linkUrl"
+        :link-preview="fullPost.linkPreview"
+        :is-author="isPostAuthor"
+        @refresh="handleRefreshPreview"
+      />
       <CodeViewer
         v-if="revision"
         :code="revision.content"
@@ -91,6 +99,7 @@ import CommentSection from './CommentSection.vue';
 import CommentInput from './CommentInput.vue';
 import InlineComment from './InlineComment.vue';
 import CodeRunner from './CodeRunner.vue';
+import LinkPreviewCard from './LinkPreviewCard.vue';
 import { useRouter } from 'vue-router';
 import { useComments } from '../../composables/useComments.js';
 import { useCommentsStore } from '../../stores/comments.js';
@@ -104,6 +113,13 @@ const fullPost = ref<PostWithRevision | null>(null);
 const inlineCommentLine = ref<number | null>(null);
 
 const revision = computed(() => fullPost.value?.revisions?.[0] ?? null);
+
+const isPostAuthor = computed(() => {
+  const u = authStore.user;
+  const p = fullPost.value;
+  if (u === null || p === null) return false;
+  return u.id === p.authorId;
+});
 
 const files = ref<PostFile[]>([]);
 
@@ -132,7 +148,11 @@ watch(
     try {
       const response = await apiFetch(`/api/posts/${id}`);
       if (response.ok) {
-        const postData = (await response.json()) as PostWithRevision;
+        // Server wraps the response as `{ post: PostWithRevision }`. Older test
+        // mocks return the bare post — handle both for compatibility (mirrors
+        // usePosts.fetchPost at composables/usePosts.ts:79).
+        const raw = (await response.json()) as PostWithRevision | { post: PostWithRevision };
+        const postData = 'post' in raw ? raw.post : raw;
         fullPost.value = postData;
         const rev = postData.revisions?.[0];
         if (rev) {
@@ -181,6 +201,19 @@ async function handleFork(): Promise<void> {
   const newPostId = await forkPost(props.post.id);
   if (newPostId) {
     router.push(`/posts/${newPostId}/edit`);
+  }
+}
+
+async function handleRefreshPreview(): Promise<void> {
+  // Capture once so the post-await assignment is unconditional (the v-if
+  // guard on the LinkPreviewCard already guarantees fullPost is non-null
+  // when this handler is reachable).
+  const post = fullPost.value;
+  if (!post) return;
+  const res = await apiFetch(`/api/posts/${post.id}/refresh-preview`, { method: 'POST' });
+  if (res.ok) {
+    const body = (await res.json()) as { post: PostWithRevision };
+    post.linkPreview = body.post.linkPreview;
   }
 }
 </script>

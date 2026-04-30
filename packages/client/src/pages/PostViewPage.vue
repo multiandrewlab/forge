@@ -176,6 +176,16 @@ async function handleFork(): Promise<void> {
               <span v-if="currentPost.language">{{ currentPost.language }}</span>
               <span v-if="latestRevision">Rev {{ latestRevision.revisionNumber }}</span>
             </div>
+            <div v-if="(currentPost.tags ?? []).length > 0" class="mt-2 flex flex-wrap gap-1">
+              <span
+                v-for="tag in currentPost.tags"
+                :key="tag"
+                :data-testid="`post-tag-chip-${tag}`"
+                class="rounded bg-gray-700 px-2 py-0.5 text-xs text-gray-300"
+              >
+                #{{ tag }}
+              </span>
+            </div>
           </div>
 
           <div v-if="isAuthor" class="flex gap-2">

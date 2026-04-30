@@ -91,6 +91,7 @@ describe('PostWithRevision with files', () => {
     createdAt: new Date(),
     updatedAt: new Date(),
     revisions: [],
+    tags: [],
   };
 
   it('should allow PostWithRevision without files (backward compatible)', () => {

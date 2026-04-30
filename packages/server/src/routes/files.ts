@@ -21,7 +21,12 @@ export async function fileRoutes(app: FastifyInstance): Promise<void> {
     '/:id/files',
     {
       preHandler: [app.authenticate],
-      config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
+      config: {
+        rateLimit:
+          process.env.E2E_MODE === '1'
+            ? { max: 10_000, timeWindow: '1 minute' }
+            : { max: 30, timeWindow: '1 minute' },
+      },
     },
     async (request, reply) => {
       const { id } = request.params as { id: string };

@@ -10,10 +10,12 @@ export default defineConfig({
   fullyParallel: false,
   workers: process.env.CI ? 4 : undefined,
   forbidOnly: !!process.env.CI,
-  // Retry once in CI to absorb workers=4 flakes from auth-rate-limit and
-  // reset-window contention; specs pass deterministically at workers=1, so a
-  // single retry on the second worker shakes out cross-test interference
-  // without masking real spec failures.
+  // Issue #67 partially addressed: E2E_MODE rate-limit branches added on
+  // /refresh + /files. But reset-window contention at workers=4 still
+  // produces "page closed" / "URL did not change after delete" flakes on
+  // delete-cascade, delete-confirms, edit-cancel-reverts. Keeping the
+  // retries: 1 band-aid in CI until the deeper contention is fixed
+  // (deferred to a follow-up issue beyond #67's rate-limit scope).
   retries: process.env.CI ? 1 : 0,
   reporter: [['html', { open: 'never' }], ['list'], ['github']],
   globalSetup: './support/global-setup.ts',

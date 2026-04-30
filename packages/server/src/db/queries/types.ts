@@ -43,6 +43,7 @@ export type PostWithRevisionRow = PostRow & {
   content: string;
   revision_number: number;
   message: string | null;
+  tags: string | null;
 };
 
 export type PostRevisionWithAuthorRow = PostRevisionRow & {

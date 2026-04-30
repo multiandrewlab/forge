@@ -624,6 +624,7 @@ describe('Post types', () => {
           createdAt: now,
         },
       ],
+      tags: [],
     };
     expect(post.revisions).toHaveLength(1);
     const firstRevision = post.revisions[0];

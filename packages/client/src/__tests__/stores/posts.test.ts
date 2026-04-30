@@ -31,6 +31,7 @@ function createMockPost(overrides: Partial<PostWithRevision> = {}): PostWithRevi
         createdAt: new Date('2025-01-01'),
       },
     ],
+    tags: [],
     ...overrides,
   };
 }

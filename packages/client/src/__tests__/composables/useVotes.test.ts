@@ -329,6 +329,7 @@ describe('useVotes', () => {
         createdAt: new Date(),
         updatedAt: new Date(),
         revisions: [],
+        tags: [],
       };
     }
 

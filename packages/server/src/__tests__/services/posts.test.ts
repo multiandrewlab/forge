@@ -37,6 +37,7 @@ const samplePostWithRevisionRow: PostWithRevisionRow = {
   content: 'console.log("hello");',
   revision_number: 1,
   message: 'Initial version',
+  tags: null,
 };
 
 describe('posts service', () => {
@@ -185,7 +186,26 @@ describe('posts service', () => {
             createdAt: samplePostRow.created_at,
           },
         ],
+        tags: [],
       });
+    });
+
+    it('splits the comma-separated tags column into an array', () => {
+      const row: PostWithRevisionRow = { ...samplePostWithRevisionRow, tags: 'rust,typescript' };
+      const dto = toPostWithRevision(row);
+      expect(dto.tags).toEqual(['rust', 'typescript']);
+    });
+
+    it('returns empty tags when row.tags is null', () => {
+      const row: PostWithRevisionRow = { ...samplePostWithRevisionRow, tags: null };
+      const dto = toPostWithRevision(row);
+      expect(dto.tags).toEqual([]);
+    });
+
+    it('returns empty tags when row.tags is the empty string', () => {
+      const row: PostWithRevisionRow = { ...samplePostWithRevisionRow, tags: '' };
+      const dto = toPostWithRevision(row);
+      expect(dto.tags).toEqual([]);
     });
   });
 });

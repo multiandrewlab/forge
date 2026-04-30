@@ -107,6 +107,7 @@ const samplePostWithRevisionRow: PostWithRevisionRow = {
   content: 'console.log("hello");',
   revision_number: 1,
   message: 'Initial version',
+  tags: null,
 };
 
 const sampleFeedRow: PostWithAuthorRow = {
@@ -465,6 +466,38 @@ describe('post routes', () => {
       expect(body.post.title).toBe('Hello World');
       expect(body.post.revisions).toHaveLength(1);
       expect(body.post.revisions[0].content).toBe('console.log("hello");');
+    });
+
+    it('returns tags array populated from comma-joined column (#63)', async () => {
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ ...samplePostWithRevisionRow, tags: 'rust,typescript' }],
+        rowCount: 1,
+      });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/posts/${postId}`,
+        headers: { authorization: `Bearer ${token}` },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().post.tags).toEqual(['rust', 'typescript']);
+    });
+
+    it('returns empty tags array when post has none (#63)', async () => {
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ ...samplePostWithRevisionRow, tags: null }],
+        rowCount: 1,
+      });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/posts/${postId}`,
+        headers: { authorization: `Bearer ${token}` },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().post.tags).toEqual([]);
     });
 
     it('returns 404 when post not found', async () => {

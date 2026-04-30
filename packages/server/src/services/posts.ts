@@ -66,5 +66,6 @@ export function toPostWithRevision(row: PostWithRevisionRow): PostWithRevision {
         createdAt: row.created_at,
       },
     ],
+    tags: row.tags ? row.tags.split(',') : [],
   };
 }

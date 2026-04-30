@@ -9,12 +9,8 @@ import { posts } from '../../fixtures/selectors/posts.js';
 // async `apiFetch(/api/posts/:id)` in PostDetail must complete before the
 // element is visible. Bumping the visibility timeout to 10s absorbs the
 // dev-server JIT cost without stalling on success.
-// FIXME(issue #65): HomePage's inline PostDetail panel does not render in the
-// e2e environment despite Desktop Chrome's 1280×720 viewport. The panel is
-// gated by `<div class="hidden flex-1 md:block">` in HomePage.vue:17 — see #65
-// for the suspected Tailwind / build / responsive cause. Specs un-fixme once
-// PostDetail panel reliably renders.
-test.fixme('code-runner: alice sees the inline run panel on a snippet post (HomePage)', async ({
+// Re-enabled in #65 after PostDetail inline panel rendering verified.
+test('code-runner: alice sees the inline run panel on a snippet post (HomePage)', async ({
   alice,
 }) => {
   await alice.goto('/');

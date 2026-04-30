@@ -17,6 +17,18 @@ const baseProps = {
 };
 
 describe('LinkPreviewCard', () => {
+  // --- Root testid (#64) ---
+
+  it('renders the data-testid="link-preview-card" on the root element when linkPreview is set', () => {
+    const wrapper = mount(LinkPreviewCard, { props: baseProps });
+    expect(wrapper.find('[data-testid="link-preview-card"]').exists()).toBe(true);
+  });
+
+  it('renders the data-testid="link-preview-card" on the root element in the fallback branch', () => {
+    const wrapper = mount(LinkPreviewCard, { props: { ...baseProps, linkPreview: null } });
+    expect(wrapper.find('[data-testid="link-preview-card"]').exists()).toBe(true);
+  });
+
   // --- With linkPreview data ---
 
   it('renders title from linkPreview', () => {

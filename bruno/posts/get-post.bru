@@ -18,8 +18,18 @@ assert {
   res.status: eq 200
 }
 
+tests {
+  test("response body includes tags as an array (#63)", function() {
+    expect(res.body.post.tags).to.be.an('array');
+  });
+}
+
 docs {
   Returns the post with all its revisions. Auth is required after #62 (WU4)
   enforced authentication on read routes; the seeded {{postId}} (c…0099) is
   testuser-owned and public so testuser's token resolves to a 200.
+
+  Issue #63: response now includes a `tags` array. The seeded postId 0099 has
+  no tag assignments in seed.sql so `tags` is an empty array — we assert
+  shape, not specific contents.
 }

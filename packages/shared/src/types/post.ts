@@ -15,5 +15,6 @@ export interface PostRevision {
 
 export interface PostWithRevision extends Post {
   revisions: PostRevision[];
+  tags: string[];
   files?: PostFile[];
 }
