@@ -14,7 +14,7 @@
       @load-more="loadMore"
       @retry="loadPosts"
     />
-    <div class="hidden flex-1 md:block">
+    <div data-testid="postdetail-panel" class="hidden flex-1 md:block">
       <PostDetail :post="selectedPost" />
     </div>
   </div>

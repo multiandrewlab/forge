@@ -201,6 +201,24 @@ describe('PostDetail', () => {
     expect(wrapper.text()).toContain('Test Post');
   });
 
+  it('unwraps the server-wrapped { post } response shape (regression: #65 / code-runner)', async () => {
+    // Real server returns `{ post: PostWithRevision }`. Older mocks returned
+    // the bare post and masked an unwrap bug that prevented PostDetail from
+    // populating contentType — which in turn kept CodeRunner from mounting on
+    // the HomePage inline panel (root cause of the #47 WU10 test.fixme'd
+    // home-code-runner-* specs).
+    setupUrlAwareMock({ post: mockPostWithRevision });
+
+    const wrapper = mount(PostDetail, { props: { post: mockPost } });
+    await flushPromises();
+
+    // If the unwrap is correct, fullPost.contentType === 'snippet' and the
+    // CodeRunner renders. We assert via the rendered title (proves fullPost
+    // is populated, not just the prop) AND via CodeRunner's testid.
+    expect(wrapper.text()).toContain('Test Post');
+    expect(wrapper.find('[data-testid="code-runner"]').exists()).toBe(true);
+  });
+
   it('sets fullPost to null when post prop becomes null', async () => {
     setupUrlAwareMock(mockPostWithRevision);
 

@@ -132,7 +132,11 @@ watch(
     try {
       const response = await apiFetch(`/api/posts/${id}`);
       if (response.ok) {
-        const postData = (await response.json()) as PostWithRevision;
+        // Server wraps the response as `{ post: PostWithRevision }`. Older test
+        // mocks return the bare post — handle both for compatibility (mirrors
+        // usePosts.fetchPost at composables/usePosts.ts:79).
+        const raw = (await response.json()) as PostWithRevision | { post: PostWithRevision };
+        const postData = 'post' in raw ? raw.post : raw;
         fullPost.value = postData;
         const rev = postData.revisions?.[0];
         if (rev) {

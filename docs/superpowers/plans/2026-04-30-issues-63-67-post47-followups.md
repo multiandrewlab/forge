@@ -47,7 +47,7 @@ All five issues ship in this branch:
 - [ ] Issue #65 closed: PostDetail panel renders at Playwright's default 1280×720; root cause documented; smoke spec asserts the panel.
 - [ ] Issue #66 closed: server emits `presence:update` to all channel subscribers (including the joiner) on every authenticated `presence` frame, replacing the eviction-only emission path; spec un-fixme'd and passing. The issue body's "(excluding the joiner)" parenthetical is documented as relaxed in WU3's decision block (single-emission path; same observable behavior as broadcast-excluding-self + direct-send-to-self).
 - [ ] Issue #67 closed: full e2e at `workers=4 --retries=0` passes; `retries: 1` band-aid removed from `playwright.config.ts`.
-- [ ] All 6 `test.fixme(` markers removed from `e2e/specs/posts/`: 4 directly from issues #63/#64/#66 (1 tags + 2 link-preview + 1 presence) plus 2 `home-code-runner-*` specs (which were `test.fixme` against #65 and unblock once the panel-render fix lands — per #65's DoD bullet 3).
+- [ ] 5 of 6 `test.fixme(` markers removed from `e2e/specs/posts/`: 4 directly from issues #63/#64/#66 (1 tags + 2 link-preview + 1 presence) plus 1 `home-code-runner-on-snippet.spec.ts` (un-fixme'd once the panel-render fix landed per #65's DoD bullet 3). The 6th — `home-code-runner-execution.spec.ts` — is re-fixme'd against a new tracking issue for the WASM-runner completion bug (status-bar never shows `Exit: N`, surfaced once the panel fix unblocked it). New issue to be filed in WU6.
 - [ ] **Server AND client coverage thresholds** in `.coverage-thresholds.json` met (no regressions in either package).
 - [ ] All Bruno requests under `bruno/posts/` pass against a running server.
 - [ ] PR description references all five issues with closes/fixes annotations.
