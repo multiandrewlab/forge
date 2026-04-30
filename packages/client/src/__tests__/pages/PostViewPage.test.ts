@@ -357,6 +357,29 @@ describe('PostViewPage', () => {
       expect(wrapper.find('[data-testid^="post-tag-chip-"]').exists()).toBe(false);
     });
 
+    it('does not crash when currentPost.tags is undefined (server PATCH/publish returns Post-shape without tags)', async () => {
+      // Simulates the gap: usePosts.updatePost / publishPost set currentPost
+      // from a server response shaped as Post (no `tags` field), then a brief
+      // render window before PostViewPage's own fetch completes. The defensive
+      // `?? []` keeps the template from throwing on `tags.length`.
+      const post = createMockPost();
+      // Force tags to be missing — mimic the runtime gap upstream
+      const postWithoutTags = post as unknown as Omit<typeof post, 'tags'>;
+      delete (postWithoutTags as { tags?: unknown }).tags;
+      mockFetchPost.mockImplementation(async () => {
+        mockCurrentPost.value = postWithoutTags as typeof post;
+      });
+      mockUser.value = createMockUser({ id: post.authorId });
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      // No crash; no chips rendered.
+      expect(wrapper.find('[data-testid^="post-tag-chip-"]').exists()).toBe(false);
+      // Title still renders, proving the template did not bail.
+      expect(wrapper.find('[data-testid="post-title"]').exists()).toBe(true);
+    });
+
     it('should hide language when language is null', async () => {
       const post = createMockPost({ language: null });
       mockFetchPost.mockImplementation(async () => {
