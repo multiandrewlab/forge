@@ -11,4 +11,5 @@ export type MockScriptKey =
   | 'autocomplete-typescript-react'
   | 'generate-readme-short'
   | 'error-rate-limit'
-  | 'mid-stream-cancel';
+  | 'mid-stream-cancel'
+  | 'search-resolves-to-typescript-tag';

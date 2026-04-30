@@ -14,6 +14,16 @@ export const mockScripts: Record<string, string[]> = {
   'generate-readme-short': ['# README\n', '\n', 'TODO: write content.', '[done]'],
   'error-rate-limit': ['[error:rate_limit]'],
   'mid-stream-cancel': ['partial ', 'output '],
+  // Issue #49: deterministic AI-search resolution for the e2e spec.
+  // Concatenated chunks form valid JSON parsable by aiSearchFiltersSchema,
+  // resolving to tags=['typescript'], language=null, contentType=null,
+  // textQuery='typescript'.
+  'search-resolves-to-typescript-tag': [
+    '{"tags":["typescript"],',
+    '"language":null,',
+    '"contentType":null,',
+    '"textQuery":"typescript"}',
+  ],
 };
 
 export function resolveMockScript(key: string | undefined): string[] {
