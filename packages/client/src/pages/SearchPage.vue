@@ -154,6 +154,7 @@
           variant="snippet"
           :active-global-index="-1"
           :start-index="0"
+          @select="onSelect"
           @add-author-filter="addAuthorFilter"
         />
         <SearchResultGroup
@@ -162,6 +163,7 @@
           variant="aiAction"
           :active-global-index="-1"
           :start-index="searchStore.results.snippets.length"
+          @select="onSelect"
           @add-author-filter="addAuthorFilter"
         />
         <SearchResultGroup
@@ -170,6 +172,7 @@
           variant="person"
           :active-global-index="-1"
           :start-index="searchStore.results.snippets.length + searchStore.results.aiActions.length"
+          @select="onSelect"
           @add-author-filter="addAuthorFilter"
         />
 
@@ -187,6 +190,7 @@
 <script setup lang="ts">
 import { computed, watch } from 'vue';
 import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router';
+import type { SearchSnippet, UserSummary, AiAction } from '@forge/shared';
 import { useSearchStore } from '@/stores/search';
 import { useSearch, type SearchParams } from '@/composables/useSearch';
 import SearchResultGroup from '@/components/search/SearchResultGroup.vue';
@@ -333,6 +337,47 @@ function setPage(n: number): void {
   if (n > 1) newQuery.page = String(n);
   void router.push({ path: '/search', query: newQuery });
 }
+
+// ── Result selection (Issue #49) ─────────────────────────────────────
+//
+// Mirrors TheSearchModal.handleSelect: SearchResultGroup emits a global index
+// across the three lists (snippets, aiActions, people, in that order). We
+// resolve the index back to an item and route accordingly.
+function onSelect(globalIndex: number): void {
+  const r = searchStore.results;
+  if (!r) return;
+
+  const sc = r.snippets.length;
+  const ac = r.aiActions.length;
+
+  if (globalIndex < sc) {
+    const snippet = r.snippets[globalIndex] as SearchSnippet;
+    void router.push('/posts/' + snippet.id);
+    return;
+  }
+
+  if (globalIndex < sc + ac) {
+    const action = r.aiActions[globalIndex - sc] as AiAction;
+    const params = action.params;
+    const query: Record<string, string> = {};
+    if (params.description) query.description = params.description;
+    if (params.contentType) query.contentType = params.contentType;
+    if (params.language) query.language = params.language;
+    void router.push({ path: '/posts/new', query });
+    return;
+  }
+
+  const personIdx = globalIndex - sc - ac;
+  if (personIdx < r.people.length) {
+    const person = r.people[personIdx] as UserSummary;
+    void router.push({ path: '/search', query: { q: person.displayName } });
+  }
+}
+
+// Expose for testing: covers the `if (!r) return;` early-return guard which
+// the template never reaches (the result groups only render when results is
+// truthy via v-else-if="searchStore.results").
+defineExpose({ onSelect });
 
 function addAuthorFilter(displayName: string): void {
   const newQuery: Record<string, string> = {};

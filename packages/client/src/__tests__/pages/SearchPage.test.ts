@@ -74,6 +74,8 @@ function createTestRouter(): Router {
     routes: [
       { path: '/', component: { template: '<div />' } },
       { path: '/search', name: 'search', component: SearchPage },
+      { path: '/posts/new', name: 'post-new', component: { template: '<div />' } },
+      { path: '/posts/:id', name: 'post-view', component: { template: '<div />' } },
     ],
   });
 }
@@ -1116,5 +1118,137 @@ describe('SearchPage.vue', () => {
     await flushPromises();
 
     expect(wrapper.find('[data-testid="filter-chip-since"]').exists()).toBe(true);
+  });
+
+  // ── Issue #49: clicking a search result navigates to the right destination ──
+  describe('result click navigation (Issue #49)', () => {
+    it('navigates to /posts/:id when a snippet result is selected', async () => {
+      await router.push({ path: '/search', query: { q: 'react' } });
+      await router.isReady();
+
+      store.setResults(makeResults());
+
+      const wrapper = mount(SearchPage, { global: { plugins: [router] } });
+      await flushPromises();
+
+      const groups = wrapper.findAllComponents({ name: 'SearchResultGroup' });
+      // Snippets group is first; emit select with global index 0 (the snippet)
+      const snippetsGroup = groups[0];
+      if (!snippetsGroup) throw new Error('Snippets group not found');
+      snippetsGroup.vm.$emit('select', 0);
+      await flushPromises();
+
+      expect(router.currentRoute.value.path).toBe('/posts/post-1');
+    });
+
+    it('navigates to /search?q=<displayName> when a person result is selected', async () => {
+      await router.push({ path: '/search', query: { q: 'react' } });
+      await router.isReady();
+
+      store.setResults(makeResults());
+
+      const wrapper = mount(SearchPage, { global: { plugins: [router] } });
+      await flushPromises();
+
+      const groups = wrapper.findAllComponents({ name: 'SearchResultGroup' });
+      // People group is third; global index = snippets(1) + aiActions(1) = 2
+      const peopleGroup = groups[2];
+      if (!peopleGroup) throw new Error('People group not found');
+      peopleGroup.vm.$emit('select', 2);
+      await flushPromises();
+
+      expect(router.currentRoute.value.path).toBe('/search');
+      expect(router.currentRoute.value.query.q).toBe('Alice Smith');
+    });
+
+    it('navigates to /posts/new with prefilled params when an aiAction is selected', async () => {
+      await router.push({ path: '/search', query: { q: 'react' } });
+      await router.isReady();
+
+      const filledAction: AiAction = {
+        label: 'Generate snippet',
+        action: 'generate',
+        params: {
+          description: 'A useEffect example',
+          contentType: 'snippet',
+          language: 'typescript',
+        },
+      };
+      store.setResults(makeResults([snippet], [filledAction], [person]));
+
+      const wrapper = mount(SearchPage, { global: { plugins: [router] } });
+      await flushPromises();
+
+      const groups = wrapper.findAllComponents({ name: 'SearchResultGroup' });
+      // AI Actions group is second; global index = snippets(1) = 1
+      const aiActionsGroup = groups[1];
+      if (!aiActionsGroup) throw new Error('AI Actions group not found');
+      aiActionsGroup.vm.$emit('select', 1);
+      await flushPromises();
+
+      expect(router.currentRoute.value.path).toBe('/posts/new');
+      expect(router.currentRoute.value.query.description).toBe('A useEffect example');
+      expect(router.currentRoute.value.query.contentType).toBe('snippet');
+      expect(router.currentRoute.value.query.language).toBe('typescript');
+    });
+
+    it('navigates to /posts/new without query params when aiAction has empty params', async () => {
+      await router.push({ path: '/search', query: { q: 'react' } });
+      await router.isReady();
+
+      // aiAction fixture above has empty params
+      store.setResults(makeResults());
+
+      const wrapper = mount(SearchPage, { global: { plugins: [router] } });
+      await flushPromises();
+
+      const groups = wrapper.findAllComponents({ name: 'SearchResultGroup' });
+      const aiActionsGroup = groups[1];
+      if (!aiActionsGroup) throw new Error('AI Actions group not found');
+      aiActionsGroup.vm.$emit('select', 1);
+      await flushPromises();
+
+      expect(router.currentRoute.value.path).toBe('/posts/new');
+      expect(router.currentRoute.value.query.description).toBeUndefined();
+      expect(router.currentRoute.value.query.contentType).toBeUndefined();
+      expect(router.currentRoute.value.query.language).toBeUndefined();
+    });
+
+    it('does nothing when results is null (early-return guard)', async () => {
+      await router.push({ path: '/search', query: { q: 'react' } });
+      await router.isReady();
+
+      // results stays null (no setResults call). The template never renders a
+      // SearchResultGroup in that state, so we exercise the guard directly via
+      // the component's exposed onSelect handler.
+      const wrapper = mount(SearchPage, { global: { plugins: [router] } });
+      await flushPromises();
+
+      const exposed = wrapper.vm as unknown as { onSelect: (i: number) => void };
+      exposed.onSelect(0);
+      await flushPromises();
+
+      expect(router.currentRoute.value.path).toBe('/search');
+    });
+
+    it('does nothing when global index is out of range', async () => {
+      await router.push({ path: '/search', query: { q: 'react' } });
+      await router.isReady();
+
+      store.setResults(makeResults());
+
+      const wrapper = mount(SearchPage, { global: { plugins: [router] } });
+      await flushPromises();
+
+      const groups = wrapper.findAllComponents({ name: 'SearchResultGroup' });
+      // Out-of-range index — past the end of all three lists
+      const snippetsGroup = groups[0];
+      if (!snippetsGroup) throw new Error('Snippets group not found');
+      snippetsGroup.vm.$emit('select', 999);
+      await flushPromises();
+
+      // Route did not change away from /search
+      expect(router.currentRoute.value.path).toBe('/search');
+    });
   });
 });
