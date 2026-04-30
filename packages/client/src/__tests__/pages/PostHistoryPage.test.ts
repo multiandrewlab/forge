@@ -9,6 +9,12 @@ const mockFetchRevisions = vi.fn();
 const mockRestoreRevision = vi.fn();
 const mockFetchPost = vi.fn();
 const mockCurrentPost = ref(null as { title: string } | null);
+// WU8 of issue #62: PostHistoryPage now branches on errorStatus to surface
+// a dedicated forbidden state when the post is private. Tests mutate these
+// refs directly; the composable mock returns the same refs back so the page
+// reactively re-renders.
+const mockError = ref<string | null>(null);
+const mockErrorStatus = ref<number | null>(null);
 
 import { ref } from 'vue';
 
@@ -18,7 +24,8 @@ vi.mock('@/composables/usePosts', () => ({
     restoreRevision: mockRestoreRevision,
     fetchPost: mockFetchPost,
     currentPost: mockCurrentPost,
-    error: { value: null },
+    error: mockError,
+    errorStatus: mockErrorStatus,
   }),
 }));
 
@@ -49,6 +56,8 @@ describe('PostHistoryPage', () => {
     setActivePinia(createPinia());
     vi.clearAllMocks();
     mockCurrentPost.value = null;
+    mockError.value = null;
+    mockErrorStatus.value = null;
   });
 
   it('fetches revisions on mount', async () => {
@@ -483,6 +492,49 @@ describe('PostHistoryPage', () => {
     // selectedRevisionNumber is 0 (rev?.revisionNumber ?? 0 fallback),
     // RestoreButton is shown with revisionNumber=0
     expect(wrapper.find('[data-testid="restore-trigger"]').exists()).toBe(true);
+  });
+
+  // WU8 of issue #62: a 403 from /api/posts/:id/revisions (or its sibling
+  // GET /api/posts/:id) renders a dedicated "forbidden" surface so the user
+  // sees that the post is private rather than a silently-empty timeline.
+  it('renders forbidden-page surface when errorStatus is 403', async () => {
+    mockFetchRevisions.mockImplementation(async () => {
+      mockError.value = 'You do not have access to this post';
+      mockErrorStatus.value = 403;
+      return [];
+    });
+
+    const wrapper = mount(PostHistoryPage);
+    await flushPromises();
+
+    const forbidden = wrapper.find('[data-testid="forbidden-page"]');
+    expect(forbidden.exists()).toBe(true);
+    expect(forbidden.text()).toContain('This post is private');
+    expect(forbidden.text()).toContain('You do not have access to this post');
+  });
+
+  it('falls back to default forbidden body text when error is empty', async () => {
+    mockFetchRevisions.mockImplementation(async () => {
+      mockError.value = null;
+      mockErrorStatus.value = 403;
+      return [];
+    });
+
+    const wrapper = mount(PostHistoryPage);
+    await flushPromises();
+
+    const forbidden = wrapper.find('[data-testid="forbidden-page"]');
+    expect(forbidden.exists()).toBe(true);
+    expect(forbidden.text()).toContain('The owner has not shared it with you.');
+  });
+
+  it('does not render forbidden-page surface on a successful fetch', async () => {
+    mockFetchRevisions.mockResolvedValue([makeRevision()]);
+
+    const wrapper = mount(PostHistoryPage);
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="forbidden-page"]').exists()).toBe(false);
   });
 
   it('rightRevision falls back to null when only one selected ID matches a revision', async () => {

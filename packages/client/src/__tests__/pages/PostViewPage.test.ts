@@ -13,6 +13,7 @@ import type { User } from '@forge/shared';
 const mockFetchPost = vi.fn();
 const mockDeletePost = vi.fn();
 const mockPostError: Ref<string | null> = ref(null);
+const mockPostErrorStatus: Ref<number | null> = ref(null);
 const mockForkPost = vi.fn();
 
 vi.mock('@/composables/usePosts', () => ({
@@ -21,6 +22,7 @@ vi.mock('@/composables/usePosts', () => ({
     deletePost: mockDeletePost,
     forkPost: mockForkPost,
     error: mockPostError,
+    errorStatus: mockPostErrorStatus,
   }),
 }));
 
@@ -217,6 +219,7 @@ describe('PostViewPage', () => {
     mockFetchPost.mockReset();
     mockDeletePost.mockReset();
     mockPostError.value = null;
+    mockPostErrorStatus.value = null;
     mockCurrentPost.value = null;
     mockUser.value = null;
     mockCommentsSubscribeRealtime.mockClear();
@@ -394,6 +397,41 @@ describe('PostViewPage', () => {
       await flushPromises();
 
       expect(wrapper.text()).toContain('Failed to fetch post');
+    });
+
+    // WU8 of issue #62: a 403 from the API renders a dedicated forbidden
+    // surface so the user understands the post is private rather than missing.
+    it('should render forbidden-page surface when errorStatus is 403', async () => {
+      mockFetchPost.mockImplementation(async () => {
+        mockPostError.value = 'You do not have access to this post';
+        mockPostErrorStatus.value = 403;
+        mockCurrentPost.value = null;
+      });
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      const forbidden = wrapper.find('[data-testid="forbidden-page"]');
+      expect(forbidden.exists()).toBe(true);
+      expect(forbidden.text()).toContain('This post is private');
+      expect(forbidden.text()).toContain('You do not have access to this post');
+      // Generic error banner should NOT also be rendered.
+      expect(wrapper.findAll('[data-testid="forbidden-page"]').length).toBe(1);
+    });
+
+    it('should fall back to default body text on 403 when error is empty', async () => {
+      mockFetchPost.mockImplementation(async () => {
+        mockPostError.value = null;
+        mockPostErrorStatus.value = 403;
+        mockCurrentPost.value = null;
+      });
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      const forbidden = wrapper.find('[data-testid="forbidden-page"]');
+      expect(forbidden.exists()).toBe(true);
+      expect(forbidden.text()).toContain('The owner has not shared it with you.');
     });
   });
 

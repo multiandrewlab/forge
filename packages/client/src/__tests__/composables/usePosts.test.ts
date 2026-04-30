@@ -119,6 +119,164 @@ describe('usePosts', () => {
       const { error } = usePosts();
       expect(error.value).toBeNull();
     });
+
+    it('should expose errorStatus as a reactive ref initialized to null', () => {
+      const { errorStatus } = usePosts();
+      expect(errorStatus.value).toBeNull();
+    });
+  });
+
+  // WU8 (issue #62): errorStatus tracks the HTTP status of the most recent
+  // failed response so view components can branch on 403 (forbidden) vs other
+  // errors. The same ref is reset at the start of every call so a successful
+  // call after a forbidden one clears the forbidden state.
+  describe('errorStatus tracking', () => {
+    it('populates errorStatus on 403 fetchPost', async () => {
+      mockApiFetch.mockResolvedValue(
+        new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403 }),
+      );
+
+      const { fetchPost, errorStatus } = usePosts();
+      await fetchPost('post-1');
+
+      expect(errorStatus.value).toBe(403);
+    });
+
+    it('populates errorStatus on 404 fetchPost', async () => {
+      mockApiFetch.mockResolvedValue(
+        new Response(JSON.stringify({ error: 'Not found' }), { status: 404 }),
+      );
+
+      const { fetchPost, errorStatus } = usePosts();
+      await fetchPost('post-x');
+
+      expect(errorStatus.value).toBe(404);
+    });
+
+    it('clears errorStatus on a subsequent successful fetchPost', async () => {
+      mockApiFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403 }),
+      );
+
+      const { fetchPost, errorStatus } = usePosts();
+      await fetchPost('post-1');
+      expect(errorStatus.value).toBe(403);
+
+      const post = createMockPost();
+      mockApiFetch.mockResolvedValueOnce(new Response(JSON.stringify(post), { status: 200 }));
+
+      await fetchPost('post-1');
+      expect(errorStatus.value).toBeNull();
+    });
+
+    it('clears errorStatus when a network failure occurs (catch path)', async () => {
+      mockApiFetch.mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403 }),
+      );
+
+      const { fetchPost, errorStatus } = usePosts();
+      await fetchPost('post-1');
+      expect(errorStatus.value).toBe(403);
+
+      mockApiFetch.mockRejectedValueOnce(new Error('Network down'));
+      await fetchPost('post-1');
+      // The reset at the top of fetchPost runs before the catch — leaving
+      // errorStatus null when the failure isn't an HTTP response.
+      expect(errorStatus.value).toBeNull();
+    });
+
+    it('populates errorStatus on 403 createPost', async () => {
+      mockApiFetch.mockResolvedValue(
+        new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403 }),
+      );
+
+      const { createPost, errorStatus } = usePosts();
+      await createPost({
+        title: 'Test',
+        contentType: ContentType.Snippet,
+        language: null,
+        visibility: Visibility.Public,
+      });
+
+      expect(errorStatus.value).toBe(403);
+    });
+
+    it('populates errorStatus on 403 updatePost', async () => {
+      mockApiFetch.mockResolvedValue(
+        new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403 }),
+      );
+
+      const { updatePost, errorStatus } = usePosts();
+      await updatePost('post-1', { title: 'x' });
+
+      expect(errorStatus.value).toBe(403);
+    });
+
+    it('populates errorStatus on 403 deletePost', async () => {
+      mockApiFetch.mockResolvedValue(
+        new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403 }),
+      );
+
+      const { deletePost, errorStatus } = usePosts();
+      await deletePost('post-1');
+
+      expect(errorStatus.value).toBe(403);
+    });
+
+    it('populates errorStatus on 400 publishPost', async () => {
+      mockApiFetch.mockResolvedValue(
+        new Response(JSON.stringify({ error: 'Cannot publish' }), { status: 400 }),
+      );
+
+      const { publishPost, errorStatus } = usePosts();
+      await publishPost('post-1');
+
+      expect(errorStatus.value).toBe(400);
+    });
+
+    it('populates errorStatus on 500 saveRevision', async () => {
+      mockApiFetch.mockResolvedValue(
+        new Response(JSON.stringify({ error: 'Save failed' }), { status: 500 }),
+      );
+
+      const { saveRevision, errorStatus } = usePosts();
+      await saveRevision('post-1', 'content', null);
+
+      expect(errorStatus.value).toBe(500);
+    });
+
+    it('populates errorStatus on 404 fetchRevisions', async () => {
+      mockApiFetch.mockResolvedValue(
+        new Response(JSON.stringify({ error: 'Not found' }), { status: 404 }),
+      );
+
+      const { fetchRevisions, errorStatus } = usePosts();
+      await fetchRevisions('post-1');
+
+      expect(errorStatus.value).toBe(404);
+    });
+
+    it('populates errorStatus on 403 restoreRevision', async () => {
+      mockApiFetch.mockResolvedValue(
+        new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403 }),
+      );
+
+      const { restoreRevision, errorStatus } = usePosts();
+      await restoreRevision('post-1', 1);
+
+      expect(errorStatus.value).toBe(403);
+    });
+
+    it('populates errorStatus on 403 forkPost', async () => {
+      mockApiFetch.mockResolvedValue(
+        new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403 }),
+      );
+
+      const { forkPost, errorStatus } = usePosts();
+      await forkPost('post-1');
+
+      expect(errorStatus.value).toBe(403);
+    });
   });
 
   describe('createPost', () => {
