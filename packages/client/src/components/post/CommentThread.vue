@@ -1,5 +1,5 @@
 <template>
-  <div class="flex flex-col gap-1">
+  <div class="flex flex-col gap-1" :data-testid="`comment-${node.id}`">
     <div class="flex items-start gap-2 rounded p-2 hover:bg-surface-700">
       <div class="flex-1">
         <div class="flex items-center gap-2 text-xs text-gray-400">
@@ -7,10 +7,13 @@
             v-if="node.author"
             :to="{ name: 'user-profile', params: { id: node.author.id } }"
             class="font-medium text-gray-300"
+            data-testid="comment-author"
           >
             {{ node.author.displayName }}
           </RouterLink>
-          <span v-else class="font-medium text-gray-300">Deleted user</span>
+          <span v-else class="font-medium text-gray-300" data-testid="comment-author"
+            >Deleted user</span
+          >
           <span>{{ timeAgo(node.createdAt) }}</span>
         </div>
 
@@ -30,7 +33,7 @@
           <p data-testid="comment-body" class="mt-1 text-sm text-gray-200 whitespace-pre-wrap">
             {{ node.body }}
           </p>
-          <div class="mt-1 flex items-center gap-2">
+          <div :data-testid="`comment-actions-${node.id}`" class="mt-1 flex items-center gap-2">
             <button
               data-testid="reply-btn"
               class="text-xs text-gray-500 hover:text-gray-300"

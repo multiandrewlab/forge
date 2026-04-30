@@ -6,6 +6,16 @@ import { useFeedStore } from '../../../stores/feed.js';
 import PostListItem from '../../../components/post/PostListItem.vue';
 import type { PostWithAuthor } from '@forge/shared';
 
+const mockToggleBookmark = vi.fn();
+
+vi.mock('../../../composables/useBookmarks.js', () => ({
+  useBookmarks: () => ({
+    toggleBookmark: mockToggleBookmark,
+    loading: { value: false },
+    error: { value: null },
+  }),
+}));
+
 const mockPost: PostWithAuthor = {
   id: '1',
   authorId: 'u1',
@@ -41,6 +51,10 @@ function createTestRouter() {
 
 describe('PostListItem', () => {
   beforeEach(() => {
+    // Pinia must be active before mounting — the component's <script setup>
+    // calls useFeedStore() at composition time for the new bookmark wiring.
+    setActivePinia(createPinia());
+    mockToggleBookmark.mockClear();
     // Reset matchMedia to desktop default before each test
     Object.defineProperty(window, 'matchMedia', {
       writable: true,
@@ -265,6 +279,49 @@ describe('PostListItem', () => {
       await wrapper.vm.$nextTick();
 
       expect(wrapper.text()).toContain('42');
+    });
+  });
+
+  describe('per-card bookmark toggle', () => {
+    it('renders bookmark-on-icon when feedStore.userBookmarks[post.id] is true', () => {
+      setActivePinia(createPinia());
+      const store = useFeedStore();
+      store.userBookmarks[mockPost.id] = true;
+      const router = createTestRouter();
+      const wrapper = mount(PostListItem, {
+        props: { post: mockPost, selected: false },
+        global: { plugins: [router] },
+      });
+      expect(wrapper.find('[data-testid="post-list-item-bookmark-on-icon"]').exists()).toBe(true);
+    });
+
+    it('does NOT render bookmark-on-icon when bookmark is absent', () => {
+      const router = createTestRouter();
+      const wrapper = mount(PostListItem, {
+        props: { post: mockPost, selected: false },
+        global: { plugins: [router] },
+      });
+      expect(wrapper.find('[data-testid="post-list-item-bookmark-on-icon"]').exists()).toBe(false);
+    });
+
+    it('clicking the toggle button calls useBookmarks().toggleBookmark with the post id', async () => {
+      const router = createTestRouter();
+      const wrapper = mount(PostListItem, {
+        props: { post: mockPost, selected: false },
+        global: { plugins: [router] },
+      });
+      await wrapper.find('[data-testid="post-list-item-bookmark-toggle-btn"]').trigger('click');
+      expect(mockToggleBookmark).toHaveBeenCalledWith(mockPost.id);
+    });
+
+    it('toggle click does NOT emit select (click.stop prevents card navigation)', async () => {
+      const router = createTestRouter();
+      const wrapper = mount(PostListItem, {
+        props: { post: mockPost, selected: false },
+        global: { plugins: [router] },
+      });
+      await wrapper.find('[data-testid="post-list-item-bookmark-toggle-btn"]').trigger('click');
+      expect(wrapper.emitted('select')).toBeFalsy();
     });
   });
 });
