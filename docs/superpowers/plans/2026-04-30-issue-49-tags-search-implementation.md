@@ -20,6 +20,25 @@
 
 ---
 
+## REV 2 changes vs. REV 1 (from plan-review-gate iteration 1)
+
+Iteration 1 returned PASS for Scope & Alignment, FAIL for Feasibility (3 blocking) and FAIL for Completeness (5 blocking). REV 2 incorporates:
+
+| #   | Concern (gate finding)                                                                                                                                                                                   | REV 2 fix                                                                                                                                                                                                                                                                                                 |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| F1  | `<PostList :posts="posts" />` in TagPage violates the actual `PostList.vue` 8-required-prop contract (line 70-80)                                                                                        | TagPage code in WU5 Task 5.6 now passes all 8 props (`selected-post-id`, `loading`, `error`, `has-more`, `current-sort`, `current-filter`, `current-tag`). Inline comment cites the contract location.                                                                                                    |
+| F2  | Plan said "Alice → ai-prompts" but seed.sql:128 has alice subscribed to **typescript** (`b0…0001`); bob is the ai-prompts subscriber                                                                     | `findTagByName` test comment at WU3 Task 3.3 corrected ("Bob is seeded as a subscriber to ai-prompts"). The 0-subscribers test switched from `devops` (which has carol) to `python` (which has 0 subs). Spec #7 `my-subscriptions-list.spec.ts` retargeted to `subscribed-tag-link-typescript` for alice. |
+| F3  | WU2 declared only WU1 dep but pagination tests require WU4's `tag-pagination-fixture` rows                                                                                                               | WU2 `**Dependencies:**` line updated to `WU1 AND WU4`. Dependency graph in §Dependency graph adds the WU4 → WU2 edge.                                                                                                                                                                                     |
+| C1  | `PostList.vue` has a `currentFilter` switch ladder (`'mine'/'bookmarked'`) but is NOT in WU6 modify scope; design's exhaustive-never DoD unreachable                                                     | New Task 6.8b added to WU6: extends `PostList.vue` switch with `'subscribed'` case + `_exhaustive: never` check + new unit test. `PostList.vue` added to WU6 file scope.                                                                                                                                  |
+| C2  | `PostViewPage.vue:183` also renders `post-tag-chip-${tag}` as `<span>`; click-tag-from-post.spec.ts navigates to `/posts/<uuid>` which mounts THIS page (not PostMetaHeader) — span click won't navigate | New Task 6.8a added to WU6: replaces the `<span>` with `<RouterLink>` and adds a unit test for tag-chip nav behavior. `PostViewPage.vue` added to WU6 file scope.                                                                                                                                         |
+| C3  | No verification command runs the `.coverage-thresholds.json` enforcement gate at the WORKSPACE-WIDE level (only per-package)                                                                             | WU9 Task 9.2 reorganized to run `npm run test:coverage` un-scoped (the canonical enforcement command per `.coverage-thresholds.json`'s `enforcement.command` field), with explicit step labels. Also added a workspace-wide `npm run typecheck` step to catch the new `_exhaustive: never` check.         |
+| C4  | WU4's `psql "$DATABASE_URL"` lacks the `set -a && source .env && set +a` prelude; would fail in fresh subshell                                                                                           | WU4 Task 4.4 + verification command both gain the `.env`-sourcing prelude (matches the pattern used by predecessor PR #73's plan and CLAUDE.md "When to run").                                                                                                                                            |
+| C5  | WU7 omitted the failing-test-FIRST step before implementation, violating CLAUDE.md "TDD is mandatory"                                                                                                    | WU7 expanded into 4 tasks: 7.1 (locate registry) → 7.2 (write failing test, verify it fails) → 7.3 (add implementation, verify it passes) → 7.4 (commit).                                                                                                                                                 |
+
+All 8 blocking findings resolved. Scope & Alignment was PASS in REV 1; no regressions introduced (REV 2 changes are all within the design's amended file scope).
+
+---
+
 ## Spec count reconciliation
 
 | Folder                   | Issue #49 target (±15%) | This plan delivers                                                              | Within band?       |
@@ -187,7 +206,9 @@ WU1 (shared types + zod)
   ├─→ WU5 (new components)
   └─→ WU6 (modified components)
 
-WU4 (seed) — independent of WU1; can run in parallel
+WU4 (seed) — independent of WU1; can run in parallel.
+  └─→ WU2 (search route's pagination tests REQUIRE the tag-pagination-fixture rows
+         from WU4; orchestrator MUST land WU4 before running WU2 verification)
 
 WU2, WU3 ──→ Bruno verification (folded into each WU's verification step)
 WU2, WU3, WU4, WU5, WU6 ──→ WU7 (server-side e2e prep — none beyond WU2-4)
@@ -501,7 +522,7 @@ Expected output: tests pass, search.ts shows 100/100/100/100 coverage, banner pr
 - Modify: `packages/server/src/__tests__/routes/search.test.ts`
 - Create: `bruno/search/by-author.bru`, `by-since.bru`, `pagination.bru`, `ai-page-1.bru`, `by-author-empty.bru`, `by-since-bad.bru`, `pagination-bad-page.bru`, `pagination-too-large.bru`
 
-**Dependencies:** WU1 (uses extended `searchQuerySchema` and `SearchResponse`).
+**Dependencies:** WU1 (uses extended `searchQuerySchema` and `SearchResponse`) **AND WU4** (the pagination unit tests in Task 2.2 require the seeded `tag-pagination-fixture` rows from WU4 to assert on >20 results). The dependency graph at §Dependency graph is updated to reflect this. Orchestrator MUST land WU4 before running WU2's verification.
 
 ### Task 2.1: Read existing search query helpers
 
@@ -1237,15 +1258,18 @@ npm test -- --run packages/server/src/__tests__/queries/feed-visibility.test.ts 
 ```ts
 describe('findTagByName — Issue #49 subscriber_count', () => {
   it('returns subscriber_count from user_tag_subscriptions aggregate', async () => {
-    // Alice is seeded as a subscriber to ai-prompts (b0...0003).
+    // Bob is seeded as a subscriber to ai-prompts (b0...0003) per
+    // scripts/seed.sql:129. (Alice is subscribed to typescript, not ai-prompts —
+    // verified against scripts/seed.sql:128.)
     const tag = await findTagByName('ai-prompts');
     expect(tag).not.toBeNull();
     expect(tag?.subscriber_count).toBeGreaterThanOrEqual(1);
   });
 
   it('returns 0 subscriber_count for a tag with no subscribers', async () => {
-    // After seed, devops has no subscribers.
-    const tag = await findTagByName('devops');
+    // python has no seeded subscribers (typescript→alice, ai-prompts→bob,
+    // devops→carol; python and react have zero seeded subs).
+    const tag = await findTagByName('python');
     expect(tag?.subscriber_count).toBe(0);
   });
 
@@ -1604,17 +1628,19 @@ FROM generate_series(1, 25) AS n;
 
 ### Task 4.4: Run the seed and verify
 
-- [ ] **Step 1: Re-run seed locally**
+- [ ] **Step 1: Re-run seed locally** (load `.env` first per CLAUDE.md "When to run" pattern)
 
 ```bash
+set -a && source .env && set +a
 psql "$DATABASE_URL" -f scripts/seed.sql
 ```
 
 Expected: no errors, terminal-row count summary shows: 5 users (was 4), 6 tags (was 5), 38 posts (was 13), 38 revisions, 36 post_tags (was 11).
 
-- [ ] **Step 2: Confirm the data**
+- [ ] **Step 2: Confirm the data** (`set -a && source .env && set +a` is from Step 1; if running this step in a fresh shell, re-source first)
 
 ```bash
+set -a && source .env && set +a   # only if running in a new shell
 psql "$DATABASE_URL" -c "SELECT COUNT(*) FROM posts WHERE author_id = 'a0000000-0000-0000-0000-000000000004';"
 # Expected: 25
 
@@ -1650,6 +1676,7 @@ WU4 of 9. Independent of all other WUs."
 **Verification (orchestrator runs):**
 
 ```bash
+set -a && source .env && set +a && \
 psql "$DATABASE_URL" -c "SELECT COUNT(*) FROM posts WHERE author_id = 'a0000000-0000-0000-0000-000000000004';" 2>&1 | grep "25" && \
 psql "$DATABASE_URL" -c "SELECT id FROM tags WHERE name = 'tag-pagination-fixture';" 2>&1 | grep "b0000000" && \
 echo "WU4 verified ✓"
@@ -2031,9 +2058,26 @@ describe('<TagPage>', () => {
     >
       No posts tagged #{{ tag!.name }} yet.
     </div>
-    <PostList v-else :posts="posts" />
+    <PostList
+      v-else
+      :posts="posts"
+      :selected-post-id="null"
+      :loading="false"
+      :error="null"
+      :has-more="false"
+      :current-sort="'recent'"
+      :current-filter="null"
+      :current-tag="tag!.name"
+    />
   </div>
 </template>
+<!--
+  PostList contract: 8 required props per packages/client/src/components/post/PostList.vue:70-80
+  (posts, selectedPostId, loading, error, hasMore, currentSort, currentFilter, currentTag).
+  All passed here. WU6 also extends PostList's currentFilter switch ladder to handle 'subscribed'
+  with a TypeScript never-exhaustiveness check; TagPage passes currentFilter=null which is the
+  pre-existing default-branch path.
+-->
 
 <script setup lang="ts">
 import { ref, watch } from 'vue';
@@ -2162,13 +2206,16 @@ echo "WU5 verified ✓"
 
 - Modify: `packages/client/src/components/shell/TheSidebar.vue` (popular-tags-list section)
 - Modify: `packages/client/src/components/post/PostMetaHeader.vue` (tag chip → RouterLink)
+- Modify: `packages/client/src/pages/PostViewPage.vue` (tag chip span → RouterLink — same testid `post-tag-chip-${tag}` at line 183; the e2e click-tag-from-post.spec.ts navigates to `/posts/<uuid>` which mounts THIS page, not PostMetaHeader)
+- Modify: `packages/client/src/components/post/PostList.vue` (extend `currentFilter` switch ladder at line 96 to handle `'subscribed'` and add a TypeScript `never` exhaustiveness check; the design's DoD requires "FeedFilter exhaustive `never` check passes typecheck")
 - Modify: `packages/client/src/pages/SearchPage.vue` (chips + pagination)
 - Modify: `packages/client/src/components/search/SearchResultItem.vue` (clickable author + stopPropagation)
 - Modify: `packages/client/src/stores/search.ts` (page/totalPages/author/since state, URL rewrite for AI-resolved)
 - Modify: `packages/client/src/composables/useSearch.ts` (URL builder)
 - Modify: `packages/client/src/stores/feed.ts` (accept 'subscribed' filter)
+- Modify: `packages/client/src/composables/useFeed.ts` (forward 'subscribed' filter to URL query — verify this composable's `setFilter` accepts the union; if it has its own switch ladder, extend with `never` check)
 - Modify: `packages/client/src/plugins/router.ts` (add /following + /tags/:name routes)
-- Modify: corresponding existing tests in `packages/client/src/__tests__/`
+- Modify: corresponding existing tests in `packages/client/src/__tests__/` — including a new test for `PostList.vue`'s `'subscribed'` branch and a new test for `PostViewPage.vue`'s tag-chip RouterLink behavior
 
 **Dependencies:** WU1, WU5.
 
@@ -2294,7 +2341,97 @@ Add a new section beneath Following:
 
 Mount `loadPopularTags(10)` in `onMounted`.
 
-### Task 6.8: Modify `PostMetaHeader.vue`
+### Task 6.8a: Modify `PostViewPage.vue` tag chip → RouterLink
+
+The post-detail page (`packages/client/src/pages/PostViewPage.vue:180-186`) renders its own tag chips as `<span data-testid="post-tag-chip-${tag}">`. The e2e `click-tag-from-post.spec.ts` navigates to `/posts/<uuid>` which mounts THIS page, NOT `PostMetaHeader.vue`. Without this change the e2e spec will fail because `<span>` clicks don't navigate.
+
+- [ ] **Step 1: Locate the tag-chip block**
+
+```bash
+grep -n "post-tag-chip" packages/client/src/pages/PostViewPage.vue
+```
+
+- [ ] **Step 2: Replace the `<span>` with `<RouterLink>`**
+
+```vue
+<!-- packages/client/src/pages/PostViewPage.vue (around line 180–186, replacing the existing v-for span) -->
+<RouterLink
+  v-for="tag in currentPost.tags"
+  :key="tag"
+  :to="{ name: 'tag-view', params: { name: tag } }"
+  :data-testid="`post-tag-chip-${tag}`"
+  class="rounded bg-gray-700 px-2 py-0.5 text-xs text-gray-300 hover:bg-gray-600"
+>
+  #{{ tag }}
+</RouterLink>
+```
+
+- [ ] **Step 3: Extend / write a unit test for PostViewPage tag-chip navigation**
+
+Add a test in `packages/client/src/__tests__/pages/PostViewPage.test.ts` asserting that the tag chip is now an `<a>` element with `href` matching `/tags/:name` (or the equivalent VueRouter-resolved path).
+
+### Task 6.8b: Modify `PostList.vue` `currentFilter` switch ladder for `'subscribed'`
+
+`packages/client/src/components/post/PostList.vue:96` has `switch (props.currentFilter) { case 'mine': ...; case 'bookmarked': ... }`. The design's DoD requires the `FeedFilter` exhaustiveness `never` check; without updating this file the DoD is unreachable.
+
+- [ ] **Step 1: Read the current switch**
+
+```bash
+sed -n '90,110p' packages/client/src/components/post/PostList.vue
+```
+
+- [ ] **Step 2: Extend the switch and add the `never` exhaustiveness check**
+
+```vue
+<!-- packages/client/src/components/post/PostList.vue (around line 96, replacing the existing switch) -->
+<script setup lang="ts">
+// ...existing imports...
+import type { FeedFilter } from '@forge/shared';
+
+// In the empty-state copy computed:
+function emptyStateCopy(filter: FeedFilter | null): string {
+  if (filter === null) return 'No posts yet.';
+  switch (filter) {
+    case 'mine':
+      return "You haven't posted anything yet.";
+    case 'bookmarked':
+      return "You haven't bookmarked anything yet.";
+    case 'subscribed':
+      return 'No recent posts from tags you follow.';
+    default: {
+      const _exhaustive: never = filter;
+      throw new Error(`Unhandled filter: ${String(_exhaustive)}`);
+    }
+  }
+}
+</script>
+```
+
+- [ ] **Step 3: Add a unit test for the `'subscribed'` branch**
+
+In `packages/client/src/__tests__/components/post/PostList.test.ts` (create if missing or extend):
+
+```ts
+it('renders subscribed-filter empty-state copy', () => {
+  const w = mount(PostList, {
+    props: {
+      posts: [],
+      currentFilter: 'subscribed' /* + other required props with sensible defaults */,
+    },
+  });
+  expect(w.text()).toContain('No recent posts from tags you follow');
+});
+```
+
+- [ ] **Step 4: Verify typecheck catches future missing-case scenarios**
+
+```bash
+npm run typecheck 2>&1 | tail -5
+```
+
+If a developer later adds a new `FeedFilter` value without updating this switch, typecheck will fail at the `_exhaustive: never` line.
+
+### Task 6.9: Modify `PostMetaHeader.vue`
 
 Replace the `<span>` tag chip with a `<RouterLink>`:
 
@@ -2312,7 +2449,7 @@ Replace the `<span>` tag chip with a `<RouterLink>`:
 
 The testid stays the same (DOM-element type changed; selector still matches).
 
-### Task 6.9: Update existing client unit tests
+### Task 6.10: Update existing client unit tests
 
 For each modified file, extend the existing test file to maintain 100% coverage. Each test should target a new branch added in this WU. Examples:
 
@@ -2325,7 +2462,7 @@ For each modified file, extend the existing test file to maintain 100% coverage.
 - `__tests__/composables/useSearch.test.ts`: tests for URL construction with author/since/page; URL rewrite on aiResolvedFilters response
 - `__tests__/plugins/router.test.ts`: tests already added in Task 6.1
 
-### Task 6.10: Run full client test suite + coverage
+### Task 6.11: Run full client test suite + coverage
 
 ```bash
 npm test -- --run packages/client 2>&1 | tail -20
@@ -2334,7 +2471,7 @@ npm run test:coverage -- --run packages/client 2>&1 | tail -30
 
 Expected: 100% on every file in the WU's modify scope.
 
-### Task 6.11: Commit WU6
+### Task 6.12: Commit WU6
 
 ```bash
 git add packages/client/src/components/ \
@@ -2390,13 +2527,78 @@ echo "WU6 verified ✓"
 grep -rn "MockScriptKey\|search-resolves\|mockScript" packages/shared/src packages/server/src 2>&1 | grep -v test | head -20
 ```
 
-The exact files depend on what foundation #44 shipped. Read the registry, add a new key (e.g., `'search-resolves-to-typescript-tag'`) with deterministic resolved filters: `{ tags: ['typescript'], language: null, contentType: null, textQuery: 'typescript' }`.
+The exact files depend on what foundation #44 shipped. Identify (a) the named-key registry file (typically `packages/shared/src/types/mock-script-keys.ts`) and (b) the server-side script lookup table.
 
-### Task 7.2: Add a unit test asserting the new key produces the expected output
+### Task 7.2: Write the failing test FIRST (TDD per CLAUDE.md)
 
-(The existing mock-LLM provider test pattern from #44 should be followed.)
+- [ ] **Step 1: Add a unit test asserting the new key produces the expected resolved filters**
 
-### Task 7.3: Commit WU7
+Locate the existing mock-provider test (likely `packages/server/src/__tests__/plugins/langchain/search-chain.test.ts` or similar). Append:
+
+```ts
+describe('search-resolves-to-typescript-tag mock script (Issue #49)', () => {
+  it('returns deterministic AI filters with tags=["typescript"]', async () => {
+    const provider = createMockProvider();
+    const chain = createSearchChain(provider);
+    // Set the named script key on the provider via the mock-LLM mechanism
+    // (exact API depends on foundation #44 implementation)
+    const filters = await runSearchChain(chain, 'typescript', {
+      mockScriptKey: 'search-resolves-to-typescript-tag',
+    });
+    expect(filters).toEqual({
+      tags: ['typescript'],
+      language: null,
+      contentType: null,
+      textQuery: 'typescript',
+    });
+  });
+});
+```
+
+- [ ] **Step 2: Run the test — it MUST fail** (the named key doesn't exist yet)
+
+```bash
+npm test -- --run packages/server/src/__tests__/plugins/langchain 2>&1 | tail -10
+```
+
+Expected: failure with "unknown mock-script key" or "key not found in registry".
+
+### Task 7.3: Add the named key to the registry
+
+- [ ] **Step 1: Edit the `MockScriptKey` registry**
+
+```ts
+// packages/shared/src/types/mock-script-keys.ts (or wherever foundation #44 defined it)
+export const MOCK_SCRIPT_KEYS = [
+  // ...existing keys...
+  'search-resolves-to-typescript-tag',
+] as const;
+
+export type MockScriptKey = (typeof MOCK_SCRIPT_KEYS)[number];
+```
+
+- [ ] **Step 2: Add the script's deterministic output to the server-side lookup**
+
+```ts
+// packages/server/src/plugins/langchain/mock-provider.ts (or equivalent)
+const SCRIPTS: Record<MockScriptKey, AiSearchFilters> = {
+  // ...existing...
+  'search-resolves-to-typescript-tag': {
+    tags: ['typescript'],
+    language: null,
+    contentType: null,
+    textQuery: 'typescript',
+  },
+};
+```
+
+- [ ] **Step 3: Re-run the test — it should pass**
+
+```bash
+npm test -- --run packages/server/src/__tests__/plugins/langchain 2>&1 | tail -10
+```
+
+### Task 7.4: Commit WU7
 
 ```bash
 git add packages/shared/src/types/mock-script-keys.ts \
@@ -2485,7 +2687,7 @@ The other 8 follow the design's spec inventory verbatim. **Critical assertions p
 - `unsubscribe-from-sidebar.spec.ts`: pre-state subscribe to ai-prompts via API; click `subscribe-btn-ai-prompts`; assert `aria-pressed="false"`.
 - `subscribed-tag-feed.spec.ts`: pre-state subscribe to react via API; visit `/following`; assert ≥1 post-list-item AND each visible item has `post-tag-chip-react`. **Confirm during impl: react-tagged seeded posts (004, 011) are NOT authored by testuser** — the feed shows posts from authors testuser follows, NOT testuser's own posts. Both are by bob (`a0…0002`), so OK.
 - `tag-page.spec.ts`: visit `/tags/typescript`; render checklist for `tag-page`, `tag-page-title`, ≥1 `post-list-item`.
-- `my-subscriptions-list.spec.ts`: log in as alice; assert `subscribed-tag-link-ai-prompts` visible.
+- `my-subscriptions-list.spec.ts`: log in as alice (seeded with sub to **typescript**, `b0...0001`, per scripts/seed.sql:128 — design doc had this wrong); assert `subscribed-tag-link-typescript` visible. Note: spec #2 (`subscribe-from-sidebar` as testuser) writes to a DIFFERENT row in `user_tag_subscriptions` (testuser, typescript) — alice and testuser are different users, PK is `(user_id, tag_id)`, so no contention.
 - `click-tag-from-post.spec.ts`: visit `/posts/c0000000-0000-0000-0000-000000000001` (typescript-tagged); click `post-tag-chip-typescript`; `expect(page).toHaveURL('/tags/typescript')`.
 - `subscribe-from-tag-page.spec.ts`: visit `/tags/devops` as testuser; click `subscribe-btn-devops`; assert `aria-pressed="true"`.
 
@@ -2588,26 +2790,34 @@ echo "WU8 verified ✓"
 
 Per CLAUDE.md §Pre-PR Knowledge Capture: the knowledge-base updates land atomically with the implementation, NOT in a follow-up.
 
-### Task 9.2: Run all gates locally
+### Task 9.2: Run all gates locally — including the global coverage-threshold enforcement command
+
+Per `.coverage-thresholds.json`'s `enforcement.command` field, the canonical coverage gate is `npm run test:coverage` run **without scoping to a single package** (so the global thresholds — lines/branches/functions/statements at 100% — are enforced across the entire diff). Per WU verification commands scope coverage to a package; this WU runs the global form to close the gate.
 
 ```bash
-# Unit + integration tests
+# 1) Unit + integration tests (entire workspace)
 npm test 2>&1 | tail -10
 
-# Coverage (must hit thresholds in .coverage-thresholds.json)
-npm run test:coverage 2>&1 | tail -20
+# 2) GLOBAL coverage gate — the .coverage-thresholds.json enforcement command.
+#    Vitest exits non-zero if any threshold is missed. This is the BLOCKING gate
+#    per CLAUDE.md §Coverage and per .coverage-thresholds.json §enforcement.
+npm run test:coverage 2>&1 | tail -30
+# Verify: no "ERROR: Coverage for X (NN%) does not meet global threshold (100%)"
 
-# Bruno (full suite)
+# 3) Bruno (full suite)
 cd bruno && npx @usebruno/cli run -r --env local && cd ..
 
-# E2E at workers=4 (CI-equivalent)
+# 4) E2E at workers=4 (CI-equivalent)
 npm run e2e -- --workers=4 2>&1 | tail -20
 
-# Build all packages
+# 5) Build all packages
 npm run build 2>&1 | tail -10
+
+# 6) Typecheck (catches the FeedFilter exhaustive-never check from Task 6.8b)
+npm run typecheck 2>&1 | tail -5
 ```
 
-Each command must succeed. If any fails, fix before proceeding.
+Each command must succeed. If any fails, fix before proceeding. If the coverage gate fails on a file outside this PR's diff (i.e., a pre-existing 100% file regressed), STOP and triage — do NOT lower thresholds or add `/* istanbul ignore */` to bypass.
 
 ### Task 9.3: Update tracking issue #43
 
