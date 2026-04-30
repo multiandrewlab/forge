@@ -21,6 +21,12 @@ export default defineConfig({
       '@': resolve(__dirname, 'src'),
     },
   },
+  // Sandbox workers use dynamic imports (`import('quickjs-emscripten')`,
+  // `import('esbuild-wasm')`) which require code-splitting. Vite's default
+  // worker.format is 'iife' and doesn't support code-splitting.
+  worker: {
+    format: 'es',
+  },
   server: {
     port: 3000,
     proxy: apiProxy,

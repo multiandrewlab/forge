@@ -1,5 +1,7 @@
 /* v8 ignore start */
 import { neutralizeBrowserApis } from './neutralize-apis.js';
+import { pickEntrySource } from './pick-entry-source.js';
+import type { SandboxFile } from './pick-entry-source.js';
 
 /** Minimal worker global shape -- avoids dependency on WebWorker lib types */
 interface WorkerGlobal {
@@ -11,15 +13,10 @@ declare const self: WorkerGlobal & Record<string, unknown>;
 
 neutralizeBrowserApis(self as Record<string, unknown>);
 
-interface VfsFile {
-  name: string;
-  content: string;
-}
-
 interface ExecuteMessage {
   type: 'execute';
-  code: string;
-  files?: VfsFile[];
+  files: readonly SandboxFile[];
+  entryFile: string;
   stdin?: string;
 }
 
@@ -54,7 +51,7 @@ async function loadPyodideRuntime(): Promise<{
 self.onmessage = async (event: MessageEvent<ExecuteMessage>) => {
   if (event.data.type !== 'execute') return;
 
-  const { code, files = [], stdin = '' } = event.data;
+  const { files, entryFile, stdin = '' } = event.data;
   const startTime = performance.now();
 
   try {
@@ -80,7 +77,7 @@ self.onmessage = async (event: MessageEvent<ExecuteMessage>) => {
     }
 
     for (const file of files) {
-      pyodide.FS.writeFile(`/home/user/${file.name}`, file.content);
+      pyodide.FS.writeFile(`/home/user/${file.filename}`, file.content);
     }
 
     // Configure sys.path and stdin
@@ -113,6 +110,10 @@ class StdinWrapper:
 
 sys.stdin = StdinWrapper(${JSON.stringify(stdinLines)})
 `);
+
+    // Resolve entry source from the manager's files[] / entryFile contract.
+    // Throws (caught below) if the manager omitted the entry file.
+    const code = pickEntrySource(files, entryFile);
 
     // Execute the user code
     await pyodide.runPythonAsync(code);

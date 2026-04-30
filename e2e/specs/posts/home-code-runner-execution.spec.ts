@@ -13,14 +13,7 @@ import { posts } from '../../fixtures/selectors/posts.js';
 // with more body"; export default testFixture;`) compiles + runs cleanly to
 // exit 0 with no stdout, so we cannot rely on output lines — the status bar
 // is the deterministic completion signal.
-// FIXME(issue #70): #65 verified that the panel + CodeRunner mount correctly
-// (sibling spec `home-code-runner-on-snippet.spec.ts` is un-fixme'd and passes).
-// However, the WASM sandbox does not progress to the `done` state with an exit
-// code: the status-bar shows only " Clear " text after Run is clicked, even at
-// workers=1 with a 60s timeout. This is a separate runtime bug in the code-
-// runner pipeline (not the panel-render issue #65 was tracking). Re-enabling
-// this assertion is gated on a new tracking issue for the runner-completion bug.
-test.fixme('code-runner: alice runs the seeded snippet and sees output panel + completion status', async ({
+test('code-runner: alice runs the seeded snippet and sees output panel + completion status', async ({
   alice,
 }) => {
   await alice.goto('/');

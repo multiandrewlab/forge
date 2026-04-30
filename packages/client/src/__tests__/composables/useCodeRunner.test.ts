@@ -474,26 +474,52 @@ describe('useCodeRunner', () => {
       expect(() => dedicatedScope.stop()).not.toThrow();
     });
   });
+});
 
-  /* ================================================================ */
-  /*  createWorker (exported factory)                                  */
-  /* ================================================================ */
-  describe('createWorker', () => {
-    it('constructs a Worker with module type', () => {
-      const MockWorker = vi.fn();
-      vi.stubGlobal('Worker', MockWorker);
+/* ================================================================ */
+/*  createWorker (exported factory) — separate top-level describe   */
+/*  because we vi.mock the ?worker modules and need them resolved   */
+/*  to distinct mock constructors for branch-mapping assertions.    */
+/* ================================================================ */
 
-      try {
-        createWorker();
+const jsWorkerSpy = vi.fn();
+const pythonWorkerSpy = vi.fn();
 
-        expect(MockWorker).toHaveBeenCalledOnce();
-        const [url, opts] = MockWorker.mock.calls[0] as [URL, WorkerOptions];
-        expect(url).toBeInstanceOf(URL);
-        expect(url.href).toContain('js-worker');
-        expect(opts).toEqual({ type: 'module' });
-      } finally {
-        vi.unstubAllGlobals();
-      }
-    });
+vi.mock('../../lib/sandbox/workers/js-worker.ts?worker', () => ({
+  default: vi.fn().mockImplementation(function (this: object) {
+    jsWorkerSpy();
+    return { terminate: vi.fn(), postMessage: vi.fn(), addEventListener: vi.fn() };
+  }),
+}));
+
+vi.mock('../../lib/sandbox/workers/python-worker.ts?worker', () => ({
+  default: vi.fn().mockImplementation(function (this: object) {
+    pythonWorkerSpy();
+    return { terminate: vi.fn(), postMessage: vi.fn(), addEventListener: vi.fn() };
+  }),
+}));
+
+describe('createWorker', () => {
+  beforeEach(() => {
+    jsWorkerSpy.mockClear();
+    pythonWorkerSpy.mockClear();
+  });
+
+  it('instantiates JsWorker (and only JsWorker) for javascript', () => {
+    createWorker('javascript');
+    expect(jsWorkerSpy).toHaveBeenCalledOnce();
+    expect(pythonWorkerSpy).not.toHaveBeenCalled();
+  });
+
+  it('instantiates JsWorker (and only JsWorker) for typescript', () => {
+    createWorker('typescript');
+    expect(jsWorkerSpy).toHaveBeenCalledOnce();
+    expect(pythonWorkerSpy).not.toHaveBeenCalled();
+  });
+
+  it('instantiates PythonWorker (and only PythonWorker) for python', () => {
+    createWorker('python');
+    expect(pythonWorkerSpy).toHaveBeenCalledOnce();
+    expect(jsWorkerSpy).not.toHaveBeenCalled();
   });
 });

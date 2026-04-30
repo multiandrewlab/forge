@@ -12,14 +12,15 @@ interface MockWorker {
   addEventListener: ReturnType<typeof vi.fn>;
   removeEventListener: ReturnType<typeof vi.fn>;
   _emit(data: unknown): void;
+  _emitEvent(type: 'error' | 'messageerror', payload: Partial<ErrorEvent>): void;
 }
 
 function createMockWorker(): MockWorker {
-  const listeners: Record<string, ((e: MessageEvent) => void)[]> = {};
+  const listeners: Record<string, ((e: Event) => void)[]> = {};
   const worker: MockWorker = {
     postMessage: vi.fn(),
     terminate: vi.fn(),
-    addEventListener: vi.fn((event: string, handler: (e: MessageEvent) => void) => {
+    addEventListener: vi.fn((event: string, handler: (e: Event) => void) => {
       if (!listeners[event]) listeners[event] = [];
       listeners[event].push(handler);
     }),
@@ -27,6 +28,10 @@ function createMockWorker(): MockWorker {
     _emit(data: unknown) {
       const event = { data } as MessageEvent;
       listeners['message']?.forEach((h) => h(event));
+    },
+    _emitEvent(type, payload) {
+      const event = { type, ...payload } as Event;
+      listeners[type]?.forEach((h) => h(event));
     },
   };
   return worker;
@@ -466,6 +471,64 @@ describe('SandboxManager', () => {
       // Second worker's timeout fires
       expect(secondOpts.onError).toHaveBeenCalledWith('Execution timed out (30s limit)');
       expect(secondWorker.terminate).toHaveBeenCalledOnce();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Worker-level error events (load failures, message deserialization)
+  // -------------------------------------------------------------------------
+  describe('worker error events', () => {
+    it('routes worker "error" events to onError with the error message', () => {
+      const opts = baseOptions();
+      manager.execute(opts);
+
+      mockWorker._emitEvent('error', { message: 'SyntaxError: bad worker module' });
+
+      expect(opts.onError).toHaveBeenCalledWith(
+        expect.stringContaining('SyntaxError: bad worker module'),
+      );
+      expect(mockWorker.terminate).toHaveBeenCalledOnce();
+    });
+
+    it('uses a fallback message when "error" event has no message', () => {
+      const opts = baseOptions();
+      manager.execute(opts);
+
+      mockWorker._emitEvent('error', {});
+
+      expect(opts.onError).toHaveBeenCalledWith(expect.stringMatching(/worker.*error/i));
+    });
+
+    it('routes worker "messageerror" events to onError', () => {
+      const opts = baseOptions();
+      manager.execute(opts);
+
+      mockWorker._emitEvent('messageerror', {});
+
+      expect(opts.onError).toHaveBeenCalledWith(expect.stringMatching(/messageerror|deseriali/i));
+      expect(mockWorker.terminate).toHaveBeenCalledOnce();
+    });
+
+    it('does not double-fire onError if the worker errors after a done message', () => {
+      const opts = baseOptions();
+      manager.execute(opts);
+
+      mockWorker._emit({ type: 'done', exitCode: 0, executionTimeMs: 1 });
+      mockWorker._emitEvent('error', { message: 'late error' });
+
+      expect(opts.onComplete).toHaveBeenCalledOnce();
+      expect(opts.onError).not.toHaveBeenCalled();
+    });
+
+    it('does not double-fire onError if a messageerror arrives after done', () => {
+      const opts = baseOptions();
+      manager.execute(opts);
+
+      mockWorker._emit({ type: 'done', exitCode: 0, executionTimeMs: 1 });
+      mockWorker._emitEvent('messageerror', {});
+
+      expect(opts.onComplete).toHaveBeenCalledOnce();
+      expect(opts.onError).not.toHaveBeenCalled();
     });
   });
 });
