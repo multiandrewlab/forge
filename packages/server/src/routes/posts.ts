@@ -169,7 +169,7 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
     }
 
     if (existing.author_id !== request.user.id) {
-      return reply.status(403).send({ error: 'Forbidden' });
+      return reply.status(403).send({ error: 'You can only edit your own posts' });
     }
 
     const parsed = updatePostSchema.safeParse(request.body);
@@ -208,7 +208,7 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
     }
 
     if (existing.author_id !== request.user.id) {
-      return reply.status(403).send({ error: 'Forbidden' });
+      return reply.status(403).send({ error: 'You can only delete your own posts' });
     }
 
     await softDeletePost(id);
@@ -227,7 +227,7 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
     }
 
     if (existing.author_id !== request.user.id) {
-      return reply.status(403).send({ error: 'Forbidden' });
+      return reply.status(403).send({ error: 'You can only publish your own posts' });
     }
 
     const publishedRow = await publishPost(id);
@@ -381,7 +381,7 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
     }
 
     if (existing.author_id !== request.user.id) {
-      return reply.status(403).send({ error: 'Forbidden' });
+      return reply.status(403).send({ error: 'You can only add revisions to your own posts' });
     }
 
     const parsed = createRevisionSchema.safeParse(request.body);
@@ -614,7 +614,9 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
       }
 
       if (existing.author_id !== request.user.id) {
-        return reply.status(403).send({ error: 'Forbidden' });
+        return reply
+          .status(403)
+          .send({ error: 'You can only restore revisions on your own posts' });
       }
 
       const targetRevision = await findRevision(id, revisionNumber);
