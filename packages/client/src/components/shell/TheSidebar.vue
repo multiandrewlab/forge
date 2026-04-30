@@ -46,6 +46,7 @@
           <button
             v-for="tag in subscribedTags"
             :key="tag.id"
+            :data-testid="`subscribed-tag-link-${tag.name}`"
             class="block w-full px-3 text-left text-sm text-gray-400 hover:text-white"
             @click="handleTagClick(tag.name)"
           >
@@ -137,6 +138,7 @@
                 <button
                   v-for="tag in subscribedTags"
                   :key="tag.id"
+                  :data-testid="`subscribed-tag-link-${tag.name}`"
                   class="block w-full px-3 text-left text-sm text-gray-400 hover:text-white"
                   @click="handleTagClick(tag.name)"
                 >
