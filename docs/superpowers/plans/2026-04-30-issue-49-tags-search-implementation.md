@@ -75,7 +75,7 @@ Bruno count grew vs. the design's first-pass figure because the design-review-ga
   - `ai-prompts`: posts `003`, `004`, `010` (bob + carol)
   - `react`: posts `004`, `011` (bob)
   - `devops`: post `005` (carol)
-- testuser (`a0…0099`) has zero seeded subscriptions. Alice has 1 sub: `ai-prompts` (`b0…0003`).
+- testuser (`a0…0099`) has zero seeded subscriptions. Seeded subs (verified `scripts/seed.sql:128–130`): alice→typescript (`b0…0001`), bob→ai-prompts (`b0…0003`), carol→devops (`b0…0005`).
 
 ---
 
