@@ -239,6 +239,80 @@ describe('PostDetail', () => {
     expect(wrapper.find('[data-testid="link-preview-card"]').exists()).toBe(true);
   });
 
+  it('LinkPreviewCard receives is-author=true when authenticated user matches post author (#64)', async () => {
+    const linkPost: PostWithRevision = {
+      ...mockPostWithRevision,
+      contentType: 'link',
+      linkUrl: 'https://example.com',
+      linkPreview: { title: 'X', description: 'Y', image: null, readingTime: null },
+    };
+    setupUrlAwareMock({ post: linkPost });
+
+    const wrapper = mount(PostDetail, { props: { post: mockPost } });
+    await flushPromises();
+
+    // Set authenticated user matching the post author — covers isPostAuthor's
+    // u.id === p.authorId branch (true case).
+    const { useAuthStore } = await import('../../../stores/auth.js');
+    const authStore = useAuthStore();
+    authStore.setAuth('token', {
+      id: 'user-1',
+      email: 'a@example.com',
+      displayName: 'Alice',
+      avatarUrl: null,
+      authProvider: 'local' as const,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await wrapper.vm.$nextTick();
+
+    const card = wrapper.findComponent({ name: 'LinkPreviewCard' });
+    expect(card.exists()).toBe(true);
+    expect(card.props('isAuthor')).toBe(true);
+  });
+
+  it('handleRefreshPreview no-ops when fullPost is null (covers early-return branch)', async () => {
+    // Mount with null post — fullPost.value stays null
+    const wrapper = mount(PostDetail, { props: { post: null } });
+    await flushPromises();
+
+    const vm = wrapper.vm as unknown as { handleRefreshPreview?: () => Promise<void> };
+    if (vm.handleRefreshPreview) {
+      await vm.handleRefreshPreview();
+    }
+    expect(mockApiFetch).not.toHaveBeenCalled();
+  });
+
+  it('LinkPreviewCard receives is-author=false when authenticated user does not match (#64)', async () => {
+    const linkPost: PostWithRevision = {
+      ...mockPostWithRevision,
+      contentType: 'link',
+      linkUrl: 'https://example.com',
+      linkPreview: { title: 'X', description: 'Y', image: null, readingTime: null },
+    };
+    setupUrlAwareMock({ post: linkPost });
+
+    const wrapper = mount(PostDetail, { props: { post: mockPost } });
+    await flushPromises();
+
+    // Different user — covers isPostAuthor's u.id !== p.authorId branch (false case).
+    const { useAuthStore } = await import('../../../stores/auth.js');
+    const authStore = useAuthStore();
+    authStore.setAuth('token', {
+      id: 'someone-else',
+      email: 'b@example.com',
+      displayName: 'Bob',
+      avatarUrl: null,
+      authProvider: 'local' as const,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await wrapper.vm.$nextTick();
+
+    const card = wrapper.findComponent({ name: 'LinkPreviewCard' });
+    expect(card.props('isAuthor')).toBe(false);
+  });
+
   it('handleRefreshPreview POSTs to /refresh-preview and updates the card (#64)', async () => {
     const linkPost: PostWithRevision = {
       ...mockPostWithRevision,

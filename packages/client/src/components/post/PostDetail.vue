@@ -30,7 +30,7 @@
         class="mb-3"
         :link-url="fullPost.linkUrl"
         :link-preview="fullPost.linkPreview"
-        :is-author="fullPost.authorId === authStore.user?.id"
+        :is-author="isPostAuthor"
         @refresh="handleRefreshPreview"
       />
       <CodeViewer
@@ -113,6 +113,13 @@ const fullPost = ref<PostWithRevision | null>(null);
 const inlineCommentLine = ref<number | null>(null);
 
 const revision = computed(() => fullPost.value?.revisions?.[0] ?? null);
+
+const isPostAuthor = computed(() => {
+  const u = authStore.user;
+  const p = fullPost.value;
+  if (u === null || p === null) return false;
+  return u.id === p.authorId;
+});
 
 const files = ref<PostFile[]>([]);
 
@@ -198,14 +205,15 @@ async function handleFork(): Promise<void> {
 }
 
 async function handleRefreshPreview(): Promise<void> {
-  if (!fullPost.value) return;
-  const id = fullPost.value.id;
-  const res = await apiFetch(`/api/posts/${id}/refresh-preview`, { method: 'POST' });
+  // Capture once so the post-await assignment is unconditional (the v-if
+  // guard on the LinkPreviewCard already guarantees fullPost is non-null
+  // when this handler is reachable).
+  const post = fullPost.value;
+  if (!post) return;
+  const res = await apiFetch(`/api/posts/${post.id}/refresh-preview`, { method: 'POST' });
   if (res.ok) {
     const body = (await res.json()) as { post: PostWithRevision };
-    if (fullPost.value) {
-      fullPost.value.linkPreview = body.post.linkPreview;
-    }
+    post.linkPreview = body.post.linkPreview;
   }
 }
 </script>
