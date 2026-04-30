@@ -1,0 +1,58 @@
+import { test, expect } from '../../fixtures/reset.js';
+import { comments } from '../../fixtures/selectors/comments.js';
+
+test('comments: nested replies render three levels deep', async ({ testuser }) => {
+  const refresh = await testuser.request.post('/api/auth/refresh');
+  expect(refresh.ok()).toBe(true);
+  const { accessToken } = (await refresh.json()) as { accessToken: string };
+  const auth = { Authorization: `Bearer ${accessToken}` };
+
+  const post = await testuser.request.post('/api/posts', {
+    headers: auth,
+    data: {
+      title: 'Nested seed',
+      contentType: 'snippet',
+      language: 'typescript',
+      content: 'x',
+      visibility: 'public',
+      isDraft: false,
+    },
+  });
+  const {
+    post: { id: postId },
+  } = (await post.json()) as { post: { id: string } };
+
+  const top = await testuser.request.post(`/api/posts/${postId}/comments`, {
+    headers: auth,
+    data: { body: 'depth-0' },
+  });
+  const {
+    comment: { id: topId },
+  } = (await top.json()) as { comment: { id: string } };
+
+  const mid = await testuser.request.post(`/api/posts/${postId}/comments`, {
+    headers: auth,
+    data: { body: 'depth-1', parentId: topId },
+  });
+  const {
+    comment: { id: midId },
+  } = (await mid.json()) as { comment: { id: string } };
+
+  const leaf = await testuser.request.post(`/api/posts/${postId}/comments`, {
+    headers: auth,
+    data: { body: 'depth-2', parentId: midId },
+  });
+  const {
+    comment: { id: leafId },
+  } = (await leaf.json()) as { comment: { id: string } };
+
+  await testuser.goto(`/posts/${postId}`);
+  // Each child comment-{id} renders nested inside its parent's DOM subtree.
+  await expect(comments.bodyOf(testuser, topId)).toHaveText('depth-0');
+  await expect(
+    comments.item(testuser, topId).locator(`[data-testid="comment-${midId}"]`),
+  ).toHaveCount(1);
+  await expect(
+    comments.item(testuser, midId).locator(`[data-testid="comment-${leafId}"]`),
+  ).toHaveCount(1);
+});
