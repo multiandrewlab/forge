@@ -13,7 +13,7 @@ import { posts } from '../../fixtures/selectors/posts.js';
 // with more body"; export default testFixture;`) compiles + runs cleanly to
 // exit 0 with no stdout, so we cannot rely on output lines — the status bar
 // is the deterministic completion signal.
-// FIXME(issue-pending): #65 verified that the panel + CodeRunner mount correctly
+// FIXME(issue #70): #65 verified that the panel + CodeRunner mount correctly
 // (sibling spec `home-code-runner-on-snippet.spec.ts` is un-fixme'd and passes).
 // However, the WASM sandbox does not progress to the `done` state with an exit
 // code: the status-bar shows only " Clear " text after Run is clicked, even at
