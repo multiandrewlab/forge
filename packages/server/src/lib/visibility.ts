@@ -9,7 +9,7 @@ import type { FastifyReply } from 'fastify';
  *   if (!assertCanReadPost(post, request.user.id, reply)) return;
  */
 export function assertCanReadPost(
-  post: { visibility: 'public' | 'private'; author_id: string },
+  post: { visibility: string; author_id: string },
   callerId: string,
   reply: FastifyReply,
 ): boolean {

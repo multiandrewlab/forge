@@ -456,6 +456,7 @@ describe('post routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: `/api/posts/${postId}`,
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(200);
@@ -472,6 +473,7 @@ describe('post routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: `/api/posts/${postId}`,
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(404);
@@ -1168,6 +1170,7 @@ describe('post routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: `/api/posts/${postId}/revisions`,
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(200);
@@ -1186,6 +1189,7 @@ describe('post routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: `/api/posts/${postId}/revisions`,
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(404);
@@ -1204,6 +1208,7 @@ describe('post routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: `/api/posts/${postId}/revisions/1`,
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(200);
@@ -1221,6 +1226,7 @@ describe('post routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: `/api/posts/${postId}/revisions/99`,
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(404);
@@ -1234,6 +1240,7 @@ describe('post routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: `/api/posts/${postId}/revisions/1`,
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(404);
@@ -1245,6 +1252,7 @@ describe('post routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: `/api/posts/${postId}/revisions/abc`,
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(400);

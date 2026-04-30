@@ -12,10 +12,11 @@ import {
 import { toComment } from '../services/comments.js';
 import type { CommentWithAuthorRow } from '../db/queries/types.js';
 import { getExcludeWs } from '../plugins/websocket/broadcast.js';
+import { assertCanReadPost } from '../lib/visibility.js';
 
 export async function commentRoutes(app: FastifyInstance): Promise<void> {
-  // GET /:id/comments — public, no auth required
-  app.get('/:id/comments', async (request, reply) => {
+  // GET /:id/comments — authenticated; private posts visible only to author
+  app.get('/:id/comments', { preHandler: [app.authenticate] }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const { revision } = request.query as { revision?: string };
 
@@ -23,6 +24,8 @@ export async function commentRoutes(app: FastifyInstance): Promise<void> {
     if (!post) {
       return reply.status(404).send({ error: 'Post not found' });
     }
+
+    if (!assertCanReadPost(post, request.user.id, reply)) return;
 
     const rows = revision
       ? await findCommentsByPostIdWithAuthorForRevision(id, revision)

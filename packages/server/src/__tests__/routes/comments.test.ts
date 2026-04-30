@@ -99,6 +99,7 @@ describe('comment routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: `/api/posts/${postId}/comments`,
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(200);
@@ -128,6 +129,7 @@ describe('comment routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: `/api/posts/${postId}/comments?revision=${revisionId}`,
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(200);
@@ -144,6 +146,7 @@ describe('comment routes', () => {
       const response = await app.inject({
         method: 'GET',
         url: `/api/posts/${postId}/comments`,
+        headers: { authorization: `Bearer ${token}` },
       });
 
       expect(response.statusCode).toBe(404);
