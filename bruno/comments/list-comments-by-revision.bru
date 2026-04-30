@@ -7,7 +7,11 @@ meta {
 get {
   url: {{baseUrl}}/api/posts/{{postId}}/comments?revision={{revisionId}}
   body: none
-  auth: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
 }
 
 assert {
@@ -19,5 +23,6 @@ docs {
 
   Response: { comments: Comment[] }
 
-  Requires {{postId}} and {{revisionId}}.
+  Requires {{postId}} and {{revisionId}}. Auth is required after #62 (WU4);
+  the seeded {{postId}} is testuser-owned and public.
 }

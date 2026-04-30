@@ -1,0 +1,36 @@
+meta {
+  name: JWT Algorithm Pin
+  type: http
+  seq: 200
+}
+
+get {
+  url: {{baseUrl}}/api/auth/me
+  body: none
+  auth: bearer
+}
+
+script:pre-request {
+  // WU9 of #62 — algorithm pin. Sign with a non-HS256 algorithm (RS256
+  // header) and a structurally-invalid signature so the server's JWT
+  // verifier rejects with 401 rather than honoring the alternate algorithm.
+  bru.setVar(
+    "badToken",
+    "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IngifQ.invalid-signature",
+  );
+}
+
+auth:bearer {
+  token: {{badToken}}
+}
+
+assert {
+  res.status: eq 401
+}
+
+docs {
+  WU9 of #62 — JWT algorithm-pin regression. The auth middleware MUST verify
+  tokens with HS256 only (matching how they are signed). A token whose header
+  declares RS256 (or any other algorithm) must be rejected with HTTP 401, not
+  silently accepted.
+}

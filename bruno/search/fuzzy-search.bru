@@ -7,7 +7,11 @@ meta {
 get {
   url: {{baseUrl}}/api/search?q=reakt&fuzzy=true
   body: none
-  auth: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
 }
 
 assert {
@@ -19,7 +23,7 @@ assert {
 }
 
 docs {
-  Fuzzy search using trigram matching. No auth required.
+  Fuzzy search using trigram matching. Auth is required after #62 (WU4).
   Misspelled query "reakt" should still find "react" results via trigram similarity.
   Query params:
   - q: search term (required)

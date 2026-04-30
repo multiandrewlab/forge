@@ -7,7 +7,11 @@ meta {
 get {
   url: {{baseUrl}}/api/tags?limit=20
   body: none
-  auth: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
 }
 
 script:post-response {
@@ -21,7 +25,7 @@ assert {
 }
 
 docs {
-  List or search tags. No auth required.
+  List or search tags. Auth is required after #62 (WU4).
   Query params:
   - q: search prefix (optional, e.g. ?q=react)
   - limit: 1-50 (default: 20)

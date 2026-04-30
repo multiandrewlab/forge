@@ -1,0 +1,26 @@
+meta {
+  name: Get Private Post as Non-Owner
+  type: http
+  seq: 100
+}
+
+get {
+  url: {{baseUrl}}/api/posts/c0000000-0000-0000-0000-000000000006
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+assert {
+  res.status: eq 403
+  res.body.error: eq This post is private
+}
+
+docs {
+  WU9 of #62 — visibility regression. testuser is not the owner of carol's
+  private post c…0006, so the visibility filter must reject this request
+  with HTTP 403 and the exact body { error: 'This post is private' }.
+}

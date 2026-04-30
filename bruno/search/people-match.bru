@@ -7,7 +7,11 @@ meta {
 get {
   url: {{baseUrl}}/api/search?q=test
   body: none
-  auth: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
 }
 
 assert {
@@ -19,7 +23,7 @@ assert {
 }
 
 docs {
-  Search with a generic term to exercise people matching. No auth required.
+  Search with a generic term to exercise people matching. Auth is required after #62 (WU4).
   Uses "test" as the query — may or may not match users depending on test DB state,
   but the request structure and response shape are validated.
   Query params:

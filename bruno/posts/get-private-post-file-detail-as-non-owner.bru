@@ -1,0 +1,26 @@
+meta {
+  name: Get Private Post File Detail as Non-Owner
+  type: http
+  seq: 105
+}
+
+get {
+  url: {{baseUrl}}/api/posts/c0000000-0000-0000-0000-000000000006/files/00000000-0000-0000-0000-000000000000
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+assert {
+  res.status: eq 403
+  res.body.error: eq This post is private
+}
+
+docs {
+  WU9 of #62 — visibility regression. The parent post visibility check fires
+  before the per-file lookup, so any UUID for the file ID still results in a
+  403 from the visibility filter (never reaches a 404 file-not-found path).
+}

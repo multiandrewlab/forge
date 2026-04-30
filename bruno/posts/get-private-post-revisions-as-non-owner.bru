@@ -1,0 +1,25 @@
+meta {
+  name: Get Private Post Revisions as Non-Owner
+  type: http
+  seq: 102
+}
+
+get {
+  url: {{baseUrl}}/api/posts/c0000000-0000-0000-0000-000000000006/revisions
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+assert {
+  res.status: eq 403
+  res.body.error: eq This post is private
+}
+
+docs {
+  WU9 of #62 — visibility regression. Listing revisions on a private post
+  not owned by the requester must return 403 from the visibility filter.
+}

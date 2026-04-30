@@ -1,0 +1,26 @@
+meta {
+  name: Get Private Post Comments as Non-Owner
+  type: http
+  seq: 101
+}
+
+get {
+  url: {{baseUrl}}/api/posts/c0000000-0000-0000-0000-000000000006/comments
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+assert {
+  res.status: eq 403
+  res.body.error: eq This post is private
+}
+
+docs {
+  WU9 of #62 — visibility regression. The /comments sub-route on a private
+  post owned by another user must inherit the parent post's visibility check
+  and reject testuser with HTTP 403.
+}

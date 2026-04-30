@@ -7,7 +7,11 @@ meta {
 get {
   url: {{baseUrl}}/api/search?q=react
   body: none
-  auth: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
 }
 
 assert {
@@ -25,7 +29,7 @@ script:post-response {
 }
 
 docs {
-  Basic full-text search for "react". No auth required.
+  Basic full-text search for "react". Auth is required after #62 (WU4).
   Query params:
   - q: search term (required)
   Response: { snippets, aiActions, people, query, totalResults }

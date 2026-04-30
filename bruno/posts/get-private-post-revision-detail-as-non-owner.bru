@@ -1,0 +1,29 @@
+meta {
+  name: Get Private Post Revision Detail as Non-Owner
+  type: http
+  seq: 103
+}
+
+get {
+  url: {{baseUrl}}/api/posts/c0000000-0000-0000-0000-000000000006/revisions/1
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+assert {
+  res.status: eq 403
+  res.body.error: eq This post is private
+}
+
+docs {
+  WU9 of #62 — visibility regression. Fetching a specific revision (#1) of a
+  private parent post (c…0006) as a non-owner must return 403 — the parent
+  visibility check fires after revision-number validation but before the
+  revision lookup. Note: this route's `:rev` segment is the integer revision
+  NUMBER, not the revision UUID — passing a UUID hits the 400 "Invalid
+  revision number" validator before visibility is checked.
+}
