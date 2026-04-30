@@ -10,7 +10,7 @@ import type { ContentType, Visibility } from '@forge/shared';
 
 const route = useRoute();
 const router = useRouter();
-const { fetchPost, saveRevision, updatePost, publishPost, error } = usePosts();
+const { fetchPost, saveRevision, updatePost, publishPost, error, errorStatus } = usePosts();
 const store = usePostsStore();
 const { currentPost, saveStatus, lastSavedAt } = storeToRefs(store);
 
@@ -169,7 +169,7 @@ async function handleCancel(): Promise<void> {
 
       <div
         v-if="error"
-        :data-testid="/forbidden/i.test(error) ? 'forbidden-page' : undefined"
+        :data-testid="errorStatus === 403 ? 'forbidden-page' : undefined"
         class="mb-4 p-3 bg-red-900/30 border border-red-500 rounded text-red-400 text-sm"
       >
         {{ error }}

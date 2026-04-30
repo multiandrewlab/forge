@@ -4,7 +4,6 @@ import { posts } from '../../fixtures/selectors/posts.js';
 test('delete: cascade — post + comments + votes + bookmarks all vanish', async ({
   testuser,
   alice,
-  request,
 }) => {
   // testuser creates a post (auth via refresh-token exchange — see
   // edit-own-post.spec.ts for canonical pattern).
@@ -65,6 +64,13 @@ test('delete: cascade — post + comments + votes + bookmarks all vanish', async
 
   // Cascade verification: the post itself returns 404. Postgres FK-cascade
   // (posts → comments / votes / bookmarks) implies all children are gone.
-  const postAfterDelete = await request.get(`/api/posts/${createdPostId}`);
+  //
+  // Auth note: GET /api/posts/:id is auth-required after WU2 of issue #62, so
+  // the unauthenticated `request` fixture would 401 here. Reusing testuser's
+  // bearer token keeps the assertion targeted at the 404 (post truly gone)
+  // rather than masking it behind an auth challenge.
+  const postAfterDelete = await testuser.request.get(`/api/posts/${createdPostId}`, {
+    headers: { Authorization: `Bearer ${tuToken}` },
+  });
   expect(postAfterDelete.status()).toBe(404);
 });

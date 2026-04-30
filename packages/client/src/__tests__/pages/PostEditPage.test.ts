@@ -44,6 +44,7 @@ const mockSaveRevision = vi.fn();
 const mockUpdatePost = vi.fn();
 const mockPublishPost = vi.fn();
 const mockError: Ref<string | null> = ref(null);
+const mockErrorStatus: Ref<number | null> = ref(null);
 
 vi.mock('@/composables/usePosts', () => ({
   usePosts: () => ({
@@ -52,6 +53,7 @@ vi.mock('@/composables/usePosts', () => ({
     updatePost: mockUpdatePost,
     publishPost: mockPublishPost,
     error: mockError,
+    errorStatus: mockErrorStatus,
   }),
 }));
 
@@ -124,6 +126,7 @@ describe('PostEditPage', () => {
     mockUpdatePost.mockReset();
     mockPublishPost.mockReset();
     mockError.value = null;
+    mockErrorStatus.value = null;
   });
 
   afterEach(() => {
@@ -263,9 +266,13 @@ describe('PostEditPage', () => {
 
     it('should tag the error block with data-testid="forbidden-page" when the error is a 403', async () => {
       // The Phase 6 e2e journey asserts on shell.forbiddenPage to confirm a
-      // permission boundary. Any error containing "forbidden" (case-insensitive)
-      // makes the error block addressable to the test selector.
-      mockError.value = 'Forbidden';
+      // permission boundary. The forbidden testid is rendered when errorStatus
+      // === 403 (matching PostViewPage / PostHistoryPage). String-matching the
+      // error message is fragile because copy changes (e.g. WU6 of #62 swapped
+      // bare "Forbidden" for "You can only edit your own posts"); the status
+      // code is the load-bearing signal.
+      mockError.value = 'You can only edit your own posts';
+      mockErrorStatus.value = 403;
       mockFetchPost.mockResolvedValue(undefined);
       const wrapper = await mountPage();
       await flushPromises();
@@ -275,6 +282,7 @@ describe('PostEditPage', () => {
 
     it('should NOT tag the error block when the error is unrelated to permissions', async () => {
       mockError.value = 'Failed to fetch post';
+      mockErrorStatus.value = 500;
       mockFetchPost.mockResolvedValue(undefined);
       const wrapper = await mountPage();
       await flushPromises();
