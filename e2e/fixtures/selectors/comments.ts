@@ -23,6 +23,10 @@ export const comments = {
     page.getByTestId(`comment-${id}`).getByTestId('edit-btn').first(),
   deleteBtnOf: (page: Page, id: string): Locator =>
     page.getByTestId(`comment-${id}`).getByTestId('delete-btn').first(),
+  // Direct action-row scope (bypasses nested replies). Use this when you need
+  // to assert action-button presence on a SPECIFIC comment without picking up
+  // buttons from nested children.
+  actionsOf: (page: Page, id: string): Locator => page.getByTestId(`comment-actions-${id}`),
 
   // Inline-on-revision-line
   inlineIndicator: (page: Page, line: number): Locator =>

@@ -33,7 +33,7 @@
           <p data-testid="comment-body" class="mt-1 text-sm text-gray-200 whitespace-pre-wrap">
             {{ node.body }}
           </p>
-          <div class="mt-1 flex items-center gap-2">
+          <div :data-testid="`comment-actions-${node.id}`" class="mt-1 flex items-center gap-2">
             <button
               data-testid="reply-btn"
               class="text-xs text-gray-500 hover:text-gray-300"
