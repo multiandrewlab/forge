@@ -215,6 +215,16 @@ export function handleConnection(
           },
         );
         deps.presence.update(result.data.channel, userId, user);
+        // Broadcast snapshot to ALL channel subscribers (including the joiner
+        // so they see themselves; PresenceIndicator dedups by userId). Same
+        // observable behavior as broadcast-excluding-self + direct-send-to-self
+        // but with one emission path. Documented relaxation of issue #66's
+        // "(excluding the joiner)" parenthetical.
+        deps.channels.broadcast(result.data.channel, {
+          type: 'presence:update',
+          channel: result.data.channel,
+          data: { users: deps.presence.getViewers(result.data.channel) },
+        });
       }
       return;
     }

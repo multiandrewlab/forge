@@ -57,9 +57,11 @@ function createDeps() {
       subscribe: vi.fn(),
       unsubscribe: vi.fn(),
       removeFromAll: vi.fn(),
+      broadcast: vi.fn(),
     } as unknown as ChannelManager,
     presence: {
       update: vi.fn(),
+      getViewers: vi.fn().mockReturnValue([]),
     } as unknown as PresenceTracker,
   };
 }
@@ -225,6 +227,61 @@ describe('handleConnection', () => {
         displayName: 'Test User',
       }),
     );
+  });
+
+  // ── Edge case 7b: Presence frame triggers broadcast (#66) ──────────
+
+  it('broadcasts presence:update with full viewer snapshot on every authenticated presence frame', () => {
+    const fakeUsers = [
+      {
+        id: 'user-1',
+        email: 'test@example.com',
+        displayName: 'Test User',
+        avatarUrl: null,
+        authProvider: 'local' as const,
+        createdAt: new Date(0),
+        updatedAt: new Date(0),
+      },
+    ];
+    (deps.presence.getViewers as ReturnType<typeof vi.fn>).mockReturnValue(fakeUsers);
+
+    handleConnection(
+      fakeApp as Parameters<typeof handleConnection>[0],
+      fakeSocket as unknown as Parameters<typeof handleConnection>[1],
+      fakeReq,
+      deps,
+    );
+
+    fakeSocket._handlers['message'](JSON.stringify({ type: 'auth', token: 'valid' }));
+    fakeSocket._handlers['message'](
+      JSON.stringify({ type: 'presence', channel: 'post:abc', status: 'viewing' }),
+    );
+
+    expect(deps.channels.broadcast).toHaveBeenCalledWith('post:abc', {
+      type: 'presence:update',
+      channel: 'post:abc',
+      data: { users: fakeUsers },
+    });
+  });
+
+  it('updates presence tracker before broadcasting (broadcast sees fresh snapshot)', () => {
+    handleConnection(
+      fakeApp as Parameters<typeof handleConnection>[0],
+      fakeSocket as unknown as Parameters<typeof handleConnection>[1],
+      fakeReq,
+      deps,
+    );
+
+    fakeSocket._handlers['message'](JSON.stringify({ type: 'auth', token: 'valid' }));
+    fakeSocket._handlers['message'](
+      JSON.stringify({ type: 'presence', channel: 'post:abc', status: 'viewing' }),
+    );
+
+    const updateOrder = (deps.presence.update as ReturnType<typeof vi.fn>).mock
+      .invocationCallOrder[0];
+    const broadcastOrder = (deps.channels.broadcast as ReturnType<typeof vi.fn>).mock
+      .invocationCallOrder[0];
+    expect(updateOrder).toBeLessThan(broadcastOrder);
   });
 
   // ── Edge case 8: Authenticated unknown type → ignore ───────────────
