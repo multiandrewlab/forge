@@ -23,6 +23,14 @@ export default tseslint.config(
     },
   },
   {
-    ignores: ['**/dist/**', '**/coverage/**', '**/.gitkeep', '.claude/**', 'scripts/**'],
+    ignores: [
+      '**/dist/**',
+      '**/coverage/**',
+      '**/.gitkeep',
+      '.claude/**',
+      'scripts/**',
+      'e2e/playwright-report/**',
+      'e2e/test-results/**',
+    ],
   },
 );
