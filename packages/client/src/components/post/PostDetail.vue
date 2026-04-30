@@ -25,6 +25,14 @@
 
     <!-- Single-file layout (existing) -->
     <div v-else class="mt-4 flex-1">
+      <LinkPreviewCard
+        v-if="fullPost?.linkUrl"
+        class="mb-3"
+        :link-url="fullPost.linkUrl"
+        :link-preview="fullPost.linkPreview"
+        :is-author="fullPost.authorId === authStore.user?.id"
+        @refresh="handleRefreshPreview"
+      />
       <CodeViewer
         v-if="revision"
         :code="revision.content"
@@ -91,6 +99,7 @@ import CommentSection from './CommentSection.vue';
 import CommentInput from './CommentInput.vue';
 import InlineComment from './InlineComment.vue';
 import CodeRunner from './CodeRunner.vue';
+import LinkPreviewCard from './LinkPreviewCard.vue';
 import { useRouter } from 'vue-router';
 import { useComments } from '../../composables/useComments.js';
 import { useCommentsStore } from '../../stores/comments.js';
@@ -185,6 +194,18 @@ async function handleFork(): Promise<void> {
   const newPostId = await forkPost(props.post.id);
   if (newPostId) {
     router.push(`/posts/${newPostId}/edit`);
+  }
+}
+
+async function handleRefreshPreview(): Promise<void> {
+  if (!fullPost.value) return;
+  const id = fullPost.value.id;
+  const res = await apiFetch(`/api/posts/${id}/refresh-preview`, { method: 'POST' });
+  if (res.ok) {
+    const body = (await res.json()) as { post: PostWithRevision };
+    if (fullPost.value) {
+      fullPost.value.linkPreview = body.post.linkPreview;
+    }
   }
 }
 </script>

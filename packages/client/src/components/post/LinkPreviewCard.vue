@@ -1,6 +1,6 @@
 <template>
   <!-- With link preview data -->
-  <div v-if="linkPreview">
+  <div v-if="linkPreview" data-testid="link-preview-card">
     <a
       :href="linkUrl"
       target="_blank"
@@ -62,7 +62,11 @@
   </div>
 
   <!-- Fallback: no link preview -->
-  <div v-else class="flex items-center gap-2 rounded-lg border border-gray-700 px-3 py-2">
+  <div
+    v-else
+    data-testid="link-preview-card"
+    class="flex items-center gap-2 rounded-lg border border-gray-700 px-3 py-2"
+  >
     <svg
       class="h-4 w-4 shrink-0 text-gray-500"
       fill="none"
