@@ -111,6 +111,23 @@ export class SandboxManager {
       }
     });
 
+    // Surface worker-level failures (module load errors, uncaught throws,
+    // postMessage deserialization failures). Without this, a worker that
+    // fails to instantiate is silently lost until the 30s execution timeout.
+    worker.addEventListener('error', (event: Event) => {
+      if (finished) return;
+      const errEvent = event as ErrorEvent;
+      const message = errEvent.message ?? 'Worker error (no message)';
+      teardown();
+      options.onError(`Worker error: ${message}`);
+    });
+
+    worker.addEventListener('messageerror', (_event: Event) => {
+      if (finished) return;
+      teardown();
+      options.onError('Worker messageerror: failed to deserialize a message');
+    });
+
     // Send execute message to the worker
     worker.postMessage({
       type: 'execute',

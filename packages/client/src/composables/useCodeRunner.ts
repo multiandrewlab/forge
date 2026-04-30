@@ -2,6 +2,13 @@ import { ref, onScopeDispose } from 'vue';
 import type { SandboxLanguage } from '../lib/sandbox/languages.js';
 import { SandboxManager } from '../lib/sandbox/manager.js';
 import type { ExecuteHandle } from '../lib/sandbox/manager.js';
+// Vite `?worker` suffix imports compile and bundle the worker module
+// (TS → JS, with all dynamic imports). Using `new Worker(new URL(...))`
+// inline previously fell back to copying the raw .ts source as a static
+// asset because the URL was assigned to a variable before construction,
+// defeating Vite's static worker analyzer (issue #70).
+import JsWorker from '../lib/sandbox/workers/js-worker.ts?worker';
+import PythonWorker from '../lib/sandbox/workers/python-worker.ts?worker';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -28,11 +35,7 @@ export type CodeRunnerStatus = 'idle' | 'loading' | 'running' | 'done' | 'error'
 
 /* v8 ignore start — Worker constructor unavailable in jsdom */
 export function createWorker(language: SandboxLanguage): Worker {
-  const url =
-    language === 'python'
-      ? new URL('../lib/sandbox/workers/python-worker.ts', import.meta.url)
-      : new URL('../lib/sandbox/workers/js-worker.ts', import.meta.url);
-  return new Worker(url, { type: 'module' });
+  return language === 'python' ? new PythonWorker() : new JsWorker();
 }
 /* v8 ignore stop */
 

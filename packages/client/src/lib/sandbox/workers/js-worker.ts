@@ -1,5 +1,7 @@
 /* v8 ignore start */
 import { neutralizeBrowserApis } from './neutralize-apis.js';
+import { pickEntrySource } from './pick-entry-source.js';
+import type { SandboxFile } from './pick-entry-source.js';
 
 /** Minimal worker global shape -- avoids dependency on WebWorker lib types */
 interface WorkerGlobal {
@@ -11,16 +13,11 @@ declare const self: WorkerGlobal & Record<string, unknown>;
 
 neutralizeBrowserApis(self as Record<string, unknown>);
 
-interface VfsFile {
-  name: string;
-  content: string;
-}
-
 interface ExecuteMessage {
   type: 'execute';
-  code: string;
   language: 'javascript' | 'typescript';
-  files?: VfsFile[];
+  files: readonly SandboxFile[];
+  entryFile: string;
   stdin?: string;
 }
 
@@ -89,7 +86,7 @@ function formatHandleArgs(ctx: QuickJSContext, args: QuickJSHandle[]): string {
 self.onmessage = async (event: MessageEvent<ExecuteMessage>) => {
   if (event.data.type !== 'execute') return;
 
-  const { code, language, files = [], stdin = '' } = event.data;
+  const { language, files, entryFile, stdin = '' } = event.data;
   const startTime = performance.now();
 
   let context: QuickJSContext | null = null;
@@ -142,7 +139,7 @@ self.onmessage = async (event: MessageEvent<ExecuteMessage>) => {
     // Mount VFS files via module loader
     // Files are made available as global __files for require()-like access
     const filesJson = ctx.newString(
-      JSON.stringify(Object.fromEntries(files.map((f) => [f.name, f.content]))),
+      JSON.stringify(Object.fromEntries(files.map((f) => [f.filename, f.content]))),
     );
     ctx.setProp(ctx.global, '__filesJson', filesJson);
     filesJson.dispose();
@@ -159,10 +156,13 @@ self.onmessage = async (event: MessageEvent<ExecuteMessage>) => {
       }
     `);
 
+    // Resolve entry source from the manager's files[] / entryFile contract.
+    // Throws (caught below) if the manager omitted the entry file.
+    let executableCode = pickEntrySource(files, entryFile);
+
     // Transpile TypeScript if needed
-    let executableCode = code;
     if (language === 'typescript') {
-      executableCode = await transpileTypeScript(code);
+      executableCode = await transpileTypeScript(executableCode);
     }
 
     // Execute the user code
