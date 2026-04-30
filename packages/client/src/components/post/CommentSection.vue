@@ -1,9 +1,9 @@
 <template>
-  <div class="flex flex-col gap-4">
+  <div data-testid="comment-section" class="flex flex-col gap-4">
     <h3 class="text-sm font-medium text-gray-400">Comments</h3>
 
     <!-- General comments (threaded) -->
-    <div v-if="store.commentTree.length > 0" class="flex flex-col gap-2">
+    <div v-if="store.commentTree.length > 0" data-testid="comment-list" class="flex flex-col gap-2">
       <CommentThread
         v-for="node in store.commentTree"
         :key="node.id"
@@ -12,7 +12,7 @@
         :current-user-id="currentUserId"
       />
     </div>
-    <p v-else class="text-sm text-gray-500">No comments yet.</p>
+    <p v-else data-testid="comments-empty" class="text-sm text-gray-500">No comments yet.</p>
 
     <!-- Stale comments from older revisions -->
     <div v-if="store.staleComments.length > 0" class="mt-4">

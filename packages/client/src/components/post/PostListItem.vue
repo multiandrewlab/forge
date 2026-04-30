@@ -1,6 +1,7 @@
 <template>
   <div
     data-testid="post-list-item"
+    :data-post-id="post.id"
     class="cursor-pointer border-b border-gray-700 p-4 transition-colors hover:bg-gray-800"
     :class="{ 'bg-gray-800': selected }"
     @click="handleClick"
@@ -29,7 +30,7 @@
     </div>
     <h3 class="mb-1 text-sm font-medium text-gray-100">{{ post.title }}</h3>
     <div class="flex items-center gap-3 text-xs text-gray-500">
-      <span class="flex items-center gap-1">
+      <span data-testid="post-list-item-vote-score" class="flex items-center gap-1">
         <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
         </svg>
@@ -46,6 +47,37 @@
         </svg>
         {{ post.forkCount }}
       </span>
+      <button
+        data-testid="post-list-item-bookmark-toggle-btn"
+        class="flex items-center gap-1 text-xs"
+        :class="isBookmarked ? 'text-yellow-400' : 'text-gray-500 hover:text-gray-300'"
+        aria-label="Bookmark"
+        @click.stop="handleBookmark"
+      >
+        <svg
+          v-if="isBookmarked"
+          data-testid="post-list-item-bookmark-on-icon"
+          class="h-3.5 w-3.5"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          fill="currentColor"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
+          />
+        </svg>
+        <svg v-else class="h-3.5 w-3.5" viewBox="0 0 24 24" stroke="currentColor" fill="none">
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
+          />
+        </svg>
+      </button>
       <span class="flex items-center gap-1 rounded bg-gray-700 px-1.5 py-0.5 text-xs">
         <svg
           v-if="post.contentType === 'link'"
@@ -73,12 +105,22 @@
 // uses lib: ["ES2022"] without "DOM", so we declare the browser globals we need.
 declare const window: { matchMedia: (query: string) => { matches: boolean } };
 
+import { computed } from 'vue';
 import { RouterLink, useRouter } from 'vue-router';
 import type { PostWithAuthor } from '@forge/shared';
+import { useFeedStore } from '../../stores/feed.js';
+import { useBookmarks } from '../../composables/useBookmarks.js';
 
 const props = defineProps<{ post: PostWithAuthor; selected: boolean }>();
 const emit = defineEmits<{ select: [id: string] }>();
 const router = useRouter();
+const feedStore = useFeedStore();
+const { toggleBookmark } = useBookmarks();
+const isBookmarked = computed(() => feedStore.userBookmarks[props.post.id] === true);
+
+function handleBookmark(): void {
+  toggleBookmark(props.post.id);
+}
 
 function handleClick(): void {
   // On mobile (<768px), navigate to full-screen post view

@@ -6,6 +6,16 @@ import { useFeedStore } from '../../../stores/feed.js';
 import PostListItem from '../../../components/post/PostListItem.vue';
 import type { PostWithAuthor } from '@forge/shared';
 
+const mockToggleBookmark = vi.fn();
+
+vi.mock('../../../composables/useBookmarks.js', () => ({
+  useBookmarks: () => ({
+    toggleBookmark: mockToggleBookmark,
+    loading: { value: false },
+    error: { value: null },
+  }),
+}));
+
 const mockPost: PostWithAuthor = {
   id: '1',
   authorId: 'u1',
@@ -41,6 +51,10 @@ function createTestRouter() {
 
 describe('PostListItem', () => {
   beforeEach(() => {
+    // Pinia must be active before mounting — the component's <script setup>
+    // calls useFeedStore() at composition time for the new bookmark wiring.
+    setActivePinia(createPinia());
+    mockToggleBookmark.mockClear();
     // Reset matchMedia to desktop default before each test
     Object.defineProperty(window, 'matchMedia', {
       writable: true,

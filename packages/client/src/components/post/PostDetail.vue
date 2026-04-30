@@ -48,6 +48,7 @@
           :comment="c"
         />
         <CommentInput
+          data-testid="inline-comment-input-wrapper"
           placeholder="Add inline comment..."
           :show-cancel="true"
           @submit="handleInlineComment"
@@ -58,6 +59,7 @@
       <div v-for="[line, lineComments] in commentsStore.inlineComments" :key="line" class="mt-1">
         <button
           v-if="inlineCommentLine !== line"
+          :data-testid="`inline-comment-indicator-line-${line}`"
           class="text-xs text-primary hover:underline"
           @click="inlineCommentLine = line"
         >

@@ -11,8 +11,14 @@
         </div>
       </div>
       <!-- Empty state -->
-      <div v-else-if="!loading && posts.length === 0" class="p-8 text-center">
-        <p class="text-sm text-gray-400">{{ emptyMessage }}</p>
+      <div
+        v-else-if="!loading && posts.length === 0"
+        data-testid="empty-state"
+        class="p-8 text-center"
+      >
+        <p data-testid="empty-state-message" class="text-sm text-gray-400">
+          {{ emptyMessage }}
+        </p>
         <RouterLink
           v-if="showCreateCta"
           to="/posts/new"

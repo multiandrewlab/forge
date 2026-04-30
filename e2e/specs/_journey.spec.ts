@@ -136,8 +136,8 @@ test.describe.serial('Phase 4 — social (search + vote + bookmark + comment)', 
 
   test('toggling bookmark on shows the on-state icon', async ({ testuser }) => {
     await testuser.goto(`/posts/${SEEDED_POST_ID}`);
-    await bookmarks.bookmarkToggle(testuser).click();
-    await expect(bookmarks.bookmarkOnIcon(testuser)).toBeVisible();
+    await bookmarks.toggleBtn(testuser).click();
+    await expect(bookmarks.onIcon(testuser)).toBeVisible();
   });
 
   test('comment is posted and appears in the thread', async ({ testuser }) => {
@@ -146,13 +146,13 @@ test.describe.serial('Phase 4 — social (search + vote + bookmark + comment)', 
     // newly-posted text — that would just match the seeded comment. Look up
     // the specific testid+text combination instead, which is unambiguous.
     await testuser.goto(`/posts/${SEEDED_POST_ID}`);
-    await comments.commentInput(testuser).fill('Journey comment.');
-    await comments.commentSubmit(testuser).click();
+    await comments.input(testuser).fill('Journey comment.');
+    await comments.submit(testuser).click();
     await expect(
       testuser.getByTestId('comment-body').filter({ hasText: 'Journey comment.' }),
     ).toBeVisible();
     // Sanity: shared selector still resolves; keeps imports load-bearing.
-    await expect(comments.commentBody(testuser)).toBeVisible();
+    await expect(comments.section(testuser)).toBeVisible();
   });
 });
 

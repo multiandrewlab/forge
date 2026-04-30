@@ -16,6 +16,7 @@
 
     <!-- Downvote -->
     <button
+      data-testid="downvote-btn"
       class="flex items-center gap-1 text-sm"
       :class="currentVote === -1 ? 'text-red-400' : 'text-gray-400'"
       aria-label="Downvote"
