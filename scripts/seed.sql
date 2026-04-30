@@ -18,7 +18,8 @@ INSERT INTO users (id, email, display_name, avatar_url, auth_provider, password_
   ('a0000000-0000-0000-0000-000000000001', 'alice@example.com', 'Alice Chen', 'https://i.pravatar.cc/150?u=alice', 'local', '$2b$12$jrcHUcVQnE.swctPk5GnreW9hkkyFqh8A9p2GnEaRrbxEaxXESYw2'),
   ('a0000000-0000-0000-0000-000000000002', 'bob@example.com', 'Bob Martinez', 'https://i.pravatar.cc/150?u=bob', 'google', NULL),
   ('a0000000-0000-0000-0000-000000000003', 'carol@example.com', 'Carol Davis', NULL, 'local', '$2b$12$jrcHUcVQnE.swctPk5GnreW9hkkyFqh8A9p2GnEaRrbxEaxXESYw2'),
-  ('a0000000-0000-0000-0000-000000000099', 'testuser@example.com', 'Test User', NULL, 'local', '$2b$12$jrcHUcVQnE.swctPk5GnreW9hkkyFqh8A9p2GnEaRrbxEaxXESYw2');
+  ('a0000000-0000-0000-0000-000000000099', 'testuser@example.com', 'Test User', NULL, 'local', '$2b$12$jrcHUcVQnE.swctPk5GnreW9hkkyFqh8A9p2GnEaRrbxEaxXESYw2'),
+  ('a0000000-0000-0000-0000-000000000004', 'paginationuser@example.com', 'Pagination User', NULL, 'local', '$2b$12$jrcHUcVQnE.swctPk5GnreW9hkkyFqh8A9p2GnEaRrbxEaxXESYw2');
 
 -- ============================================================
 -- Tags (5)
@@ -28,7 +29,8 @@ INSERT INTO tags (id, name) VALUES
   ('b0000000-0000-0000-0000-000000000002', 'python'),
   ('b0000000-0000-0000-0000-000000000003', 'ai-prompts'),
   ('b0000000-0000-0000-0000-000000000004', 'react'),
-  ('b0000000-0000-0000-0000-000000000005', 'devops');
+  ('b0000000-0000-0000-0000-000000000005', 'devops'),
+  ('b0000000-0000-0000-0000-000000000006', 'tag-pagination-fixture');
 
 -- ============================================================
 -- Posts (13: mix of snippet/prompt/document/link + testuser fixture)
@@ -148,5 +150,44 @@ INSERT INTO prompt_variables (id, post_id, name, placeholder, sort_order, defaul
   ('f0000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000004', 'component_name', 'e.g., UserProfile', 0, 'MyComponent'),
   ('f0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000004', 'props', 'e.g., name: string, age: number', 1, NULL),
   ('f0000000-0000-0000-0000-000000000003', 'c0000000-0000-0000-0000-000000000004', 'features', 'e.g., loading state, error handling', 2, 'responsive, accessible');
+
+-- ============================================================
+-- Pagination fixture posts (Issue #49 — deterministic data
+-- for e2e/specs/search/pagination.spec.ts and filter-chip-since.spec.ts)
+--
+-- NOTE: revision UUID range shifted from 100-124 to 200-224 to avoid
+-- collision with existing testuser revisions at d0...000100/000101.
+-- Post UUID range shifted to 200-224 in lockstep so post+revision share
+-- the same numeric suffix for easier cross-referencing.
+-- ============================================================
+
+INSERT INTO posts (id, author_id, title, content_type, language, visibility, is_draft, view_count, created_at)
+SELECT
+  ('c0000000-0000-0000-0000-000000000' || lpad((200 + n)::text, 3, '0'))::uuid,
+  'a0000000-0000-0000-0000-000000000004',
+  'Pagination fixture post ' || n,
+  'snippet',
+  'typescript',
+  'public',
+  false,
+  0,
+  NOW() - interval '2 days'
+FROM generate_series(1, 25) AS n;
+
+INSERT INTO post_revisions (id, post_id, author_id, content, message, revision_number)
+SELECT
+  ('d0000000-0000-0000-0000-000000000' || lpad((200 + n)::text, 3, '0'))::uuid,
+  ('c0000000-0000-0000-0000-000000000' || lpad((200 + n)::text, 3, '0'))::uuid,
+  'a0000000-0000-0000-0000-000000000004',
+  'pagination fixture body ' || n,
+  'Initial pagination fixture',
+  1
+FROM generate_series(1, 25) AS n;
+
+INSERT INTO post_tags (post_id, tag_id)
+SELECT
+  ('c0000000-0000-0000-0000-000000000' || lpad((200 + n)::text, 3, '0'))::uuid,
+  'b0000000-0000-0000-0000-000000000006'
+FROM generate_series(1, 25) AS n;
 
 COMMIT;
