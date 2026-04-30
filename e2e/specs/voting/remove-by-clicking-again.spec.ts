@@ -7,6 +7,7 @@ test('voting: clicking upvote twice removes the vote (idempotency) on a fresh po
   // Use a freshly created post (initial vote_count = 0) so the assertion is
   // immune to cross-worker contention on the seeded cheatsheet baseline.
   const refresh = await testuser.request.post('/api/auth/refresh');
+  expect(refresh.ok()).toBe(true);
   const { accessToken } = (await refresh.json()) as { accessToken: string };
   const created = await testuser.request.post('/api/posts', {
     headers: { Authorization: `Bearer ${accessToken}` },

@@ -24,6 +24,7 @@ test.fixme('comments: cannot edit own comment after the edit window expires', as
       isDraft: false,
     },
   });
+  expect(post.ok()).toBe(true);
   const {
     post: { id: postId },
   } = (await post.json()) as { post: { id: string } };
@@ -31,6 +32,7 @@ test.fixme('comments: cannot edit own comment after the edit window expires', as
     headers: auth,
     data: { body: 'too late' },
   });
+  expect(c.ok()).toBe(true);
   const {
     comment: { id: commentId },
   } = (await c.json()) as { comment: { id: string } };

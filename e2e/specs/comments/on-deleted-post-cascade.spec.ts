@@ -17,6 +17,7 @@ test('comments: GET /comments returns 404 after the post is deleted', async ({ t
       isDraft: false,
     },
   });
+  expect(post.ok()).toBe(true);
   const {
     post: { id: postId },
   } = (await post.json()) as { post: { id: string } };

@@ -8,6 +8,7 @@ test('voting: vote score in feed view updates after upvoting on a fresh post', a
   // locator by its data-post-id to dodge cross-worker contention on the
   // seeded cheatsheet baseline.
   const refresh = await testuser.request.post('/api/auth/refresh');
+  expect(refresh.ok()).toBe(true);
   const { accessToken } = (await refresh.json()) as { accessToken: string };
   const created = await testuser.request.post('/api/posts', {
     headers: { Authorization: `Bearer ${accessToken}` },

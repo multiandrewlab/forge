@@ -18,6 +18,7 @@ test('comments: delete own — testuser deletes their comment via UI', async ({ 
       isDraft: false,
     },
   });
+  expect(post.ok()).toBe(true);
   const {
     post: { id: postId },
   } = (await post.json()) as { post: { id: string } };
@@ -25,6 +26,7 @@ test('comments: delete own — testuser deletes their comment via UI', async ({ 
     headers: auth,
     data: { body: 'doomed' },
   });
+  expect(comment.ok()).toBe(true);
   const {
     comment: { id: commentId },
   } = (await comment.json()) as { comment: { id: string } };

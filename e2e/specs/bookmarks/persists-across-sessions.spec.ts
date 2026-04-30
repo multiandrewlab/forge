@@ -11,6 +11,7 @@ test('bookmarks: persist across sessions (close context, reopen)', async ({
   // bookmarks THIS post; the assertion against /bookmarks looks up THIS post
   // by title (unique per run).
   const refresh = await testuser.request.post('/api/auth/refresh');
+  expect(refresh.ok()).toBe(true);
   const { accessToken } = (await refresh.json()) as { accessToken: string };
   const auth = { Authorization: `Bearer ${accessToken}` };
   const uniqueTitle = `Bookmark-persists seed ${Date.now()}`;
@@ -25,6 +26,7 @@ test('bookmarks: persist across sessions (close context, reopen)', async ({
       isDraft: false,
     },
   });
+  expect(created.ok()).toBe(true);
   const {
     post: { id: postId },
   } = (await created.json()) as { post: { id: string } };

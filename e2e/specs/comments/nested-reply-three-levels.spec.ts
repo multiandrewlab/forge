@@ -18,6 +18,7 @@ test('comments: nested replies render three levels deep', async ({ testuser }) =
       isDraft: false,
     },
   });
+  expect(post.ok()).toBe(true);
   const {
     post: { id: postId },
   } = (await post.json()) as { post: { id: string } };
@@ -26,6 +27,7 @@ test('comments: nested replies render three levels deep', async ({ testuser }) =
     headers: auth,
     data: { body: 'depth-0' },
   });
+  expect(top.ok()).toBe(true);
   const {
     comment: { id: topId },
   } = (await top.json()) as { comment: { id: string } };
@@ -34,6 +36,7 @@ test('comments: nested replies render three levels deep', async ({ testuser }) =
     headers: auth,
     data: { body: 'depth-1', parentId: topId },
   });
+  expect(mid.ok()).toBe(true);
   const {
     comment: { id: midId },
   } = (await mid.json()) as { comment: { id: string } };
@@ -42,6 +45,7 @@ test('comments: nested replies render three levels deep', async ({ testuser }) =
     headers: auth,
     data: { body: 'depth-2', parentId: midId },
   });
+  expect(leaf.ok()).toBe(true);
   const {
     comment: { id: leafId },
   } = (await leaf.json()) as { comment: { id: string } };

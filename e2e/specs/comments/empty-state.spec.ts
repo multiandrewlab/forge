@@ -18,6 +18,7 @@ test('comments: empty-state appears for a brand-new post', async ({ testuser }) 
       isDraft: false,
     },
   });
+  expect(post.ok()).toBe(true);
   const {
     post: { id: postId },
   } = (await post.json()) as { post: { id: string } };

@@ -9,13 +9,18 @@ test('bookmarks: /bookmarks page shows empty-state when user has no bookmarks', 
   // off before navigating. This is idempotent — if no bookmarks exist (the
   // common case post-reset), the loop is a no-op.
   const refresh = await testuser.request.post('/api/auth/refresh');
+  expect(refresh.ok()).toBe(true);
   const { accessToken } = (await refresh.json()) as { accessToken: string };
   const auth = { Authorization: `Bearer ${accessToken}` };
   const list = await testuser.request.get('/api/bookmarks?limit=100', { headers: auth });
   expect(list.ok()).toBe(true);
   const { posts } = (await list.json()) as { posts: { id: string }[] };
   for (const p of posts) {
-    await testuser.request.post(`/api/posts/${p.id}/bookmark`, { headers: auth, data: {} });
+    const toggleRes = await testuser.request.post(`/api/posts/${p.id}/bookmark`, {
+      headers: auth,
+      data: {},
+    });
+    expect(toggleRes.ok()).toBe(true);
   }
 
   await testuser.goto('/bookmarks');

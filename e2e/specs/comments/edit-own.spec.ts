@@ -20,6 +20,7 @@ test('comments: edit own — testuser edits their comment via UI', async ({ test
       isDraft: false,
     },
   });
+  expect(post.ok()).toBe(true);
   const {
     post: { id: postId },
   } = (await post.json()) as { post: { id: string } };
@@ -27,6 +28,7 @@ test('comments: edit own — testuser edits their comment via UI', async ({ test
     headers: auth,
     data: { body: 'before-edit' },
   });
+  expect(comment.ok()).toBe(true);
   const {
     comment: { id: commentId },
   } = (await comment.json()) as { comment: { id: string } };

@@ -7,6 +7,7 @@ test("bookmarks: /bookmarks page lists the user's bookmark on a fresh post", asy
   // listing by the unique title to dodge cross-worker pollution that could
   // add or remove other testuser bookmarks mid-flight.
   const refresh = await testuser.request.post('/api/auth/refresh');
+  expect(refresh.ok()).toBe(true);
   const { accessToken } = (await refresh.json()) as { accessToken: string };
   const auth = { Authorization: `Bearer ${accessToken}` };
   const uniqueTitle = `Bookmark-list seed ${Date.now()}`;
@@ -21,6 +22,7 @@ test("bookmarks: /bookmarks page lists the user's bookmark on a fresh post", asy
       isDraft: false,
     },
   });
+  expect(created.ok()).toBe(true);
   const {
     post: { id: postId },
   } = (await created.json()) as { post: { id: string } };

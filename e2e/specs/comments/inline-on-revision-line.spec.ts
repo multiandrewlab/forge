@@ -21,6 +21,7 @@ test('comments: inline comment on revision line — indicator + body render', as
       isDraft: false,
     },
   });
+  expect(create.ok()).toBe(true);
   // POST /api/posts returns { post, revision } as SEPARATE top-level fields per
   // packages/server/src/routes/posts.ts:106-110 (toPost(...) + toRevision(...)).
   const {

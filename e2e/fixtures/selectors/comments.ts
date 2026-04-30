@@ -6,9 +6,14 @@ export const comments = {
   list: (page: Page): Locator => page.getByTestId('comment-list'),
   empty: (page: Page): Locator => page.getByTestId('comments-empty'),
 
-  // CommentInput (top-level new-comment form, lives at the bottom of CommentSection)
-  input: (page: Page): Locator => page.getByTestId('comment-input').first(),
-  submit: (page: Page): Locator => page.getByTestId('comment-submit-btn').first(),
+  // CommentInput (top-level new-comment form, lives at the bottom of CommentSection).
+  // Scoped to `comment-section` so it doesn't accidentally match the inline-comment
+  // form (PostDetail) or reply/edit forms (CommentThread) which also render
+  // `comment-input` / `comment-submit-btn` testids.
+  input: (page: Page): Locator =>
+    page.getByTestId('comment-section').getByTestId('comment-input').last(),
+  submit: (page: Page): Locator =>
+    page.getByTestId('comment-section').getByTestId('comment-submit-btn').last(),
 
   // Per-comment thread item — pass UUID for uniqueness
   item: (page: Page, id: string): Locator => page.getByTestId(`comment-${id}`),

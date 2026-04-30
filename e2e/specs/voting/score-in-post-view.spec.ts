@@ -6,6 +6,7 @@ test('voting: post-view shows vote_count from the server', async ({ testuser, al
   // Asserts the post-view renders the server-side vote_count for a post that
   // the viewer themselves has not voted on.
   const tuRefresh = await testuser.request.post('/api/auth/refresh');
+  expect(tuRefresh.ok()).toBe(true);
   const { accessToken: tuToken } = (await tuRefresh.json()) as { accessToken: string };
   const post = await testuser.request.post('/api/posts', {
     headers: { Authorization: `Bearer ${tuToken}` },
@@ -23,6 +24,7 @@ test('voting: post-view shows vote_count from the server', async ({ testuser, al
   } = (await post.json()) as { post: { id: string } };
 
   const aliceRefresh = await alice.request.post('/api/auth/refresh');
+  expect(aliceRefresh.ok()).toBe(true);
   const { accessToken: aliceToken } = (await aliceRefresh.json()) as { accessToken: string };
   await alice.request.post(`/api/posts/${postId}/vote`, {
     headers: { Authorization: `Bearer ${aliceToken}` },
