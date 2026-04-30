@@ -20,8 +20,14 @@ export async function runSearchChain(
   query: string,
 ): Promise<AiSearchFilters | null> {
   try {
-    const result = await chain.invoke({ query });
-    const parsed: unknown = JSON.parse(result);
+    // Use stream() + accumulate so this chain works against ChatMock, whose
+    // _generate throws "only supports streaming." Matches the canonical
+    // pattern used by autocomplete/generate/playground chains. (Issue #49)
+    let raw = '';
+    for await (const chunk of await chain.stream({ query })) {
+      raw += chunk;
+    }
+    const parsed: unknown = JSON.parse(raw);
     const validation = aiSearchFiltersSchema.safeParse(parsed);
     if (!validation.success) {
       return null;
