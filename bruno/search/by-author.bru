@@ -1,0 +1,34 @@
+meta {
+  name: search by author
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/search?q=typescript&author=Alice
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.snippets: isArray
+  res.body.page: isNumber
+  res.body.totalPages: isNumber
+}
+
+docs {
+  Search filtered by author display_name (case-insensitive). The author
+  filter pushes a `LOWER(u.display_name) = LOWER($n)` predicate into the
+  primary search query. Issue #49.
+
+  Query params:
+  - q: search term (required)
+  - author: display_name (case-insensitive exact match; min 1, max 100)
+
+  Response includes the new pagination contract: { page, totalPages }.
+}

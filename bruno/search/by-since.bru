@@ -1,0 +1,31 @@
+meta {
+  name: search by since (7d window)
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/api/search?q=fixture&since=7d
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.snippets: isArray
+  res.body.page: isNumber
+  res.body.totalPages: isNumber
+}
+
+docs {
+  Search restricted to posts created in the last 7 days. Accepts
+  z.enum(['today', '7d', '30d']) — anything else returns 400. Issue #49.
+
+  Query params:
+  - q: search term (required)
+  - since: 'today' | '7d' | '30d'
+}

@@ -1,0 +1,39 @@
+meta {
+  name: search ai (page=1 only)
+  type: http
+  seq: 11
+}
+
+get {
+  url: {{baseUrl}}/api/search?q=python+csv+parsing&ai=true&page=1
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.snippets: isArray
+  res.body.page: eq 1
+  res.body.totalPages: isNumber
+}
+
+docs {
+  AI-resolved search on page=1. The route gates AI resolution behind
+  `page === 1`; subsequent pages must reuse the resolved tag/type via
+  URL params (no re-resolution). Issue #49.
+
+  Local env runs LLM_PROVIDER=mock so this exercises the deterministic
+  mock provider rather than a real LLM. The named mock-script key
+  `search-resolves-to-typescript-tag` lands in WU7 — until then this
+  request hits the default mock path (which still returns 200; just
+  without a guaranteed `aiResolvedFilters` echo).
+
+  Query params:
+  - q: search term (required)
+  - ai: 'true' enables the AI resolution chain
+  - page: must be 1 for AI resolution to fire (gate)
+}

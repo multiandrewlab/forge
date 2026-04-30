@@ -1,0 +1,25 @@
+meta {
+  name: search pagination (page=1001 → 400)
+  type: http
+  seq: 15
+}
+
+get {
+  url: {{baseUrl}}/api/search?q=typescript&page=1001
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+assert {
+  res.status: eq 400
+}
+
+docs {
+  Validates that the page upper bound (1000) is enforced — anything
+  beyond returns 400. This caps OFFSET amplification at ~20k results
+  to bound DoS exposure. Issue #49 design amendment §Server route changes.
+}
