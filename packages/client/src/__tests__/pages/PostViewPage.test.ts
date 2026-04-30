@@ -171,6 +171,7 @@ function createMockPost(overrides: Partial<PostWithRevision> = {}): PostWithRevi
         createdAt: new Date('2025-01-01'),
       },
     ],
+    tags: [],
     ...overrides,
   };
 }
@@ -327,6 +328,33 @@ describe('PostViewPage', () => {
       expect(wrapper.text()).toContain('code');
       expect(wrapper.text()).toContain('typescript');
       expect(wrapper.text()).toContain('Rev 1');
+    });
+
+    it('renders post-tag-chip-<name> for each tag (#63)', async () => {
+      const post = createMockPost({ tags: ['rust', 'typescript'] });
+      mockFetchPost.mockImplementation(async () => {
+        mockCurrentPost.value = post;
+      });
+      mockUser.value = createMockUser({ id: post.authorId });
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid="post-tag-chip-rust"]').exists()).toBe(true);
+      expect(wrapper.find('[data-testid="post-tag-chip-typescript"]').exists()).toBe(true);
+    });
+
+    it('omits the tag-chip block when post has no tags', async () => {
+      const post = createMockPost({ tags: [] });
+      mockFetchPost.mockImplementation(async () => {
+        mockCurrentPost.value = post;
+      });
+      mockUser.value = createMockUser({ id: post.authorId });
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid^="post-tag-chip-"]').exists()).toBe(false);
     });
 
     it('should hide language when language is null', async () => {

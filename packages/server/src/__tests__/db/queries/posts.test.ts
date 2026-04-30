@@ -208,15 +208,29 @@ describe('post queries', () => {
       content: '# Hello World',
       revision_number: 2,
       message: 'Updated content',
+      tags: null,
     };
 
     it('returns post joined with latest revision', async () => {
       mockQuery.mockResolvedValue({ rows: [samplePostWithRevision], rowCount: 1 });
       const result = await findPostWithLatestRevision(samplePost.id);
-      expect(mockQuery).toHaveBeenCalledWith(
-        `SELECT p.*, pr.id AS revision_id, pr.content, pr.revision_number, pr.message FROM posts p INNER JOIN post_revisions pr ON pr.post_id = p.id WHERE p.id = $1 AND p.deleted_at IS NULL ORDER BY pr.revision_number DESC LIMIT 1`,
-        [samplePost.id],
+      // SQL contains the tags subquery via string_agg (mirrors findFeedPostById pattern).
+      // Match by normalized substring to avoid coupling test to whitespace.
+      const calls = mockQuery.mock.calls as Array<[string, unknown[]]>;
+      expect(calls).toHaveLength(1);
+      const firstCall = calls[0] as [string, unknown[]];
+      const [sql, params] = firstCall;
+      expect(sql).toContain(
+        'SELECT p.*, pr.id AS revision_id, pr.content, pr.revision_number, pr.message',
       );
+      expect(sql).toContain("string_agg(t.name, ',' ORDER BY t.name)");
+      expect(sql).toContain('FROM post_tags pt');
+      expect(sql).toContain('JOIN tags t ON t.id = pt.tag_id');
+      expect(sql).toContain('AS tags');
+      expect(sql).toContain('INNER JOIN post_revisions pr ON pr.post_id = p.id');
+      expect(sql).toContain('ORDER BY pr.revision_number DESC');
+      expect(sql).toContain('LIMIT 1');
+      expect(params).toEqual([samplePost.id]);
       expect(result).toEqual(samplePostWithRevision);
     });
 

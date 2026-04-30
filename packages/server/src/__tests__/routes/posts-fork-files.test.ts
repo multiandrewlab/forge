@@ -107,6 +107,7 @@ const sourceWithRevisionRow: PostWithRevisionRow = {
   content: 'console.log("hello");',
   revision_number: 1,
   message: 'Initial version',
+  tags: null,
 };
 
 const sourceRevisionRow: PostRevisionRow = {

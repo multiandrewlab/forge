@@ -71,6 +71,7 @@ const privatePostWithRevision: PostWithRevisionRow = {
   content: '# Kubernetes Notes',
   revision_number: 1,
   message: 'Initial version',
+  tags: null,
 };
 
 const publicPostWithRevision: PostWithRevisionRow = {
@@ -79,6 +80,7 @@ const publicPostWithRevision: PostWithRevisionRow = {
   content: 'const testFixture: string = "hello";',
   revision_number: 1,
   message: 'Initial version',
+  tags: null,
 };
 
 const privateRevisionRow: PostRevisionRow = {
