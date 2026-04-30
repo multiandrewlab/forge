@@ -185,36 +185,50 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
   );
 
   // POST /refresh
-  app.post('/refresh', async (request, reply) => {
-    const token = request.cookies.refresh_token;
-    if (!token) {
-      return reply.status(401).send({ error: 'No refresh token' });
-    }
+  app.post(
+    '/refresh',
+    {
+      config: {
+        // Workers=4 e2e runs hit /refresh many times across 3 fixtures + per-spec
+        // page navigations. Lift the per-route cap when E2E_MODE=1 so cross-test
+        // bursts can't surface as 429s. Production cap unchanged.
+        rateLimit:
+          process.env.E2E_MODE === '1'
+            ? { max: 10_000, timeWindow: '1 minute' }
+            : { max: 30, timeWindow: '1 minute' },
+      },
+    },
+    async (request, reply) => {
+      const token = request.cookies.refresh_token;
+      if (!token) {
+        return reply.status(401).send({ error: 'No refresh token' });
+      }
 
-    let payload: { id: string };
-    try {
-      payload = verifyRefreshToken(app, token);
-    } catch {
-      return reply.status(401).send({ error: 'Invalid refresh token' });
-    }
+      let payload: { id: string };
+      try {
+        payload = verifyRefreshToken(app, token);
+      } catch {
+        return reply.status(401).send({ error: 'Invalid refresh token' });
+      }
 
-    const row = await findUserById(payload.id);
-    if (!row) {
-      return reply.status(401).send({ error: 'User not found' });
-    }
+      const row = await findUserById(payload.id);
+      if (!row) {
+        return reply.status(401).send({ error: 'User not found' });
+      }
 
-    const user = toUser(row);
-    const accessToken = generateAccessToken(app, {
-      id: user.id,
-      email: user.email,
-      displayName: user.displayName,
-    });
-    const newRefreshToken = generateRefreshToken(app, { id: user.id });
+      const user = toUser(row);
+      const accessToken = generateAccessToken(app, {
+        id: user.id,
+        email: user.email,
+        displayName: user.displayName,
+      });
+      const newRefreshToken = generateRefreshToken(app, { id: user.id });
 
-    void reply.setCookie('refresh_token', newRefreshToken, getRefreshCookieOptions());
+      void reply.setCookie('refresh_token', newRefreshToken, getRefreshCookieOptions());
 
-    return reply.send({ accessToken });
-  });
+      return reply.send({ accessToken });
+    },
+  );
 
   // POST /logout
   app.post('/logout', async (_request, reply) => {
