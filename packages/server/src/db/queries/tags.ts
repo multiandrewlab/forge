@@ -1,8 +1,24 @@
 import { query } from '../connection.js';
 import type { TagRow, PostTagRow, UserTagSubscriptionRow } from './types.js';
 
-export async function findTagByName(name: string): Promise<TagRow | null> {
-  const result = await query<TagRow>('SELECT * FROM tags WHERE name = $1', [name]);
+export interface TagRowWithStats extends TagRow {
+  subscriber_count: number;
+}
+
+/**
+ * Lookup a tag by name (case-insensitive) and aggregate its subscriber_count.
+ * Returns the row plus a `subscriber_count` integer derived from
+ * user_tag_subscriptions. Used by the public GET /api/tags/:name handler.
+ */
+export async function findTagByName(name: string): Promise<TagRowWithStats | null> {
+  const result = await query<TagRowWithStats>(
+    `SELECT t.*,
+            (SELECT COUNT(*)::int FROM user_tag_subscriptions WHERE tag_id = t.id) AS subscriber_count
+       FROM tags t
+      WHERE LOWER(t.name) = LOWER($1)
+      LIMIT 1`,
+    [name],
+  );
   return result.rows[0] ?? null;
 }
 

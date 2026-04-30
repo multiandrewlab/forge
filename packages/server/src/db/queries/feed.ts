@@ -81,6 +81,21 @@ export async function findFeedPosts(input: FindFeedPostsInput): Promise<FindFeed
     }
   }
 
+  // Issue #49: filter='subscribed' reuses the same EXISTS predicate that the
+  // personalized sort uses. Short-circuit to an empty result if the caller
+  // has zero subscriptions — it's both a perf win and avoids returning the
+  // entire public feed when the user has no preferences expressed yet.
+  if (filter === 'subscribed') {
+    const subCheck = await query(
+      'SELECT 1 FROM user_tag_subscriptions WHERE user_id = $1 LIMIT 1',
+      [userId],
+    );
+    if (subCheck.rows.length === 0) {
+      return { posts: [], hasMore: false };
+    }
+    filterBySubscriptions = true;
+  }
+
   const clampedLimit = Math.min(limit ?? 20, 100);
   const fetchLimit = clampedLimit + 1;
 

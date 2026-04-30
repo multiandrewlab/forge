@@ -1,0 +1,26 @@
+meta {
+  name: Get Tag By Name
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/tags/typescript
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Issue #49: GET /api/tags/:name returns tag detail with subscriber_count.
+  Response: { id, name, postCount, subscriberCount }.
+
+  Lookup is case-insensitive (LOWER(t.name) = LOWER($1)).
+}

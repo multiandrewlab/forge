@@ -232,6 +232,60 @@ describe('findFeedPosts', () => {
       expect(sql).not.toContain("'; DROP TABLE posts; --");
     });
   });
+
+  // ─── Issue #49: filter='subscribed' ─────────────────────────────────
+
+  describe("filter='subscribed'", () => {
+    it('short-circuits to empty when user has zero subscriptions (no feed query issued)', async () => {
+      // First call: subscription pre-check returns no rows
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+      const result = await findFeedPosts({ userId, filter: 'subscribed' });
+      // Only the pre-check ran — no main feed query
+      expect(mockQuery).toHaveBeenCalledOnce();
+      const [subSql, subParams] = mockQuery.mock.calls[0] as [string, unknown[]];
+      expect(subSql).toContain('user_tag_subscriptions');
+      expect(subParams).toEqual([userId]);
+      expect(result).toEqual({ posts: [], hasMore: false });
+    });
+
+    it('reuses the personalized EXISTS predicate when the user has subscriptions', async () => {
+      // 1. Pre-check: user has subscriptions
+      mockQuery.mockResolvedValueOnce({ rows: [{ '?column?': 1 }], rowCount: 1 });
+      // 2. Main feed query
+      mockQuery.mockResolvedValueOnce({ rows: [sampleRow], rowCount: 1 });
+
+      const result = await findFeedPosts({ userId, filter: 'subscribed' });
+
+      expect(mockQuery).toHaveBeenCalledTimes(2);
+      const [feedSql, feedParams] = mockQuery.mock.calls[1] as [string, unknown[]];
+      // The EXISTS predicate from the personalized branch is reused verbatim
+      expect(feedSql).toContain('EXISTS');
+      expect(feedSql).toContain('post_tags pt_sub');
+      expect(feedSql).toContain('user_tag_subscriptions uts');
+      expect(feedSql).toContain('uts.user_id');
+      expect(feedParams).toContain(userId);
+      // Visibility clause is still applied (subscribed is not author-scoped)
+      expect(feedSql).toContain("p.visibility = 'public'");
+      // Drafts are still excluded
+      expect(feedSql).toContain('p.is_draft = false');
+      expect(result.posts).toHaveLength(1);
+    });
+
+    it('composes with tag=<name> — both predicates applied to the WHERE clause', async () => {
+      // Pre-check: user has subscriptions
+      mockQuery.mockResolvedValueOnce({ rows: [{ '?column?': 1 }], rowCount: 1 });
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+      await findFeedPosts({ userId, filter: 'subscribed', tag: 'typescript' });
+
+      const [feedSql, feedParams] = mockQuery.mock.calls[1] as [string, unknown[]];
+      // Both: subscriptions EXISTS + tag join
+      expect(feedSql).toContain('user_tag_subscriptions uts');
+      expect(feedSql.toLowerCase()).toContain('post_tags');
+      expect(feedParams).toContain('typescript');
+      expect(feedParams).toContain(userId);
+    });
+  });
 });
 
 describe('findFeedPostById', () => {

@@ -1,0 +1,30 @@
+meta {
+  name: Get Feed - filter=subscribed
+  type: http
+  seq: 107
+}
+
+get {
+  url: {{baseUrl}}/api/posts?filter=subscribed
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Issue #49: feed restricted to posts whose tags the caller subscribes to.
+
+  testuser has zero seeded subscriptions, so the response will be an
+  empty posts array — but the endpoint returns 200 (not 404), proving
+  the schema accepts 'subscribed' as a valid filter.
+
+  When the caller has subscriptions, the SQL reuses the same EXISTS
+  predicate the personalized sort uses.
+}

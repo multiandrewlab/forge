@@ -313,8 +313,11 @@ describe('post routes', () => {
       });
 
       expect(response.statusCode).toBe(201);
-      // Verify findTagByName was called
-      expect(mockQuery).toHaveBeenCalledWith('SELECT * FROM tags WHERE name = $1', ['typescript']);
+      // Verify findTagByName was called (case-insensitive lookup with subscriber_count aggregate)
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringMatching(/LOWER\(\s*t\.name\s*\)\s*=\s*LOWER\(\$1\)/i),
+        ['typescript'],
+      );
       // Verify createTag was called (tag didn't exist)
       expect(mockQuery).toHaveBeenCalledWith('INSERT INTO tags (name) VALUES ($1) RETURNING *', [
         'typescript',
@@ -351,8 +354,11 @@ describe('post routes', () => {
       });
 
       expect(response.statusCode).toBe(201);
-      // Verify findTagByName was called
-      expect(mockQuery).toHaveBeenCalledWith('SELECT * FROM tags WHERE name = $1', ['javascript']);
+      // Verify findTagByName was called (case-insensitive lookup with subscriber_count aggregate)
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringMatching(/LOWER\(\s*t\.name\s*\)\s*=\s*LOWER\(\$1\)/i),
+        ['javascript'],
+      );
       // Verify createTag was NOT called (tag exists)
       expect(mockQuery).not.toHaveBeenCalledWith(
         'INSERT INTO tags (name) VALUES ($1) RETURNING *',

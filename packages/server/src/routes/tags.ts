@@ -5,6 +5,7 @@ import {
   findPopularTags,
   getUserSubscriptions,
   findTagById,
+  findTagByName,
   subscribeToTag,
   unsubscribeFromTag,
 } from '../db/queries/tags.js';
@@ -87,5 +88,36 @@ export async function tagRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(404).send({ error: 'Not subscribed to this tag' });
     }
     return reply.status(204).send();
+  });
+
+  // GET /:name — fully PUBLIC tag detail (Issue #49).
+  //
+  // No `preHandler` array — anonymous callers receive the same response shape as
+  // authenticated callers. State-changing endpoints (POST/DELETE /:id/subscribe)
+  // keep their auth guard. The handler reads tag rows + aggregates only; it
+  // never references request.user, so a missing JWT is fine.
+  //
+  // Subscribe state is intentionally NOT hydrated here — the client makes a
+  // separate authed call to GET /api/tags/subscriptions to determine whether
+  // the current user is subscribed.
+  //
+  // The 404 body is identical for "deleted" and "never existed" cases — there
+  // is no enumeration channel for callers to distinguish soft-deleted tags
+  // from non-existent ones.
+  app.get('/:name', async (request, reply) => {
+    const { name } = request.params as { name: string };
+    if (!name || name.length === 0 || name.length > 50) {
+      return reply.status(400).send({ error: 'Invalid tag name' });
+    }
+    const row = await findTagByName(name);
+    if (!row) {
+      return reply.status(404).send({ error: 'Tag not found' });
+    }
+    return reply.send({
+      id: row.id,
+      name: row.name,
+      postCount: row.post_count,
+      subscriberCount: row.subscriber_count,
+    });
   });
 }
