@@ -119,6 +119,87 @@ describe('searchQuerySchema', () => {
       expect(result.data.limit).toBe(20);
     }
   });
+
+  describe('author parameter', () => {
+    it('accepts a non-empty string ≤ 100 chars', () => {
+      const result = searchQuerySchema.safeParse({ q: 'test', author: 'Alice' });
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.author).toBe('Alice');
+    });
+
+    it('rejects empty string with min(1) error', () => {
+      const result = searchQuerySchema.safeParse({ q: 'test', author: '' });
+      expect(result.success).toBe(false);
+    });
+
+    it('rejects strings > 100 chars', () => {
+      const result = searchQuerySchema.safeParse({ q: 'test', author: 'a'.repeat(101) });
+      expect(result.success).toBe(false);
+    });
+
+    it('omits the field when not provided', () => {
+      const result = searchQuerySchema.safeParse({ q: 'test' });
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.author).toBeUndefined();
+    });
+  });
+
+  describe('since parameter', () => {
+    it.each(['today', '7d', '30d'] as const)('accepts %s as a valid token', (token) => {
+      const result = searchQuerySchema.safeParse({ q: 'test', since: token });
+      expect(result.success).toBe(true);
+    });
+
+    it('rejects unknown tokens with 400-level error', () => {
+      const result = searchQuerySchema.safeParse({ q: 'test', since: 'banana' });
+      expect(result.success).toBe(false);
+    });
+
+    it('rejects empty string', () => {
+      const result = searchQuerySchema.safeParse({ q: 'test', since: '' });
+      expect(result.success).toBe(false);
+    });
+
+    it('omits the field when not provided', () => {
+      const result = searchQuerySchema.safeParse({ q: 'test' });
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.since).toBeUndefined();
+    });
+  });
+
+  describe('page parameter', () => {
+    it('defaults to 1 when not provided', () => {
+      const result = searchQuerySchema.safeParse({ q: 'test' });
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.page).toBe(1);
+    });
+
+    it('coerces a string number', () => {
+      const result = searchQuerySchema.safeParse({ q: 'test', page: '5' });
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.page).toBe(5);
+    });
+
+    it('rejects 0 (must be ≥ 1)', () => {
+      const result = searchQuerySchema.safeParse({ q: 'test', page: 0 });
+      expect(result.success).toBe(false);
+    });
+
+    it('rejects negative numbers', () => {
+      const result = searchQuerySchema.safeParse({ q: 'test', page: -1 });
+      expect(result.success).toBe(false);
+    });
+
+    it('rejects values over 1000 (DoS bound)', () => {
+      const result = searchQuerySchema.safeParse({ q: 'test', page: 1001 });
+      expect(result.success).toBe(false);
+    });
+
+    it('rejects non-integer values', () => {
+      const result = searchQuerySchema.safeParse({ q: 'test', page: 1.5 });
+      expect(result.success).toBe(false);
+    });
+  });
 });
 
 describe('SearchSnippet interface', () => {
@@ -215,12 +296,16 @@ describe('SearchResponse interface', () => {
       people: [{ id: 'u1', displayName: 'Jane', avatarUrl: null, postCount: 5 }],
       query: 'react',
       totalResults: 3,
+      page: 1,
+      totalPages: 1,
     };
     expect(response.snippets).toHaveLength(1);
     expect(response.aiActions).toHaveLength(1);
     expect(response.people).toHaveLength(1);
     expect(response.query).toBe('react');
     expect(response.totalResults).toBe(3);
+    expect(response.page).toBe(1);
+    expect(response.totalPages).toBe(1);
   });
 
   it('allows empty arrays', () => {
@@ -230,9 +315,31 @@ describe('SearchResponse interface', () => {
       people: [],
       query: '',
       totalResults: 0,
+      page: 1,
+      totalPages: 0,
     };
     expect(response.snippets).toHaveLength(0);
     expect(response.totalResults).toBe(0);
+    expect(response.page).toBe(1);
+    expect(response.totalPages).toBe(0);
+  });
+
+  it('allows aiResolvedFilters with tag and type', () => {
+    const response: SearchResponse = {
+      snippets: [],
+      aiActions: [],
+      people: [],
+      query: 'react hooks',
+      totalResults: 0,
+      page: 1,
+      totalPages: 0,
+      aiResolvedFilters: {
+        tag: 'react',
+        type: 'snippet',
+      },
+    };
+    expect(response.aiResolvedFilters?.tag).toBe('react');
+    expect(response.aiResolvedFilters?.type).toBe('snippet');
   });
 });
 

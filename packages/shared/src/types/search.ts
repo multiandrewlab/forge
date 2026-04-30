@@ -22,6 +22,10 @@ export const searchQuerySchema = z.object({
     }, z.boolean())
     .optional(),
   limit: z.coerce.number().int().min(1).max(50).default(20),
+  // New fields (Issue #49):
+  author: z.string().min(1).max(100).optional(),
+  since: z.enum(['today', '7d', '30d']).optional(),
+  page: z.coerce.number().int().min(1).max(1000).default(1),
 });
 
 export const aiSearchFiltersSchema = z.object({
@@ -72,4 +76,10 @@ export interface SearchResponse {
   people: UserSummary[];
   query: string;
   totalResults: number;
+  page: number;
+  totalPages: number;
+  aiResolvedFilters?: {
+    tag?: string;
+    type?: ContentType;
+  };
 }
