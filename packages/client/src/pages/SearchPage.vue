@@ -19,8 +19,47 @@
         Results for <span class="text-primary">{{ q }}</span>
       </h1>
 
+      <!-- Since-preset row (issue #49): Today / 7d / 30d / All time -->
+      <div data-testid="since-preset-row" class="mb-3 flex flex-wrap gap-2">
+        <button
+          data-testid="since-preset-today"
+          type="button"
+          :class="presetClass('today')"
+          @click="setSincePreset('today')"
+        >
+          Today
+        </button>
+        <button
+          data-testid="since-preset-7d"
+          type="button"
+          :class="presetClass('7d')"
+          @click="setSincePreset('7d')"
+        >
+          7d
+        </button>
+        <button
+          data-testid="since-preset-30d"
+          type="button"
+          :class="presetClass('30d')"
+          @click="setSincePreset('30d')"
+        >
+          30d
+        </button>
+        <button
+          data-testid="since-preset-all"
+          type="button"
+          :class="presetClass(null)"
+          @click="setSincePreset(null)"
+        >
+          All time
+        </button>
+      </div>
+
       <!-- Filter chips -->
-      <div v-if="typeFilter || tagFilter" class="mb-4 flex flex-wrap gap-2">
+      <div
+        v-if="typeFilter || tagFilter || authorFilter || sinceFilter"
+        class="mb-4 flex flex-wrap gap-2"
+      >
         <span
           v-if="typeFilter"
           data-testid="filter-chip-type"
@@ -47,6 +86,36 @@
             class="ml-1 text-gray-400 hover:text-white"
             aria-label="Remove tag filter"
             @click="removeFilter('tag')"
+          >
+            &times;
+          </button>
+        </span>
+        <span
+          v-if="authorFilter"
+          data-testid="filter-chip-author"
+          class="inline-flex items-center gap-1 rounded-full bg-gray-700 px-3 py-1 text-xs text-gray-200"
+        >
+          author: {{ authorFilter }}
+          <button
+            data-testid="remove-filter-author"
+            class="ml-1 text-gray-400 hover:text-white"
+            aria-label="Remove author filter"
+            @click="removeFilter('author')"
+          >
+            &times;
+          </button>
+        </span>
+        <span
+          v-if="sinceFilter"
+          data-testid="filter-chip-since"
+          class="inline-flex items-center gap-1 rounded-full bg-gray-700 px-3 py-1 text-xs text-gray-200"
+        >
+          since: {{ sinceFilter }}
+          <button
+            data-testid="remove-filter-since"
+            class="ml-1 text-gray-400 hover:text-white"
+            aria-label="Remove since filter"
+            @click="removeFilter('since')"
           >
             &times;
           </button>
@@ -85,6 +154,7 @@
           variant="snippet"
           :active-global-index="-1"
           :start-index="0"
+          @add-author-filter="addAuthorFilter"
         />
         <SearchResultGroup
           title="AI Actions"
@@ -92,6 +162,7 @@
           variant="aiAction"
           :active-global-index="-1"
           :start-index="searchStore.results.snippets.length"
+          @add-author-filter="addAuthorFilter"
         />
         <SearchResultGroup
           title="People"
@@ -99,6 +170,14 @@
           variant="person"
           :active-global-index="-1"
           :start-index="searchStore.results.snippets.length + searchStore.results.aiActions.length"
+          @add-author-filter="addAuthorFilter"
+        />
+
+        <!-- Pagination (issue #49) -->
+        <SearchPagination
+          :page="searchStore.page"
+          :total-pages="searchStore.totalPages"
+          @change="setPage"
         />
       </div>
     </template>
@@ -107,10 +186,11 @@
 
 <script setup lang="ts">
 import { computed, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { useRoute, useRouter, type LocationQueryRaw } from 'vue-router';
 import { useSearchStore } from '@/stores/search';
-import { useSearch } from '@/composables/useSearch';
+import { useSearch, type SearchParams } from '@/composables/useSearch';
 import SearchResultGroup from '@/components/search/SearchResultGroup.vue';
+import SearchPagination from '@/components/search/SearchPagination.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -133,7 +213,25 @@ const tagFilter = computed(() => {
   return typeof val === 'string' ? val : '';
 });
 
+const authorFilter = computed(() => {
+  const val = route.query.author;
+  return typeof val === 'string' ? val : '';
+});
+
+const sinceFilter = computed(() => {
+  const val = route.query.since;
+  return typeof val === 'string' ? val : '';
+});
+
 const isFuzzy = computed(() => route.query.fuzzy === 'true');
+const isAi = computed(() => route.query.ai === 'true');
+
+const pageParam = computed(() => {
+  const val = route.query.page;
+  if (typeof val !== 'string') return 1;
+  const parsed = parseInt(val, 10);
+  return Number.isFinite(parsed) && parsed >= 1 ? parsed : 1;
+});
 
 // ── Derived state ────────────────────────────────────────────────────
 const hasNoResults = computed(() => {
@@ -142,25 +240,64 @@ const hasNoResults = computed(() => {
   return r.snippets.length === 0 && r.aiActions.length === 0 && r.people.length === 0;
 });
 
+// ── Helpers ─────────────────────────────────────────────────────────
+function buildOpts(): SearchParams {
+  const opts: SearchParams = {};
+  if (typeFilter.value) opts.type = typeFilter.value;
+  if (tagFilter.value) opts.tag = tagFilter.value;
+  if (isFuzzy.value) opts.fuzzy = true;
+  if (authorFilter.value) opts.author = authorFilter.value;
+  if (sinceFilter.value) opts.since = sinceFilter.value;
+  if (pageParam.value > 1) opts.page = pageParam.value;
+  return opts;
+}
+
+function presetClass(token: string | null): string {
+  const base = 'rounded-full px-3 py-1 text-xs border';
+  const isActive = token === null ? sinceFilter.value === '' : sinceFilter.value === token;
+  return isActive
+    ? `${base} border-primary bg-primary/20 text-primary`
+    : `${base} border-gray-700 text-gray-300 hover:bg-gray-700`;
+}
+
 // ── Run search on mount + route changes ──────────────────────────────
+//
+// When the server returns aiResolvedFilters (AI-assisted search), we need to
+// merge those into the route query AND drop ai=true so subsequent navigations
+// (pagination, filter clicks) don't re-trigger the AI path. router.replace
+// keeps the back-button behaviour sane.
+async function runWithRewrite(): Promise<void> {
+  await search(q.value, buildOpts());
+  const resolved = searchStore.results?.aiResolvedFilters;
+  if (resolved && isAi.value) {
+    const newQuery: LocationQueryRaw = { ...route.query };
+    delete newQuery.ai;
+    if (resolved.tag) newQuery.tag = resolved.tag;
+    if (resolved.type) newQuery.type = resolved.type;
+    void router.replace({ path: '/search', query: newQuery });
+  }
+}
+
 watch(
   () => route.query,
   () => {
     if (q.value) {
-      search(q.value);
+      void runWithRewrite();
     }
   },
   { immediate: true, deep: true },
 );
 
 // ── Filter actions ───────────────────────────────────────────────────
-function removeFilter(filterKey: 'type' | 'tag'): void {
+function removeFilter(filterKey: 'type' | 'tag' | 'author' | 'since'): void {
   const newQuery: Record<string, string> = {};
   if (q.value) newQuery.q = q.value;
   if (filterKey !== 'type' && typeFilter.value) newQuery.type = typeFilter.value;
   if (filterKey !== 'tag' && tagFilter.value) newQuery.tag = tagFilter.value;
+  if (filterKey !== 'author' && authorFilter.value) newQuery.author = authorFilter.value;
+  if (filterKey !== 'since' && sinceFilter.value) newQuery.since = sinceFilter.value;
   if (isFuzzy.value) newQuery.fuzzy = 'true';
-  router.push({ path: '/search', query: newQuery });
+  void router.push({ path: '/search', query: newQuery });
 }
 
 function tryFuzzy(): void {
@@ -168,7 +305,43 @@ function tryFuzzy(): void {
   if (q.value) newQuery.q = q.value;
   if (typeFilter.value) newQuery.type = typeFilter.value;
   if (tagFilter.value) newQuery.tag = tagFilter.value;
+  if (authorFilter.value) newQuery.author = authorFilter.value;
+  if (sinceFilter.value) newQuery.since = sinceFilter.value;
   newQuery.fuzzy = 'true';
-  router.push({ path: '/search', query: newQuery });
+  void router.push({ path: '/search', query: newQuery });
+}
+
+function setSincePreset(token: string | null): void {
+  const newQuery: Record<string, string> = {};
+  if (q.value) newQuery.q = q.value;
+  if (typeFilter.value) newQuery.type = typeFilter.value;
+  if (tagFilter.value) newQuery.tag = tagFilter.value;
+  if (authorFilter.value) newQuery.author = authorFilter.value;
+  if (isFuzzy.value) newQuery.fuzzy = 'true';
+  if (token !== null) newQuery.since = token;
+  void router.push({ path: '/search', query: newQuery });
+}
+
+function setPage(n: number): void {
+  const newQuery: Record<string, string> = {};
+  if (q.value) newQuery.q = q.value;
+  if (typeFilter.value) newQuery.type = typeFilter.value;
+  if (tagFilter.value) newQuery.tag = tagFilter.value;
+  if (authorFilter.value) newQuery.author = authorFilter.value;
+  if (sinceFilter.value) newQuery.since = sinceFilter.value;
+  if (isFuzzy.value) newQuery.fuzzy = 'true';
+  if (n > 1) newQuery.page = String(n);
+  void router.push({ path: '/search', query: newQuery });
+}
+
+function addAuthorFilter(displayName: string): void {
+  const newQuery: Record<string, string> = {};
+  if (q.value) newQuery.q = q.value;
+  if (typeFilter.value) newQuery.type = typeFilter.value;
+  if (tagFilter.value) newQuery.tag = tagFilter.value;
+  if (sinceFilter.value) newQuery.since = sinceFilter.value;
+  if (isFuzzy.value) newQuery.fuzzy = 'true';
+  newQuery.author = displayName;
+  void router.push({ path: '/search', query: newQuery });
 }
 </script>

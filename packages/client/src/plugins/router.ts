@@ -34,6 +34,18 @@ const router = createRouter({
           props: { filter: 'bookmarked' },
         },
         {
+          path: 'following',
+          name: 'home-following',
+          component: () => import('@/pages/HomePage.vue'),
+          props: { filter: 'subscribed' },
+        },
+        {
+          path: 'tags/:name',
+          name: 'tag-view',
+          component: () => import('@/pages/TagPage.vue'),
+          meta: { requiresAuth: false },
+        },
+        {
           path: 'posts/new',
           name: 'post-new',
           component: () => import('@/pages/PostNewPage.vue'),

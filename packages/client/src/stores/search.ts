@@ -36,6 +36,14 @@ export const useSearchStore = defineStore('search', () => {
   const recentQueries = ref<string[]>(loadRecentQueries());
   const activeIndex = ref(0);
   const aiEnabled = ref(false);
+  // Pagination + filter state for the dedicated /search page (issue #49).
+  // `page` and `totalPages` mirror the server response so <SearchPagination>
+  // can render. `author` and `since` mirror the route query so chips render
+  // consistently with `tag` and `type`.
+  const page = ref(1);
+  const totalPages = ref(1);
+  const author = ref<string | null>(null);
+  const since = ref<string | null>(null);
 
   function setQuery(q: string): void {
     query.value = q;
@@ -43,6 +51,13 @@ export const useSearchStore = defineStore('search', () => {
 
   function setResults(r: SearchResponse | null): void {
     results.value = r;
+    if (r === null) {
+      page.value = 1;
+      totalPages.value = 1;
+    } else {
+      page.value = r.page;
+      totalPages.value = r.totalPages;
+    }
   }
 
   function setLoading(v: boolean): void {
@@ -76,6 +91,8 @@ export const useSearchStore = defineStore('search', () => {
   function clearResults(): void {
     results.value = null;
     query.value = '';
+    page.value = 1;
+    totalPages.value = 1;
   }
 
   function setActiveIndex(i: number): void {
@@ -86,6 +103,18 @@ export const useSearchStore = defineStore('search', () => {
     aiEnabled.value = !aiEnabled.value;
   }
 
+  function setPage(n: number): void {
+    page.value = n;
+  }
+
+  function setAuthor(value: string | null): void {
+    author.value = value;
+  }
+
+  function setSince(value: string | null): void {
+    since.value = value;
+  }
+
   return {
     query,
     results,
@@ -94,6 +123,10 @@ export const useSearchStore = defineStore('search', () => {
     recentQueries,
     activeIndex,
     aiEnabled,
+    page,
+    totalPages,
+    author,
+    since,
     setQuery,
     setResults,
     setLoading,
@@ -103,5 +136,8 @@ export const useSearchStore = defineStore('search', () => {
     clearResults,
     setActiveIndex,
     toggleAi,
+    setPage,
+    setAuthor,
+    setSince,
   };
 });

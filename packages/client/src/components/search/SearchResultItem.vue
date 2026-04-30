@@ -32,9 +32,14 @@
         <span class="truncate text-xs text-gray-500 dark:text-gray-400">
           {{ snippetData.excerpt }}
         </span>
-        <span class="text-xs text-gray-400 dark:text-gray-500">
+        <button
+          data-testid="search-result-author"
+          type="button"
+          class="cursor-pointer self-start text-left text-xs text-gray-400 hover:text-gray-200 hover:underline focus-visible:ring-1 focus-visible:ring-primary dark:text-gray-500"
+          @click.stop="emit('addAuthorFilter', snippetData.authorDisplayName)"
+        >
           {{ snippetData.authorDisplayName }}
-        </span>
+        </button>
       </div>
     </template>
 
@@ -76,7 +81,7 @@ const props = defineProps<{
   active: boolean;
 }>();
 
-defineEmits<{ select: [] }>();
+const emit = defineEmits<{ select: []; addAuthorFilter: [displayName: string] }>();
 
 const snippetData = computed(() => props.data as SearchSnippet);
 const personData = computed(() => props.data as UserSummary);
