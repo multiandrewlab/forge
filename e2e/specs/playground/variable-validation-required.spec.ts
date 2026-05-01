@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright';
 import { test, expect } from '../../fixtures/reset.js';
 import { playground } from '../../fixtures/selectors/playground.js';
 import { withMockScript } from '../../fixtures/mock-llm.js';
@@ -25,4 +26,21 @@ test('playground: required var → Run disabled, * indicator, aria-required, run
   // Fill the input → enabled
   await input.fill('something');
   await expect(playground.runBtn(testuser)).toBeEnabled();
+
+  // Accessibility scan — playground form region must have zero axe-core
+  // violations at WCAG 2 A/AA. Scan is scoped to the playground variables
+  // form (the surface this spec asserts) rather than the whole page so we
+  // don't fail on pre-existing chrome contrast issues (sidebar / nav /
+  // primary button background) tracked outside #50's scope. The contrast
+  // rule is also disabled because the disabled-button (Run) styling shares
+  // the same orange-on-white tokens as the rest of the app and is part of
+  // the same chrome-wide #ff6b1a brand-color tracking item, not a
+  // playground regression. Color-contrast aside, we still want every other
+  // a11y rule (label associations, ARIA roles, focus order, etc.) green.
+  const axeResults = await new AxeBuilder({ page: testuser })
+    .include('[data-testid="playground-page"]')
+    .withTags(['wcag2a', 'wcag2aa'])
+    .disableRules(['color-contrast'])
+    .analyze();
+  expect(axeResults.violations).toEqual([]);
 });
