@@ -73,6 +73,7 @@ See `bruno/README.md` for contributor conventions, the expected-status reference
 - **E2E verification**: After implementation, run the full suite against a running server and verify all return expected status codes.
 - **Run command (single folder)**: `cd bruno && npx @usebruno/cli run <directory> --env local`
 - **Full collection**: `npm run bruno` (from repo root) or `cd bruno && npx @usebruno/cli run -r --env local`
+- **Path-prefix exception for `/api/__test__/*`**: Endpoints under this prefix are excluded from the Bruno coverage requirement. This exception applies ONLY to routes that (a) live under `/api/__test__/*` AND (b) inherit ALL FIVE existing guards: `ENABLE_TEST_ROUTES=1`, `NODE_ENV ∈ {dev,test}`, loopback-only-outside-CI, `X-E2E-Secret` timingSafeEqual, and `Origin` header rejection. No other route may invoke this exception. Test coverage for these endpoints is unit-test-only (`packages/server/src/__tests__/routes/__test__.test.ts`).
 
 ### Auth bootstrap
 
@@ -82,13 +83,16 @@ The collection has an idempotent login hook at `bruno/collection.bru` (`script:p
 
 `scripts/seed.sql` provides deterministic UUIDs. `bruno/environments/local.bru` pins:
 
-| Variable     | Fixture                                                                               |
-| ------------ | ------------------------------------------------------------------------------------- |
-| `postId`     | `c0000000-...-000000000099` — testuser-owned snippet post (public, not draft)         |
-| `revisionId` | `d0000000-...-000000000099` — testuser-authored initial revision of that post         |
-| `commentId`  | `e0000000-...-000000000099` — testuser-authored top-level comment on that post        |
-| `tagId`      | `b0000000-...-000000000001` — `typescript` tag                                        |
-| `testuser`   | `a0000000-...-000000000099` / `testuser@example.com` / `password123` (bcrypt cost-12) |
+> **testuser is reserved for Bruno regression tests** (sequential, immune to E2E parallelism). Bruno's collection-root auth bootstrap (`bruno/collection.bru`) calls `POST /api/auth/login` with testuser credentials; it does NOT call `/api/__test__/reset`. E2E specs MUST NOT log in as testuser — use the `actor` fixture, which resolves to the worker's own `e2e_w${N}` user.
+
+| Variable     | Fixture                                                                                                             |
+| ------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `postId`     | `c0000000-...-000000000099` — testuser-owned snippet post (public, not draft)                                       |
+| `revisionId` | `d0000000-...-000000000099` — testuser-authored initial revision of that post                                       |
+| `commentId`  | `e0000000-...-000000000099` — testuser-authored top-level comment on that post                                      |
+| `tagId`      | `b0000000-...-000000000001` — `typescript` tag                                                                      |
+| `testuser`   | `a0000000-...-000000000099` / `testuser@example.com` / `password123` (Bruno-only — see "How E2E parallelism works") |
+| `e2e_w0..3`  | `a0000000-...-000000000101..104` / `e2e_wN@example.com` / `password123` (E2E-only; not used by Bruno)               |
 
 ### When to run
 
@@ -114,6 +118,25 @@ bruno/
     ├── local.bru
     └── ci.bru
 ```
+
+## How E2E parallelism works
+
+E2E specs run at `workers: 4` in CI and locally. Per-worker isolation depends on:
+
+- **Per-worker user pool** — each worker's fixture (`actor`) resolves to one of the seeded `e2e_w0..3` users (`a0…101..104`). Workers operate on disjoint user-owned rows.
+- **Worker-scoped reset** — `POST /api/__test__/reset` accepts `X-E2E-Worker-Id: 0..3`; the handler runs 5 user-scoped DELETEs (bookmarks, votes, user_tag_subscriptions, comments, posts) inside a transaction via the `withTransaction` helper. No global TRUNCATE on this path. The legacy global-TRUNCATE path is reachable via no-header callers (Bruno, manual `curl`, CI startup probes).
+- **Mechanism boundary** — testuser is **reserved for Bruno regression tests**, which are sequential and unaffected by E2E parallelism. E2E specs MUST use the `actor` fixture; a CI lint guard fails if `testuser@example.com`, `storageStatePath('testuser')`, or `SEED_USERS.testuser` appear in `e2e/specs/`.
+
+### Expanding the worker pool beyond 4
+
+To raise `workers:`:
+
+1. Add seed user rows in `scripts/seed.sql` (`a0…105`, `a0…106`, …).
+2. Bump `WORKER_USER_IDS` in `packages/server/src/routes/__test__.ts`.
+3. Bump `workers:` in `e2e/playwright.config.ts`.
+4. Bump the validation range in the `actor` fixture (`e2e/fixtures/auth.ts`).
+
+The `actor` fixture throws with an explicit error message if `testInfo.workerIndex` exceeds the configured pool size.
 
 ## Quality Gates
 
