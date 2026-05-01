@@ -10,7 +10,7 @@ TRUNCATE users, posts, post_revisions, post_files, tags, post_tags,
 CASCADE;
 
 -- ============================================================
--- Users (4: 1 Google SSO, 3 local)
+-- Users (8: 1 Google SSO, 3 local + 4 e2e workers)
 -- ============================================================
 -- testuser (Bruno regression test user — password: "password123")
 -- Regenerate hash: cd packages/server && node -e 'import("bcryptjs").then(b => b.default.hash("password123", 12).then(h => console.log(h)))'
@@ -19,6 +19,11 @@ INSERT INTO users (id, email, display_name, avatar_url, auth_provider, password_
   ('a0000000-0000-0000-0000-000000000002', 'bob@example.com', 'Bob Martinez', 'https://i.pravatar.cc/150?u=bob', 'google', NULL),
   ('a0000000-0000-0000-0000-000000000003', 'carol@example.com', 'Carol Davis', NULL, 'local', '$2b$12$jrcHUcVQnE.swctPk5GnreW9hkkyFqh8A9p2GnEaRrbxEaxXESYw2'),
   ('a0000000-0000-0000-0000-000000000099', 'testuser@example.com', 'Test User', NULL, 'local', '$2b$12$jrcHUcVQnE.swctPk5GnreW9hkkyFqh8A9p2GnEaRrbxEaxXESYw2'),
+  -- E2E worker users (per-worker user pool; see design 2026-05-01-issue-75-e2e-cross-worker-reset)
+  ('a0000000-0000-0000-0000-000000000101', 'e2e_w0@example.com', 'E2E Worker 0', NULL, 'local', '$2b$12$jrcHUcVQnE.swctPk5GnreW9hkkyFqh8A9p2GnEaRrbxEaxXESYw2'),
+  ('a0000000-0000-0000-0000-000000000102', 'e2e_w1@example.com', 'E2E Worker 1', NULL, 'local', '$2b$12$jrcHUcVQnE.swctPk5GnreW9hkkyFqh8A9p2GnEaRrbxEaxXESYw2'),
+  ('a0000000-0000-0000-0000-000000000103', 'e2e_w2@example.com', 'E2E Worker 2', NULL, 'local', '$2b$12$jrcHUcVQnE.swctPk5GnreW9hkkyFqh8A9p2GnEaRrbxEaxXESYw2'),
+  ('a0000000-0000-0000-0000-000000000104', 'e2e_w3@example.com', 'E2E Worker 3', NULL, 'local', '$2b$12$jrcHUcVQnE.swctPk5GnreW9hkkyFqh8A9p2GnEaRrbxEaxXESYw2'),
   ('a0000000-0000-0000-0000-000000000004', 'paginationuser@example.com', 'Pagination User', NULL, 'local', '$2b$12$jrcHUcVQnE.swctPk5GnreW9hkkyFqh8A9p2GnEaRrbxEaxXESYw2');
 
 -- ============================================================
