@@ -201,6 +201,54 @@ describe('SearchResultItem', () => {
     });
   });
 
+  describe('addAuthorFilter (issue #49)', () => {
+    it('renders search-result-author button on snippet variant', () => {
+      const wrapper = mount(SearchResultItem, {
+        props: { variant: 'snippet', data: snippetData, active: false },
+      });
+      const btn = wrapper.find('[data-testid="search-result-author"]');
+      expect(btn.exists()).toBe(true);
+      expect(btn.text()).toBe('Jane Doe');
+    });
+
+    it('emits addAuthorFilter with the displayName when author button clicked', async () => {
+      const wrapper = mount(SearchResultItem, {
+        props: { variant: 'snippet', data: snippetData, active: false },
+      });
+      const btn = wrapper.find('[data-testid="search-result-author"]');
+      await btn.trigger('click');
+
+      const emitted = wrapper.emitted('addAuthorFilter');
+      expect(emitted).toHaveLength(1);
+      expect(emitted?.[0]).toEqual(['Jane Doe']);
+    });
+
+    it('clicking author does NOT bubble select event (stopPropagation)', async () => {
+      const wrapper = mount(SearchResultItem, {
+        props: { variant: 'snippet', data: snippetData, active: false },
+      });
+      const btn = wrapper.find('[data-testid="search-result-author"]');
+      await btn.trigger('click');
+
+      // event.stopPropagation prevents the parent div's @click from firing.
+      expect(wrapper.emitted('select')).toBeUndefined();
+    });
+
+    it('does not render author button on person variant', () => {
+      const wrapper = mount(SearchResultItem, {
+        props: { variant: 'person', data: personData, active: false },
+      });
+      expect(wrapper.find('[data-testid="search-result-author"]').exists()).toBe(false);
+    });
+
+    it('does not render author button on aiAction variant', () => {
+      const wrapper = mount(SearchResultItem, {
+        props: { variant: 'aiAction', data: aiActionData, active: false },
+      });
+      expect(wrapper.find('[data-testid="search-result-author"]').exists()).toBe(false);
+    });
+  });
+
   describe('a11y', () => {
     it('has role="option"', () => {
       const wrapper = mount(SearchResultItem, {

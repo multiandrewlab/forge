@@ -351,4 +351,99 @@ describe('tag routes', () => {
       expect(response.statusCode).toBe(401);
     });
   });
+
+  // ─── GET /api/tags/:name (Issue #49 — public endpoint) ────────────
+
+  describe('GET /api/tags/:name', () => {
+    it('returns 200 with tag data for an authenticated request', async () => {
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ ...sampleTag, subscriber_count: 2 }],
+        rowCount: 1,
+      });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/tags/typescript',
+        headers: { authorization: `Bearer ${token}` },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(body).toMatchObject({
+        id: sampleTag.id,
+        name: 'typescript',
+        postCount: sampleTag.post_count,
+        subscriberCount: 2,
+      });
+    });
+
+    it('returns 200 for an UNAUTHENTICATED request (handler is fully public)', async () => {
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ ...sampleTag, subscriber_count: 2 }],
+        rowCount: 1,
+      });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/tags/typescript',
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(body.name).toBe('typescript');
+    });
+
+    it('returns 404 for a non-existent tag', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/tags/does-not-exist-12345',
+        headers: { authorization: `Bearer ${token}` },
+      });
+
+      expect(response.statusCode).toBe(404);
+      expect(response.json()).toEqual({ error: 'Tag not found' });
+    });
+
+    it('returns the same 404 body for "deleted" and "never existed" cases (no enumeration channel)', async () => {
+      mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });
+
+      const res1 = await app.inject({ method: 'GET', url: '/api/tags/never-existed-aa' });
+      const res2 = await app.inject({ method: 'GET', url: '/api/tags/never-existed-bb' });
+
+      expect(res1.statusCode).toBe(res2.statusCode);
+      expect(res1.json()).toEqual(res2.json());
+    });
+
+    it('passes the raw name through (case-insensitive matching is handled by SQL)', async () => {
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ ...sampleTag, subscriber_count: 0 }],
+        rowCount: 1,
+      });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/tags/TypeScript',
+      });
+
+      expect(response.statusCode).toBe(200);
+      // The handler echoes the canonical row name from DB
+      expect(response.json().name).toBe('typescript');
+      // SQL is case-insensitive; the route forwards the raw param
+      const [, params] = mockQuery.mock.calls[0] as [string, unknown[]];
+      expect(params).toEqual(['TypeScript']);
+    });
+
+    it('returns 400 for an empty / overly long name (handler-level guard)', async () => {
+      const longName = 'a'.repeat(51);
+      const response = await app.inject({
+        method: 'GET',
+        url: `/api/tags/${longName}`,
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toEqual({ error: 'Invalid tag name' });
+    });
+  });
 });

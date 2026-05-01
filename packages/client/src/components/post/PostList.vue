@@ -63,7 +63,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { RouterLink } from 'vue-router';
-import type { PostWithAuthor, FeedSort } from '@forge/shared';
+import type { PostWithAuthor, FeedSort, FeedFilter } from '@forge/shared';
 import PostListFilters from './PostListFilters.vue';
 import PostListItem from './PostListItem.vue';
 
@@ -74,7 +74,7 @@ const props = defineProps<{
   error: string | null;
   hasMore: boolean;
   currentSort: FeedSort;
-  currentFilter: string | null;
+  currentFilter: FeedFilter | null;
   currentTag: string | null;
 }>();
 
@@ -91,16 +91,27 @@ function onSortChange(value: FeedSort): void {
   sort.value = value;
 }
 
-const emptyMessage = computed(() => {
-  if (props.currentTag) return `No posts tagged #${props.currentTag}`;
-  switch (props.currentFilter) {
+// Exhaustive switch over FeedFilter so adding a new filter to the shared
+// type forces a compile error here (issue #49 DoD).
+function emptyMessageFor(filter: FeedFilter | null): string {
+  if (filter === null) return 'No posts yet — be the first to share!';
+  switch (filter) {
     case 'mine':
       return "You haven't created any posts yet";
     case 'bookmarked':
       return 'No bookmarked posts yet';
-    default:
-      return 'No posts yet — be the first to share!';
+    case 'subscribed':
+      return 'No recent posts from tags you follow.';
+    default: {
+      const _exhaustive: never = filter;
+      throw new Error(`Unhandled filter: ${String(_exhaustive)}`);
+    }
   }
+}
+
+const emptyMessage = computed(() => {
+  if (props.currentTag) return `No posts tagged #${props.currentTag}`;
+  return emptyMessageFor(props.currentFilter);
 });
 
 const showCreateCta = computed(() => props.currentFilter !== 'bookmarked');

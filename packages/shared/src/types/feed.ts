@@ -15,7 +15,7 @@ export interface PostWithAuthor extends Post {
 }
 
 export type FeedSort = 'trending' | 'recent' | 'top' | 'personalized';
-export type FeedFilter = 'mine' | 'bookmarked';
+export type FeedFilter = 'mine' | 'bookmarked' | 'subscribed';
 export type FeedContentType = ContentType;
 
 export interface FeedResponse {

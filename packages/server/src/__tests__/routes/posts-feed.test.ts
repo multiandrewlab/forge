@@ -291,6 +291,50 @@ describe('GET /api/posts (feed)', () => {
     );
   });
 
+  // ─── Issue #49: filter='subscribed' / tag=<name> ────────────────────
+
+  it('accepts filter=subscribed and forwards it to findFeedPosts', async () => {
+    mockFindFeedPosts.mockResolvedValueOnce({ posts: [], hasMore: false });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/posts?filter=subscribed',
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(mockFindFeedPosts).toHaveBeenCalledWith(
+      expect.objectContaining({ filter: 'subscribed', userId }),
+    );
+  });
+
+  it('forwards tag=<name> to findFeedPosts (Issue #49 by-tag feed)', async () => {
+    mockFindFeedPosts.mockResolvedValueOnce({ posts: [], hasMore: false });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/posts?tag=typescript',
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(mockFindFeedPosts).toHaveBeenCalledWith(
+      expect.objectContaining({ tag: 'typescript', userId }),
+    );
+  });
+
+  it('returns 400 when tag is the empty string (min length 1)', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/posts?tag=',
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    expect(response.statusCode).toBe(400);
+    const body = response.json();
+    expect(body.error).toBeDefined();
+  });
+
   it('passes cursor to findFeedPosts', async () => {
     const cursorData = { createdAt: '2026-01-01T00:00:00.000Z', id: postId };
     const cursor = Buffer.from(JSON.stringify(cursorData)).toString('base64');

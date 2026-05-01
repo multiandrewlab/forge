@@ -1,0 +1,27 @@
+meta {
+  name: Get Tag By Name (Anonymous)
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/api/tags/typescript
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Issue #49: GET /api/tags/:name is FULLY PUBLIC.
+
+  `auth: none` at the file level overrides the collection-level bearer
+  configured in `bruno/collection.bru` — the request goes out without
+  an Authorization header, proving the public-access contract.
+
+  If this ever returns 401, the route's preHandler array was changed
+  (broke the public contract) or the file-level auth override stopped
+  taking precedence over the collection bootstrap.
+}

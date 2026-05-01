@@ -110,6 +110,23 @@ describe('useFeed', () => {
     expect(mockApiFetch).toHaveBeenCalledWith('/api/posts?sort=recent&filter=mine&limit=20');
   });
 
+  it('setFilter forwards "subscribed" to URL query', async () => {
+    mockApiFetch.mockResolvedValue(mockFetchResponse({ posts: [], cursor: null }));
+    const { setFilter } = useFeed();
+    await setFilter('subscribed');
+    expect(mockApiFetch).toHaveBeenCalledWith('/api/posts?sort=recent&filter=subscribed&limit=20');
+  });
+
+  it('setFilter clears filter when called with null', async () => {
+    mockApiFetch.mockResolvedValue(mockFetchResponse({ posts: [], cursor: null }));
+    const { setFilter } = useFeed();
+    await setFilter('mine');
+    mockApiFetch.mockClear();
+    mockApiFetch.mockResolvedValue(mockFetchResponse({ posts: [], cursor: null }));
+    await setFilter(null);
+    expect(mockApiFetch).toHaveBeenCalledWith('/api/posts?sort=recent&limit=20');
+  });
+
   it('error ref is set on fetch failure', async () => {
     mockApiFetch.mockResolvedValue(mockFetchResponse({ error: 'Server error' }, false));
     const { loadPosts, error } = useFeed();

@@ -204,6 +204,11 @@ function createTestRouter(): Router {
         name: 'post-edit',
         component: { template: '<div>Edit</div>' },
       },
+      {
+        path: '/tags/:name',
+        name: 'tag-view',
+        component: { template: '<div>Tag</div>' },
+      },
     ],
   });
 }
@@ -342,6 +347,24 @@ describe('PostViewPage', () => {
 
       expect(wrapper.find('[data-testid="post-tag-chip-rust"]').exists()).toBe(true);
       expect(wrapper.find('[data-testid="post-tag-chip-typescript"]').exists()).toBe(true);
+    });
+
+    it('tag chips are navigable links to /tags/:name (#49)', async () => {
+      const post = createMockPost({ tags: ['rust'] });
+      mockFetchPost.mockImplementation(async () => {
+        mockCurrentPost.value = post;
+      });
+      mockUser.value = createMockUser({ id: post.authorId });
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      const chip = wrapper.find('[data-testid="post-tag-chip-rust"]');
+      expect(chip.exists()).toBe(true);
+      // RouterLink renders as <a>; the e2e click-tag-from-post spec relies on
+      // this navigating to /tags/:name from the post-view page.
+      expect(chip.element.tagName.toLowerCase()).toBe('a');
+      expect(chip.attributes('href')).toBe('/tags/rust');
     });
 
     it('omits the tag-chip block when post has no tags', async () => {

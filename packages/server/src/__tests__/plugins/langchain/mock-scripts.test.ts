@@ -1,9 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { aiSearchFiltersSchema } from '@forge/shared';
 import {
   mockScripts,
   DEFAULT_SCRIPT_KEY,
   resolveMockScript,
 } from '../../../plugins/langchain/mock-scripts.js';
+import { ChatMock, mockScriptStorage } from '../../../plugins/langchain/mock-provider.js';
+import { createSearchChain } from '../../../plugins/langchain/chains/search.js';
 
 describe('mock-scripts registry', () => {
   it('exposes a default script key', () => {
@@ -69,5 +72,55 @@ describe('resolveMockScript', () => {
     process.env.NODE_ENV = 'production';
     expect(resolveMockScript('nonexistent-key')).toBe(mockScripts[DEFAULT_SCRIPT_KEY]);
     expect(warnSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('search-resolves-to-typescript-tag mock script (Issue #49)', () => {
+  const KEY = 'search-resolves-to-typescript-tag';
+
+  it('is registered in the mock-scripts registry', () => {
+    expect(mockScripts[KEY]).toBeDefined();
+    expect(mockScripts[KEY].length).toBeGreaterThan(0);
+  });
+
+  it('chunks concatenate to valid JSON that parses to AiSearchFilters with tags=["typescript"]', () => {
+    const assembled = mockScripts[KEY].join('');
+    const parsed: unknown = JSON.parse(assembled);
+    const validation = aiSearchFiltersSchema.safeParse(parsed);
+    expect(validation.success).toBe(true);
+    if (validation.success) {
+      expect(validation.data).toEqual({
+        tags: ['typescript'],
+        language: null,
+        contentType: null,
+        textQuery: 'typescript',
+      });
+    }
+  });
+
+  it('streams via ChatMock + StringOutputParser to produce the deterministic JSON', async () => {
+    // Mirrors the structure search chain runs through: prompt → model → string
+    // parser. Since runSearchChain uses .invoke() not .stream() (a separate
+    // concern owned by WU2), we exercise the script's streaming-assembly path
+    // directly via the chain's stream() so this test stays scoped to WU7.
+    const model = new ChatMock({});
+    const chain = createSearchChain(model);
+    const collected: string[] = [];
+    await mockScriptStorage.run(KEY, async () => {
+      const stream = await chain.stream({ query: 'typescript' });
+      for await (const chunk of stream) collected.push(chunk);
+    });
+    const assembled = collected.join('');
+    const parsed: unknown = JSON.parse(assembled);
+    const validation = aiSearchFiltersSchema.safeParse(parsed);
+    expect(validation.success).toBe(true);
+    if (validation.success) {
+      expect(validation.data).toEqual({
+        tags: ['typescript'],
+        language: null,
+        contentType: null,
+        textQuery: 'typescript',
+      });
+    }
   });
 });

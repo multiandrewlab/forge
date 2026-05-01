@@ -12,6 +12,8 @@ function createMockSearchResponse(overrides: Partial<SearchResponse> = {}): Sear
     people: [],
     query: 'test',
     totalResults: 0,
+    page: 1,
+    totalPages: 1,
     ...overrides,
   };
 }
@@ -33,6 +35,10 @@ describe('useSearchStore', () => {
       expect(store.recentQueries).toEqual([]);
       expect(store.activeIndex).toBe(0);
       expect(store.aiEnabled).toBe(false);
+      expect(store.page).toBe(1);
+      expect(store.totalPages).toBe(1);
+      expect(store.author).toBeNull();
+      expect(store.since).toBeNull();
     });
 
     it('should load recentQueries from localStorage', () => {
@@ -121,6 +127,25 @@ describe('useSearchStore', () => {
 
       store.setResults(null);
       expect(store.results).toBeNull();
+    });
+
+    it('should mirror page and totalPages from the response', () => {
+      const store = useSearchStore();
+      const response = createMockSearchResponse({ page: 3, totalPages: 5 });
+
+      store.setResults(response);
+      expect(store.page).toBe(3);
+      expect(store.totalPages).toBe(5);
+    });
+
+    it('should reset page and totalPages to 1 when results is null', () => {
+      const store = useSearchStore();
+      store.setResults(createMockSearchResponse({ page: 4, totalPages: 9 }));
+      expect(store.page).toBe(4);
+
+      store.setResults(null);
+      expect(store.page).toBe(1);
+      expect(store.totalPages).toBe(1);
     });
   });
 
@@ -228,6 +253,54 @@ describe('useSearchStore', () => {
       store.clearResults();
       expect(store.results).toBeNull();
       expect(store.query).toBe('');
+    });
+
+    it('should reset page and totalPages to 1', () => {
+      const store = useSearchStore();
+      store.setResults(createMockSearchResponse({ page: 3, totalPages: 7 }));
+      expect(store.page).toBe(3);
+
+      store.clearResults();
+      expect(store.page).toBe(1);
+      expect(store.totalPages).toBe(1);
+    });
+  });
+
+  describe('setPage', () => {
+    it('should update page', () => {
+      const store = useSearchStore();
+      store.setPage(4);
+      expect(store.page).toBe(4);
+    });
+  });
+
+  describe('setAuthor', () => {
+    it('should update author', () => {
+      const store = useSearchStore();
+      store.setAuthor('Alice');
+      expect(store.author).toBe('Alice');
+    });
+
+    it('should clear author with null', () => {
+      const store = useSearchStore();
+      store.setAuthor('Alice');
+      store.setAuthor(null);
+      expect(store.author).toBeNull();
+    });
+  });
+
+  describe('setSince', () => {
+    it('should update since', () => {
+      const store = useSearchStore();
+      store.setSince('7d');
+      expect(store.since).toBe('7d');
+    });
+
+    it('should clear since with null', () => {
+      const store = useSearchStore();
+      store.setSince('today');
+      store.setSince(null);
+      expect(store.since).toBeNull();
     });
   });
 

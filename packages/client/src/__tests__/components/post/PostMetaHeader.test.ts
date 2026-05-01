@@ -61,6 +61,38 @@ describe('PostMetaHeader', () => {
     expect(wrapper.text()).toContain('#vue');
   });
 
+  it('tag chips are RouterLinks pointing to /tags/:name (#49)', () => {
+    const wrapper = mount(PostMetaHeader, {
+      props: { post: mockPost },
+      global: defaultGlobal,
+    });
+
+    const links = wrapper.findAllComponents(RouterLinkStub);
+    const tagLinks = links.filter((l) => {
+      const to = l.props('to') as { name?: string };
+      return to.name === 'tag-view';
+    });
+    expect(tagLinks).toHaveLength(2);
+    expect(tagLinks[0].props('to')).toEqual({
+      name: 'tag-view',
+      params: { name: 'frontend' },
+    });
+    expect(tagLinks[1].props('to')).toEqual({
+      name: 'tag-view',
+      params: { name: 'vue' },
+    });
+  });
+
+  it('tag chip preserves data-testid="post-tag-chip-<name>"', () => {
+    const wrapper = mount(PostMetaHeader, {
+      props: { post: mockPost },
+      global: defaultGlobal,
+    });
+
+    expect(wrapper.find('[data-testid="post-tag-chip-frontend"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="post-tag-chip-vue"]').exists()).toBe(true);
+  });
+
   it('does not render tags section when tags is empty', () => {
     const noTagsPost = { ...mockPost, tags: [] };
     const wrapper = mount(PostMetaHeader, {

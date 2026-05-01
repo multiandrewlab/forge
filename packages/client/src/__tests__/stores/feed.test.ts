@@ -76,6 +76,25 @@ describe('useFeedStore', () => {
     expect(store.filter).toBe('mine');
   });
 
+  it('setFilter accepts "subscribed"', () => {
+    const store = useFeedStore();
+    store.setFilter('subscribed');
+    expect(store.filter).toBe('subscribed');
+  });
+
+  it('setFilter accepts "bookmarked"', () => {
+    const store = useFeedStore();
+    store.setFilter('bookmarked');
+    expect(store.filter).toBe('bookmarked');
+  });
+
+  it('setFilter accepts null (clears)', () => {
+    const store = useFeedStore();
+    store.setFilter('mine');
+    store.setFilter(null);
+    expect(store.filter).toBeNull();
+  });
+
   it('setTag updates tag', () => {
     const store = useFeedStore();
     store.setTag('frontend');

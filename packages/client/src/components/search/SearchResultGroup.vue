@@ -12,6 +12,7 @@
       :data="item"
       :active="activeGlobalIndex === startIndex + i"
       @select="$emit('select', startIndex + i)"
+      @add-author-filter="$emit('addAuthorFilter', $event)"
     />
   </div>
 </template>
@@ -28,5 +29,8 @@ defineProps<{
   startIndex: number;
 }>();
 
-defineEmits<{ select: [globalIndex: number] }>();
+defineEmits<{
+  select: [globalIndex: number];
+  addAuthorFilter: [displayName: string];
+}>();
 </script>

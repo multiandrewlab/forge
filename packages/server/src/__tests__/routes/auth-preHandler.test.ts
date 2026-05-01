@@ -24,6 +24,7 @@ vi.mock('../../db/queries/search.js', () => ({
   searchPostsByTsvector: vi.fn(),
   searchPostsByTrigram: vi.fn(),
   searchUsers: vi.fn(),
+  countSearchPosts: vi.fn().mockResolvedValue(0),
 }));
 
 vi.mock('../../plugins/langchain/provider.js', () => ({

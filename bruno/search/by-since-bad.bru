@@ -1,0 +1,25 @@
+meta {
+  name: search by since (invalid token → 400)
+  type: http
+  seq: 13
+}
+
+get {
+  url: {{baseUrl}}/api/search?q=typescript&since=banana
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+assert {
+  res.status: eq 400
+}
+
+docs {
+  Validates that an unrecognised `since` token is rejected with 400.
+  The schema accepts only the strict enum ['today', '7d', '30d'].
+  Issue #49.
+}

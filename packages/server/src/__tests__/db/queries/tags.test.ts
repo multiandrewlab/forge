@@ -18,6 +18,7 @@ import {
   getUserSubscriptions,
 } from '../../../db/queries/tags.js';
 import type { TagRow, PostTagRow } from '../../../db/queries/types.js';
+import type { TagRowWithStats } from '../../../db/queries/tags.js';
 
 const mockQuery = query as Mock;
 
@@ -27,23 +28,44 @@ const sampleTag: TagRow = {
   post_count: 5,
 };
 
+const sampleTagWithStats: TagRowWithStats = {
+  ...sampleTag,
+  subscriber_count: 3,
+};
+
 describe('tag queries', () => {
   beforeEach(() => {
     mockQuery.mockReset();
   });
 
   describe('findTagByName', () => {
-    it('returns the tag when found', async () => {
-      mockQuery.mockResolvedValue({ rows: [sampleTag], rowCount: 1 });
+    it('returns the tag with subscriber_count when found (case-insensitive lookup)', async () => {
+      mockQuery.mockResolvedValue({ rows: [sampleTagWithStats], rowCount: 1 });
       const result = await findTagByName('typescript');
-      expect(mockQuery).toHaveBeenCalledWith('SELECT * FROM tags WHERE name = $1', ['typescript']);
-      expect(result).toEqual(sampleTag);
+      expect(mockQuery).toHaveBeenCalledOnce();
+      const [sql, params] = mockQuery.mock.calls[0] as [string, unknown[]];
+      // Lookup must be case-insensitive — LOWER(t.name) = LOWER($1)
+      expect(sql).toMatch(/LOWER\(\s*t\.name\s*\)\s*=\s*LOWER\(\$1\)/i);
+      // Subscriber count must be aggregated as a subquery over user_tag_subscriptions
+      expect(sql).toMatch(/COUNT\(\*\)::int/i);
+      expect(sql).toContain('user_tag_subscriptions');
+      expect(sql.toLowerCase()).toContain('subscriber_count');
+      expect(params).toEqual(['typescript']);
+      expect(result).toEqual(sampleTagWithStats);
+      expect(result?.subscriber_count).toBe(3);
     });
 
     it('returns null when not found', async () => {
       mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });
       const result = await findTagByName('nonexistent');
       expect(result).toBeNull();
+    });
+
+    it('returns subscriber_count = 0 when tag has no subscribers', async () => {
+      const noSubs: TagRowWithStats = { ...sampleTag, subscriber_count: 0 };
+      mockQuery.mockResolvedValue({ rows: [noSubs], rowCount: 1 });
+      const result = await findTagByName('python');
+      expect(result?.subscriber_count).toBe(0);
     });
   });
 

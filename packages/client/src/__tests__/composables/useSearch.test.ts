@@ -16,7 +16,7 @@ vi.mock('../../lib/api.js', () => ({
   apiFetch: (...args: unknown[]) => mockApiFetch(...args) as unknown,
 }));
 
-import { useSearch } from '../../composables/useSearch.js';
+import { useSearch, buildSearchUrl } from '../../composables/useSearch.js';
 
 const FAKE_SEARCH_RESPONSE: SearchResponse = {
   snippets: [],
@@ -24,6 +24,8 @@ const FAKE_SEARCH_RESPONSE: SearchResponse = {
   people: [],
   query: 'vue',
   totalResults: 0,
+  page: 1,
+  totalPages: 1,
 };
 
 describe('useSearch', () => {
@@ -285,7 +287,7 @@ describe('useSearch', () => {
     });
   });
 
-  describe('encodeURIComponent for special characters', () => {
+  describe('URL encoding for special characters', () => {
     it('encodes query parameter correctly', async () => {
       mockApiFetch.mockResolvedValue(mockResponse(FAKE_SEARCH_RESPONSE));
 
@@ -293,7 +295,122 @@ describe('useSearch', () => {
       search('hello world&foo=bar');
       await vi.advanceTimersByTimeAsync(300);
 
-      expect(mockApiFetch).toHaveBeenCalledWith('/api/search?q=hello%20world%26foo%3Dbar');
+      // URLSearchParams encodes spaces as `+` (form-style); the server
+      // accepts both `+` and `%20` in query strings.
+      expect(mockApiFetch).toHaveBeenCalledWith('/api/search?q=hello+world%26foo%3Dbar');
     });
+  });
+
+  describe('search opts (issue #49)', () => {
+    it('includes type, tag, fuzzy, author, since, page, limit in URL', async () => {
+      mockApiFetch.mockResolvedValue(mockResponse(FAKE_SEARCH_RESPONSE));
+
+      const { search } = useSearch();
+      search('vue', {
+        type: 'snippet',
+        tag: 'frontend',
+        fuzzy: true,
+        author: 'Alice',
+        since: '7d',
+        page: 3,
+        limit: 25,
+      });
+      await vi.advanceTimersByTimeAsync(300);
+
+      expect(mockApiFetch).toHaveBeenCalledTimes(1);
+      const url = mockApiFetch.mock.calls[0][0] as string;
+      expect(url).toContain('q=vue');
+      expect(url).toContain('type=snippet');
+      expect(url).toContain('tag=frontend');
+      expect(url).toContain('fuzzy=true');
+      expect(url).toContain('author=Alice');
+      expect(url).toContain('since=7d');
+      expect(url).toContain('page=3');
+      expect(url).toContain('limit=25');
+    });
+
+    it('omits page when page is 1 (default)', async () => {
+      mockApiFetch.mockResolvedValue(mockResponse(FAKE_SEARCH_RESPONSE));
+
+      const { search } = useSearch();
+      search('vue', { page: 1 });
+      await vi.advanceTimersByTimeAsync(300);
+
+      const url = mockApiFetch.mock.calls[0][0] as string;
+      expect(url).not.toContain('page=');
+    });
+
+    it('omits fuzzy when fuzzy=false', async () => {
+      mockApiFetch.mockResolvedValue(mockResponse(FAKE_SEARCH_RESPONSE));
+
+      const { search } = useSearch();
+      search('vue', { fuzzy: false });
+      await vi.advanceTimersByTimeAsync(300);
+
+      const url = mockApiFetch.mock.calls[0][0] as string;
+      expect(url).not.toContain('fuzzy=');
+    });
+
+    it('combines opts with aiEnabled flag', async () => {
+      mockApiFetch.mockResolvedValue(mockResponse(FAKE_SEARCH_RESPONSE));
+      const store = useSearchStore();
+      store.toggleAi();
+
+      const { search } = useSearch();
+      search('vue', { tag: 'foo' });
+      await vi.advanceTimersByTimeAsync(300);
+
+      const url = mockApiFetch.mock.calls[0][0] as string;
+      expect(url).toContain('ai=true');
+      expect(url).toContain('tag=foo');
+    });
+
+    it('honors explicit opts.ai=true even when store.aiEnabled is false', async () => {
+      mockApiFetch.mockResolvedValue(mockResponse(FAKE_SEARCH_RESPONSE));
+      const store = useSearchStore();
+      // store.aiEnabled defaults to false — do NOT toggle it on
+      expect(store.aiEnabled).toBe(false);
+
+      const { search } = useSearch();
+      search('vue', { ai: true });
+      await vi.advanceTimersByTimeAsync(300);
+
+      const url = mockApiFetch.mock.calls[0][0] as string;
+      expect(url).toContain('ai=true');
+    });
+
+    it('honors explicit opts.ai=false even when store.aiEnabled is true', async () => {
+      mockApiFetch.mockResolvedValue(mockResponse(FAKE_SEARCH_RESPONSE));
+      const store = useSearchStore();
+      store.toggleAi();
+      expect(store.aiEnabled).toBe(true);
+
+      const { search } = useSearch();
+      search('vue', { ai: false });
+      await vi.advanceTimersByTimeAsync(300);
+
+      const url = mockApiFetch.mock.calls[0][0] as string;
+      expect(url).not.toContain('ai=');
+    });
+  });
+});
+
+describe('buildSearchUrl', () => {
+  it('builds a basic url with just q', () => {
+    expect(buildSearchUrl('vue')).toBe('/api/search?q=vue');
+  });
+
+  it('appends ai=true when aiEnabled is true', () => {
+    expect(buildSearchUrl('vue', {}, true)).toBe('/api/search?q=vue&ai=true');
+  });
+
+  it('omits page when not provided or === 1', () => {
+    expect(buildSearchUrl('vue', { page: 1 })).toBe('/api/search?q=vue');
+    expect(buildSearchUrl('vue', { page: undefined })).toBe('/api/search?q=vue');
+  });
+
+  it('encodes special characters in q', () => {
+    const url = buildSearchUrl('hello world');
+    expect(url).toContain('q=hello+world');
   });
 });

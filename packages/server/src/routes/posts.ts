@@ -33,8 +33,11 @@ import { assertCanReadPost } from '../lib/visibility.js';
 
 const feedQuerySchema = z.object({
   sort: z.enum(['trending', 'recent', 'top', 'personalized']).default('recent'),
-  filter: z.enum(['mine', 'bookmarked']).optional(),
-  tag: z.string().max(50).optional(),
+  // Issue #49: 'subscribed' selects posts whose tags the caller subscribes to.
+  filter: z.enum(['mine', 'bookmarked', 'subscribed']).optional(),
+  // Issue #49: tag=<name> filters the feed to posts tagged with <name>.
+  // min(1) rejects ?tag= (empty string) at the schema layer.
+  tag: z.string().min(1).max(50).optional(),
   type: z.enum(['snippet', 'prompt', 'document', 'link']).optional(),
   cursor: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(100).default(20),
@@ -84,11 +87,9 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
 
     if (parsed.data.tags && parsed.data.tags.length > 0) {
       for (const tagName of parsed.data.tags) {
-        let tag = await findTagByName(tagName);
-        if (!tag) {
-          tag = await createTag(tagName);
-        }
-        await addPostTag(postRow.id, tag.id);
+        const existing = await findTagByName(tagName);
+        const tagId = existing ? existing.id : (await createTag(tagName)).id;
+        await addPostTag(postRow.id, tagId);
       }
     }
 

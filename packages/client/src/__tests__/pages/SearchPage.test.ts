@@ -7,6 +7,9 @@ import type { SearchResponse, SearchSnippet, UserSummary, AiAction } from '@forg
 import { useSearchStore } from '../../stores/search';
 
 // ── Mock useSearch ────────────────────────────────────────────────────
+// SearchPage uses `runSearch` (awaitable, non-debounced) — so the mock
+// here is wired to `runSearch` even though the assertion variable name
+// `mockSearch` is preserved for spec readability.
 const mockSearch = vi.fn();
 const mockClearResults = vi.fn();
 
@@ -16,6 +19,7 @@ vi.mock('../../composables/useSearch.js', () => ({
     results: ref<SearchResponse | null>(null),
     isLoading: ref(false),
     search: mockSearch,
+    runSearch: mockSearch,
     clearResults: mockClearResults,
   }),
 }));
@@ -51,6 +55,7 @@ function makeResults(
   snippets: SearchSnippet[] = [snippet],
   aiActions: AiAction[] = [aiAction],
   people: UserSummary[] = [person],
+  overrides: Partial<SearchResponse> = {},
 ): SearchResponse {
   return {
     snippets,
@@ -58,6 +63,9 @@ function makeResults(
     people,
     query: 'react',
     totalResults: snippets.length + aiActions.length + people.length,
+    page: 1,
+    totalPages: 1,
+    ...overrides,
   };
 }
 
@@ -70,6 +78,8 @@ function createTestRouter(): Router {
     routes: [
       { path: '/', component: { template: '<div />' } },
       { path: '/search', name: 'search', component: SearchPage },
+      { path: '/posts/new', name: 'post-new', component: { template: '<div />' } },
+      { path: '/posts/:id', name: 'post-view', component: { template: '<div />' } },
     ],
   });
 }
@@ -96,7 +106,8 @@ describe('SearchPage.vue', () => {
     mount(SearchPage, { global: { plugins: [router] } });
     await flushPromises();
 
-    expect(mockSearch).toHaveBeenCalledWith('react');
+    expect(mockSearch).toHaveBeenCalled();
+    expect(mockSearch.mock.calls[0][0]).toBe('react');
   });
 
   // ── DoD #1: Watches route.query changes ──
@@ -111,7 +122,8 @@ describe('SearchPage.vue', () => {
     await router.push({ path: '/search', query: { q: 'vue' } });
     await flushPromises();
 
-    expect(mockSearch).toHaveBeenCalledWith('vue');
+    expect(mockSearch).toHaveBeenCalled();
+    expect(mockSearch.mock.calls[0][0]).toBe('vue');
   });
 
   // ── DoD #2: Header shows "Results for {q}" ──
@@ -270,6 +282,22 @@ describe('SearchPage.vue', () => {
     expect(fuzzyLink.exists()).toBe(true);
   });
 
+  // ── hasNoResults ignores aiActions (synthesized from query) ──
+  it('shows "Try fuzzy search" link even when aiActions is non-empty (snippets + people are empty)', async () => {
+    await router.push({ path: '/search', query: { q: 'xyznotfound' } });
+    await router.isReady();
+
+    // Server populates aiActions for ANY query — they should not count as
+    // "results" for the no-results / try-fuzzy-link gate.
+    store.setResults(makeResults([], [aiAction], []));
+
+    const wrapper = mount(SearchPage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="try-fuzzy-link"]').exists()).toBe(true);
+    expect(wrapper.text()).toContain('No results for');
+  });
+
   // ── DoD #8: Try fuzzy toggles ?fuzzy=true ──
   it('"Try fuzzy search" link adds fuzzy=true to route', async () => {
     await router.push({ path: '/search', query: { q: 'xyznotfound' } });
@@ -313,6 +341,8 @@ describe('SearchPage.vue', () => {
       people: [],
       query: 'empty',
       totalResults: 0,
+      page: 1,
+      totalPages: 1,
     });
 
     const wrapper = mount(SearchPage, { global: { plugins: [router] } });
@@ -572,6 +602,686 @@ describe('SearchPage.vue', () => {
     await router.push({ path: '/search', query: { q: 'react', fuzzy: 'true' } });
     await flushPromises();
 
-    expect(mockSearch).toHaveBeenCalledWith('react');
+    expect(mockSearch).toHaveBeenCalled();
+    expect(mockSearch.mock.calls[0][0]).toBe('react');
+    // Verify fuzzy is forwarded as opts.fuzzy
+    expect(mockSearch.mock.calls[0][1]).toEqual({ fuzzy: true });
+  });
+
+  // ── Issue #49: ?ai=true threads through buildOpts ─────────────────
+  it('forwards ai=true from route.query.ai into search opts', async () => {
+    await router.push({ path: '/search', query: { q: 'foo', ai: 'true' } });
+    await router.isReady();
+
+    mount(SearchPage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    expect(mockSearch).toHaveBeenCalled();
+    expect(mockSearch.mock.calls[0][0]).toBe('foo');
+    expect(mockSearch.mock.calls[0][1]).toEqual(expect.objectContaining({ ai: true }));
+  });
+
+  // ── Issue #49: filter-chip-author ─────────────────────────────────
+  describe('author filter chip', () => {
+    it('renders filter-chip-author when author is in route.query', async () => {
+      await router.push({ path: '/search', query: { q: 'react', author: 'Alice' } });
+      await router.isReady();
+
+      const wrapper = mount(SearchPage, { global: { plugins: [router] } });
+      await flushPromises();
+
+      const chip = wrapper.find('[data-testid="filter-chip-author"]');
+      expect(chip.exists()).toBe(true);
+      expect(chip.text()).toContain('Alice');
+    });
+
+    it('removes author filter when X is clicked', async () => {
+      await router.push({ path: '/search', query: { q: 'react', author: 'Alice' } });
+      await router.isReady();
+
+      const wrapper = mount(SearchPage, { global: { plugins: [router] } });
+      await flushPromises();
+
+      const pushSpy = vi.spyOn(router, 'push');
+      const removeBtn = wrapper.find('[data-testid="remove-filter-author"]');
+      await removeBtn.trigger('click');
+
+      expect(pushSpy).toHaveBeenCalledWith({
+        path: '/search',
+        query: { q: 'react' },
+      });
+    });
+
+    it('forwards author to search opts', async () => {
+      await router.push({ path: '/search', query: { q: 'react', author: 'Alice' } });
+      await router.isReady();
+
+      mount(SearchPage, { global: { plugins: [router] } });
+      await flushPromises();
+
+      expect(mockSearch.mock.calls[0][1]).toEqual({ author: 'Alice' });
+    });
+
+    it('preserves since filter when removing author filter', async () => {
+      await router.push({
+        path: '/search',
+        query: { q: 'react', author: 'Alice', since: '7d' },
+      });
+      await router.isReady();
+
+      const wrapper = mount(SearchPage, { global: { plugins: [router] } });
+      await flushPromises();
+
+      const pushSpy = vi.spyOn(router, 'push');
+      await wrapper.find('[data-testid="remove-filter-author"]').trigger('click');
+
+      expect(pushSpy).toHaveBeenCalledWith({
+        path: '/search',
+        query: { q: 'react', since: '7d' },
+      });
+    });
+  });
+
+  // ── Issue #49: filter-chip-since ──────────────────────────────────
+  describe('since filter chip', () => {
+    it('renders filter-chip-since when since is in route.query', async () => {
+      await router.push({ path: '/search', query: { q: 'react', since: '7d' } });
+      await router.isReady();
+
+      const wrapper = mount(SearchPage, { global: { plugins: [router] } });
+      await flushPromises();
+
+      const chip = wrapper.find('[data-testid="filter-chip-since"]');
+      expect(chip.exists()).toBe(true);
+      expect(chip.text()).toContain('7d');
+    });
+
+    it('removes since filter when X is clicked', async () => {
+      await router.push({ path: '/search', query: { q: 'react', since: '7d' } });
+      await router.isReady();
+
+      const wrapper = mount(SearchPage, { global: { plugins: [router] } });
+      await flushPromises();
+
+      const pushSpy = vi.spyOn(router, 'push');
+      const removeBtn = wrapper.find('[data-testid="remove-filter-since"]');
+      await removeBtn.trigger('click');
+
+      expect(pushSpy).toHaveBeenCalledWith({
+        path: '/search',
+        query: { q: 'react' },
+      });
+    });
+
+    it('forwards since to search opts', async () => {
+      await router.push({ path: '/search', query: { q: 'react', since: '30d' } });
+      await router.isReady();
+
+      mount(SearchPage, { global: { plugins: [router] } });
+      await flushPromises();
+
+      expect(mockSearch.mock.calls[0][1]).toEqual({ since: '30d' });
+    });
+
+    it('preserves author filter when removing since filter', async () => {
+      await router.push({
+        path: '/search',
+        query: { q: 'react', author: 'Alice', since: '7d' },
+      });
+      await router.isReady();
+
+      const wrapper = mount(SearchPage, { global: { plugins: [router] } });
+      await flushPromises();
+
+      const pushSpy = vi.spyOn(router, 'push');
+      await wrapper.find('[data-testid="remove-filter-since"]').trigger('click');
+
+      expect(pushSpy).toHaveBeenCalledWith({
+        path: '/search',
+        query: { q: 'react', author: 'Alice' },
+      });
+    });
+  });
+
+  // ── Issue #49: since-preset row ───────────────────────────────────
+  describe('since-preset row', () => {
+    it('renders 4 preset chips', async () => {
+      await router.push({ path: '/search', query: { q: 'react' } });
+      await router.isReady();
+
+      const wrapper = mount(SearchPage, { global: { plugins: [router] } });
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid="since-preset-today"]').exists()).toBe(true);
+      expect(wrapper.find('[data-testid="since-preset-7d"]').exists()).toBe(true);
+      expect(wrapper.find('[data-testid="since-preset-30d"]').exists()).toBe(true);
+      expect(wrapper.find('[data-testid="since-preset-all"]').exists()).toBe(true);
+    });
+
+    it('clicking Today pushes ?since=today', async () => {
+      await router.push({ path: '/search', query: { q: 'react' } });
+      await router.isReady();
+
+      const wrapper = mount(SearchPage, { global: { plugins: [router] } });
+      await flushPromises();
+
+      const pushSpy = vi.spyOn(router, 'push');
+      await wrapper.find('[data-testid="since-preset-today"]').trigger('click');
+
+      expect(pushSpy).toHaveBeenCalledWith({
+        path: '/search',
+        query: { q: 'react', since: 'today' },
+      });
+    });
+
+    it('clicking 7d pushes ?since=7d', async () => {
+      await router.push({ path: '/search', query: { q: 'react' } });
+      await router.isReady();
+
+      const wrapper = mount(SearchPage, { global: { plugins: [router] } });
+      await flushPromises();
+
+      const pushSpy = vi.spyOn(router, 'push');
+      await wrapper.find('[data-testid="since-preset-7d"]').trigger('click');
+
+      expect(pushSpy).toHaveBeenCalledWith({
+        path: '/search',
+        query: { q: 'react', since: '7d' },
+      });
+    });
+
+    it('clicking 30d pushes ?since=30d', async () => {
+      await router.push({ path: '/search', query: { q: 'react' } });
+      await router.isReady();
+
+      const wrapper = mount(SearchPage, { global: { plugins: [router] } });
+      await flushPromises();
+
+      const pushSpy = vi.spyOn(router, 'push');
+      await wrapper.find('[data-testid="since-preset-30d"]').trigger('click');
+
+      expect(pushSpy).toHaveBeenCalledWith({
+        path: '/search',
+        query: { q: 'react', since: '30d' },
+      });
+    });
+
+    it('clicking All time omits since param', async () => {
+      await router.push({ path: '/search', query: { q: 'react', since: '7d' } });
+      await router.isReady();
+
+      const wrapper = mount(SearchPage, { global: { plugins: [router] } });
+      await flushPromises();
+
+      const pushSpy = vi.spyOn(router, 'push');
+      await wrapper.find('[data-testid="since-preset-all"]').trigger('click');
+
+      expect(pushSpy).toHaveBeenCalledWith({
+        path: '/search',
+        query: { q: 'react' },
+      });
+    });
+
+    it('preserves type, tag, fuzzy, author when picking a since preset', async () => {
+      await router.push({
+        path: '/search',
+        query: { q: 'react', type: 'snippet', tag: 'js', fuzzy: 'true', author: 'Alice' },
+      });
+      await router.isReady();
+
+      const wrapper = mount(SearchPage, { global: { plugins: [router] } });
+      await flushPromises();
+
+      const pushSpy = vi.spyOn(router, 'push');
+      await wrapper.find('[data-testid="since-preset-7d"]').trigger('click');
+
+      expect(pushSpy).toHaveBeenCalledWith({
+        path: '/search',
+        query: {
+          q: 'react',
+          type: 'snippet',
+          tag: 'js',
+          fuzzy: 'true',
+          author: 'Alice',
+          since: '7d',
+        },
+      });
+    });
+  });
+
+  // ── Issue #49: <SearchPagination> ─────────────────────────────────
+  describe('SearchPagination', () => {
+    it('renders SearchPagination when totalPages > 1', async () => {
+      await router.push({ path: '/search', query: { q: 'react' } });
+      await router.isReady();
+
+      store.setResults(makeResults([snippet], [], [], { page: 1, totalPages: 3 }));
+
+      const wrapper = mount(SearchPage, { global: { plugins: [router] } });
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid="search-pagination"]').exists()).toBe(true);
+    });
+
+    it('clicking Next pushes ?page=2', async () => {
+      await router.push({ path: '/search', query: { q: 'react' } });
+      await router.isReady();
+
+      store.setResults(makeResults([snippet], [], [], { page: 1, totalPages: 3 }));
+
+      const wrapper = mount(SearchPage, { global: { plugins: [router] } });
+      await flushPromises();
+
+      const pushSpy = vi.spyOn(router, 'push');
+      await wrapper.find('[data-testid="next-page-btn"]').trigger('click');
+
+      expect(pushSpy).toHaveBeenCalledWith({
+        path: '/search',
+        query: { q: 'react', page: '2' },
+      });
+    });
+
+    it('forwards page param to search opts when > 1', async () => {
+      await router.push({ path: '/search', query: { q: 'react', page: '2' } });
+      await router.isReady();
+
+      mount(SearchPage, { global: { plugins: [router] } });
+      await flushPromises();
+
+      expect(mockSearch.mock.calls[0][1]).toEqual({ page: 2 });
+    });
+
+    it('does not forward page param when === 1', async () => {
+      await router.push({ path: '/search', query: { q: 'react', page: '1' } });
+      await router.isReady();
+
+      mount(SearchPage, { global: { plugins: [router] } });
+      await flushPromises();
+
+      expect(mockSearch.mock.calls[0][1]).toEqual({});
+    });
+
+    it('does not forward page param when not provided', async () => {
+      await router.push({ path: '/search', query: { q: 'react' } });
+      await router.isReady();
+
+      mount(SearchPage, { global: { plugins: [router] } });
+      await flushPromises();
+
+      expect(mockSearch.mock.calls[0][1]).toEqual({});
+    });
+
+    it('treats invalid page param as 1 (no forwarding)', async () => {
+      await router.push({ path: '/search', query: { q: 'react', page: 'abc' } });
+      await router.isReady();
+
+      mount(SearchPage, { global: { plugins: [router] } });
+      await flushPromises();
+
+      expect(mockSearch.mock.calls[0][1]).toEqual({});
+    });
+
+    it('preserves filters when navigating to a new page', async () => {
+      await router.push({
+        path: '/search',
+        query: { q: 'react', type: 'snippet', tag: 'js', author: 'Alice', since: '7d' },
+      });
+      await router.isReady();
+
+      store.setResults(makeResults([snippet], [], [], { page: 1, totalPages: 3 }));
+
+      const wrapper = mount(SearchPage, { global: { plugins: [router] } });
+      await flushPromises();
+
+      const pushSpy = vi.spyOn(router, 'push');
+      await wrapper.find('[data-testid="next-page-btn"]').trigger('click');
+
+      expect(pushSpy).toHaveBeenCalledWith({
+        path: '/search',
+        query: {
+          q: 'react',
+          type: 'snippet',
+          tag: 'js',
+          author: 'Alice',
+          since: '7d',
+          page: '2',
+        },
+      });
+    });
+
+    it('drops page param when navigating back to page 1', async () => {
+      // Pagination shows current=2, click Prev → page 1 → query has no page param
+      await router.push({ path: '/search', query: { q: 'react', page: '2' } });
+      await router.isReady();
+
+      store.setResults(makeResults([snippet], [], [], { page: 2, totalPages: 5 }));
+
+      const wrapper = mount(SearchPage, { global: { plugins: [router] } });
+      await flushPromises();
+
+      const pushSpy = vi.spyOn(router, 'push');
+      await wrapper.find('[data-testid="prev-page-btn"]').trigger('click');
+
+      expect(pushSpy).toHaveBeenCalledWith({
+        path: '/search',
+        query: { q: 'react' },
+      });
+    });
+  });
+
+  // ── Issue #49: addAuthorFilter from result item ───────────────────
+  describe('addAuthorFilter event', () => {
+    it('clicking a result author button pushes ?author=<name>', async () => {
+      await router.push({ path: '/search', query: { q: 'react' } });
+      await router.isReady();
+
+      store.setResults(makeResults([snippet], [], []));
+
+      const wrapper = mount(SearchPage, { global: { plugins: [router] } });
+      await flushPromises();
+
+      const pushSpy = vi.spyOn(router, 'push');
+      const authorBtn = wrapper.find('[data-testid="search-result-author"]');
+      expect(authorBtn.exists()).toBe(true);
+      await authorBtn.trigger('click');
+
+      expect(pushSpy).toHaveBeenCalledWith({
+        path: '/search',
+        query: { q: 'react', author: 'Alice' },
+      });
+    });
+
+    it('preserves type, tag, since, fuzzy when adding author filter', async () => {
+      await router.push({
+        path: '/search',
+        query: { q: 'react', type: 'snippet', tag: 'js', since: '7d', fuzzy: 'true' },
+      });
+      await router.isReady();
+
+      store.setResults(makeResults([snippet], [], []));
+
+      const wrapper = mount(SearchPage, { global: { plugins: [router] } });
+      await flushPromises();
+
+      const pushSpy = vi.spyOn(router, 'push');
+      await wrapper.find('[data-testid="search-result-author"]').trigger('click');
+
+      expect(pushSpy).toHaveBeenCalledWith({
+        path: '/search',
+        query: {
+          q: 'react',
+          type: 'snippet',
+          tag: 'js',
+          since: '7d',
+          fuzzy: 'true',
+          author: 'Alice',
+        },
+      });
+    });
+  });
+
+  // ── Issue #49: aiResolvedFilters URL rewrite ──────────────────────
+  describe('aiResolvedFilters URL rewrite', () => {
+    it('replaces route with resolved filters and removes ai=true after AI search', async () => {
+      await router.push({ path: '/search', query: { q: 'foo bar', ai: 'true' } });
+      await router.isReady();
+
+      // Simulate the server returning aiResolvedFilters in the response.
+      mockSearch.mockImplementationOnce(async () => {
+        store.setResults(
+          makeResults([snippet], [], [], {
+            aiResolvedFilters: { tag: 'frontend', type: 'snippet' },
+          }),
+        );
+      });
+
+      const replaceSpy = vi.spyOn(router, 'replace');
+      mount(SearchPage, { global: { plugins: [router] } });
+      await flushPromises();
+
+      expect(replaceSpy).toHaveBeenCalledWith({
+        path: '/search',
+        query: expect.objectContaining({
+          q: 'foo bar',
+          tag: 'frontend',
+          type: 'snippet',
+        }),
+      });
+      const lastCall = replaceSpy.mock.calls[replaceSpy.mock.calls.length - 1][0];
+      const lastQuery = (lastCall as { query: Record<string, string> }).query;
+      expect(lastQuery.ai).toBeUndefined();
+    });
+
+    it('does not call router.replace when no aiResolvedFilters in response', async () => {
+      await router.push({ path: '/search', query: { q: 'foo', ai: 'true' } });
+      await router.isReady();
+
+      mockSearch.mockImplementationOnce(async () => {
+        store.setResults(makeResults([snippet], [], []));
+      });
+
+      const replaceSpy = vi.spyOn(router, 'replace');
+      mount(SearchPage, { global: { plugins: [router] } });
+      await flushPromises();
+
+      expect(replaceSpy).not.toHaveBeenCalled();
+    });
+
+    it('does not call router.replace when ai is not true', async () => {
+      await router.push({ path: '/search', query: { q: 'foo' } });
+      await router.isReady();
+
+      mockSearch.mockImplementationOnce(async () => {
+        store.setResults(
+          makeResults([snippet], [], [], {
+            aiResolvedFilters: { tag: 'frontend' },
+          }),
+        );
+      });
+
+      const replaceSpy = vi.spyOn(router, 'replace');
+      mount(SearchPage, { global: { plugins: [router] } });
+      await flushPromises();
+
+      expect(replaceSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── Issue #49: tryFuzzy preserves all filters ─────────────────────
+  it('"Try fuzzy search" preserves author and since filters', async () => {
+    await router.push({
+      path: '/search',
+      query: { q: 'xyznotfound', author: 'Bob', since: '7d' },
+    });
+    await router.isReady();
+
+    store.setResults(makeResults([], [], []));
+
+    const wrapper = mount(SearchPage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    const pushSpy = vi.spyOn(router, 'push');
+    const fuzzyLink = wrapper.find('[data-testid="try-fuzzy-link"]');
+    await fuzzyLink.trigger('click');
+
+    expect(pushSpy).toHaveBeenCalledWith({
+      path: '/search',
+      query: { q: 'xyznotfound', author: 'Bob', since: '7d', fuzzy: 'true' },
+    });
+  });
+
+  // ── Issue #49: setPage preserves fuzzy when paginating ─────────────
+  it('paginating preserves fuzzy=true', async () => {
+    await router.push({
+      path: '/search',
+      query: { q: 'react', fuzzy: 'true' },
+    });
+    await router.isReady();
+
+    store.setResults(makeResults([snippet], [], [], { page: 1, totalPages: 3 }));
+
+    const wrapper = mount(SearchPage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    const pushSpy = vi.spyOn(router, 'push');
+    await wrapper.find('[data-testid="next-page-btn"]').trigger('click');
+
+    expect(pushSpy).toHaveBeenCalledWith({
+      path: '/search',
+      query: { q: 'react', fuzzy: 'true', page: '2' },
+    });
+  });
+
+  // ── Issue #49: filter chip group renders when any of the four is set ──
+  it('renders the chip group when only author is set', async () => {
+    await router.push({ path: '/search', query: { q: 'react', author: 'Bob' } });
+    await router.isReady();
+
+    const wrapper = mount(SearchPage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="filter-chip-author"]').exists()).toBe(true);
+  });
+
+  it('renders the chip group when only since is set', async () => {
+    await router.push({ path: '/search', query: { q: 'react', since: 'today' } });
+    await router.isReady();
+
+    const wrapper = mount(SearchPage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="filter-chip-since"]').exists()).toBe(true);
+  });
+
+  // ── Issue #49: clicking a search result navigates to the right destination ──
+  describe('result click navigation (Issue #49)', () => {
+    it('navigates to /posts/:id when a snippet result is selected', async () => {
+      await router.push({ path: '/search', query: { q: 'react' } });
+      await router.isReady();
+
+      store.setResults(makeResults());
+
+      const wrapper = mount(SearchPage, { global: { plugins: [router] } });
+      await flushPromises();
+
+      const groups = wrapper.findAllComponents({ name: 'SearchResultGroup' });
+      // Snippets group is first; emit select with global index 0 (the snippet)
+      const snippetsGroup = groups[0];
+      if (!snippetsGroup) throw new Error('Snippets group not found');
+      snippetsGroup.vm.$emit('select', 0);
+      await flushPromises();
+
+      expect(router.currentRoute.value.path).toBe('/posts/post-1');
+    });
+
+    it('navigates to /search?q=<displayName> when a person result is selected', async () => {
+      await router.push({ path: '/search', query: { q: 'react' } });
+      await router.isReady();
+
+      store.setResults(makeResults());
+
+      const wrapper = mount(SearchPage, { global: { plugins: [router] } });
+      await flushPromises();
+
+      const groups = wrapper.findAllComponents({ name: 'SearchResultGroup' });
+      // People group is third; global index = snippets(1) + aiActions(1) = 2
+      const peopleGroup = groups[2];
+      if (!peopleGroup) throw new Error('People group not found');
+      peopleGroup.vm.$emit('select', 2);
+      await flushPromises();
+
+      expect(router.currentRoute.value.path).toBe('/search');
+      expect(router.currentRoute.value.query.q).toBe('Alice Smith');
+    });
+
+    it('navigates to /posts/new with prefilled params when an aiAction is selected', async () => {
+      await router.push({ path: '/search', query: { q: 'react' } });
+      await router.isReady();
+
+      const filledAction: AiAction = {
+        label: 'Generate snippet',
+        action: 'generate',
+        params: {
+          description: 'A useEffect example',
+          contentType: 'snippet',
+          language: 'typescript',
+        },
+      };
+      store.setResults(makeResults([snippet], [filledAction], [person]));
+
+      const wrapper = mount(SearchPage, { global: { plugins: [router] } });
+      await flushPromises();
+
+      const groups = wrapper.findAllComponents({ name: 'SearchResultGroup' });
+      // AI Actions group is second; global index = snippets(1) = 1
+      const aiActionsGroup = groups[1];
+      if (!aiActionsGroup) throw new Error('AI Actions group not found');
+      aiActionsGroup.vm.$emit('select', 1);
+      await flushPromises();
+
+      expect(router.currentRoute.value.path).toBe('/posts/new');
+      expect(router.currentRoute.value.query.description).toBe('A useEffect example');
+      expect(router.currentRoute.value.query.contentType).toBe('snippet');
+      expect(router.currentRoute.value.query.language).toBe('typescript');
+    });
+
+    it('navigates to /posts/new without query params when aiAction has empty params', async () => {
+      await router.push({ path: '/search', query: { q: 'react' } });
+      await router.isReady();
+
+      // aiAction fixture above has empty params
+      store.setResults(makeResults());
+
+      const wrapper = mount(SearchPage, { global: { plugins: [router] } });
+      await flushPromises();
+
+      const groups = wrapper.findAllComponents({ name: 'SearchResultGroup' });
+      const aiActionsGroup = groups[1];
+      if (!aiActionsGroup) throw new Error('AI Actions group not found');
+      aiActionsGroup.vm.$emit('select', 1);
+      await flushPromises();
+
+      expect(router.currentRoute.value.path).toBe('/posts/new');
+      expect(router.currentRoute.value.query.description).toBeUndefined();
+      expect(router.currentRoute.value.query.contentType).toBeUndefined();
+      expect(router.currentRoute.value.query.language).toBeUndefined();
+    });
+
+    it('does nothing when results is null (early-return guard)', async () => {
+      await router.push({ path: '/search', query: { q: 'react' } });
+      await router.isReady();
+
+      // results stays null (no setResults call). The template never renders a
+      // SearchResultGroup in that state, so we exercise the guard directly via
+      // the component's exposed onSelect handler.
+      const wrapper = mount(SearchPage, { global: { plugins: [router] } });
+      await flushPromises();
+
+      const exposed = wrapper.vm as unknown as { onSelect: (i: number) => void };
+      exposed.onSelect(0);
+      await flushPromises();
+
+      expect(router.currentRoute.value.path).toBe('/search');
+    });
+
+    it('does nothing when global index is out of range', async () => {
+      await router.push({ path: '/search', query: { q: 'react' } });
+      await router.isReady();
+
+      store.setResults(makeResults());
+
+      const wrapper = mount(SearchPage, { global: { plugins: [router] } });
+      await flushPromises();
+
+      const groups = wrapper.findAllComponents({ name: 'SearchResultGroup' });
+      // Out-of-range index — past the end of all three lists
+      const snippetsGroup = groups[0];
+      if (!snippetsGroup) throw new Error('Snippets group not found');
+      snippetsGroup.vm.$emit('select', 999);
+      await flushPromises();
+
+      // Route did not change away from /search
+      expect(router.currentRoute.value.path).toBe('/search');
+    });
   });
 });

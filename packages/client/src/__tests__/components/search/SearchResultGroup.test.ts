@@ -177,4 +177,21 @@ describe('SearchResultGroup', () => {
     expect(items[0].props('active')).toBe(true);
     expect(items[0].props('variant')).toBe('aiAction');
   });
+
+  it('forwards addAuthorFilter event from a snippet item (#49)', async () => {
+    const wrapper = mount(SearchResultGroup, {
+      props: {
+        title: 'Snippets',
+        items: snippets,
+        variant: 'snippet',
+        activeGlobalIndex: -1,
+        startIndex: 0,
+      },
+    });
+    const items = wrapper.findAllComponents(SearchResultItem);
+    items[0].vm.$emit('addAuthorFilter', 'Alice');
+    await wrapper.vm.$nextTick();
+    expect(wrapper.emitted('addAuthorFilter')).toHaveLength(1);
+    expect(wrapper.emitted('addAuthorFilter')?.[0]).toEqual(['Alice']);
+  });
 });

@@ -133,9 +133,20 @@ describe('PostList', () => {
       expect(wrapper.text()).toContain('No bookmarked posts yet');
     });
 
+    it('shows "subscribed" empty-state when currentFilter is "subscribed" (#49)', () => {
+      const wrapper = mountList({ currentFilter: 'subscribed' });
+      expect(wrapper.text()).toContain('No recent posts from tags you follow.');
+    });
+
     it('shows default message when no tag or filter', () => {
       const wrapper = mountList();
       expect(wrapper.text()).toContain('No posts yet — be the first to share!');
+    });
+
+    it('throws on unknown filter value (exhaustiveness check, #49)', () => {
+      // The exhaustive `never` branch is a compile-time guard. To exercise
+      // it at runtime, we cast a bogus value through the prop boundary.
+      expect(() => mountList({ currentFilter: 'bogus' })).toThrow(/Unhandled filter: bogus/);
     });
   });
 

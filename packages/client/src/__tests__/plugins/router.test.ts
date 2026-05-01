@@ -108,6 +108,26 @@ describe('Router', () => {
       expect(route.meta.requiresAuth).toBe(false);
     });
 
+    it('should have a home-following route at "/following"', () => {
+      const route = router.resolve('/following');
+      expect(route.name).toBe('home-following');
+    });
+
+    it('should mark home-following route as requiresAuth (inherits from parent)', () => {
+      const route = router.resolve('/following');
+      expect(route.meta.requiresAuth).toBe(true);
+    });
+
+    it('should have a tag-view route at "/tags/:name"', () => {
+      const route = router.resolve('/tags/typescript');
+      expect(route.name).toBe('tag-view');
+    });
+
+    it('should mark tag-view route as not requiring auth', () => {
+      const route = router.resolve('/tags/typescript');
+      expect(route.meta.requiresAuth).toBe(false);
+    });
+
     it('should mark home route as requiresAuth', () => {
       const route = router.resolve('/');
       expect(route.meta.requiresAuth).toBe(true);
@@ -161,6 +181,36 @@ describe('Router', () => {
       await router.isReady();
 
       expect(router.currentRoute.value.name).toBe('home-bookmarks');
+    });
+
+    it('should navigate to home-following route when authenticated', async () => {
+      const store = useAuthStore();
+      store.setAuth('token', createMockUser());
+
+      await router.push('/following');
+      await router.isReady();
+
+      expect(router.currentRoute.value.name).toBe('home-following');
+    });
+
+    it('should pass filter=subscribed prop to HomePage on /following', () => {
+      const route = router.resolve('/following');
+      const matched = route.matched[route.matched.length - 1];
+      expect(matched.props.default).toEqual({ filter: 'subscribed' });
+    });
+
+    it('should navigate to tag-view route when unauthenticated', async () => {
+      await router.push('/tags/typescript');
+      await router.isReady();
+
+      expect(router.currentRoute.value.name).toBe('tag-view');
+    });
+
+    it('should expose :name route param on tag-view', async () => {
+      await router.push('/tags/javascript');
+      await router.isReady();
+
+      expect(router.currentRoute.value.params.name).toBe('javascript');
     });
 
     it('should navigate to post-history route when authenticated', async () => {

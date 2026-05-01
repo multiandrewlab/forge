@@ -1,0 +1,24 @@
+meta {
+  name: Get Feed - invalid filter
+  type: http
+  seq: 109
+}
+
+get {
+  url: {{baseUrl}}/api/posts?filter=invalid
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+assert {
+  res.status: eq 400
+}
+
+docs {
+  Issue #49: schema rejects unrecognized filter values. Accepted values
+  are: mine, bookmarked, subscribed.
+}

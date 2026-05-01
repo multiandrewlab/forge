@@ -1,0 +1,27 @@
+meta {
+  name: Get Feed - by tag
+  type: http
+  seq: 108
+}
+
+get {
+  url: {{baseUrl}}/api/posts?tag=typescript
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Issue #49: feed filtered to posts tagged with <name> (case-insensitive
+  per SQL).
+
+  The seeded fixtures include several typescript-tagged posts
+  (c…0001, c…0009, c…0011, c…0099) so this returns a non-empty page.
+}

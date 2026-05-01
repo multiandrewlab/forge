@@ -21,12 +21,23 @@ export interface SearchUserRow {
   post_count: number;
 }
 
+interface CountRow {
+  count: string | number;
+}
+
 // ─── Filter options ───
 
 export interface SearchPostOptions {
   contentType?: string;
   tag?: string;
   limit?: number;
+  // Issue #49 additions:
+  /** Case-insensitive display_name exact match. */
+  author?: string;
+  /** Time-window filter on posts.created_at. */
+  since?: 'today' | '7d' | '30d';
+  /** 1-indexed page number. Default 1. */
+  page?: number;
 }
 
 export interface SearchUserOptions {
@@ -35,11 +46,18 @@ export interface SearchUserOptions {
 
 // ─── Helpers ───
 
-/** Shared LATERAL join + author join + base WHERE for both post search queries. */
-function buildPostSearchSuffix(
-  params: unknown[],
-  options: SearchPostOptions,
-): { filterClauses: string; limitParam: string } {
+const SINCE_INTERVALS: Record<NonNullable<SearchPostOptions['since']>, string> = {
+  today: '1 day',
+  '7d': '7 days',
+  '30d': '30 days',
+};
+
+/**
+ * Build the shared filter clauses (content_type, tag, author, since) used by
+ * both the primary search queries and the count helper. Mutates `params` and
+ * returns the joined SQL fragment.
+ */
+function buildFilterClauses(params: unknown[], options: SearchPostOptions): string {
   const filterParts: string[] = [];
 
   if (options.contentType !== undefined) {
@@ -54,11 +72,37 @@ function buildPostSearchSuffix(
     );
   }
 
+  if (options.author !== undefined) {
+    params.push(options.author);
+    filterParts.push(`AND LOWER(u.display_name) = LOWER($${params.length})`);
+  }
+
+  if (options.since !== undefined) {
+    params.push(SINCE_INTERVALS[options.since]);
+    filterParts.push(`AND p.created_at >= NOW() - $${params.length}::interval`);
+  }
+
+  return filterParts.join('\n  ');
+}
+
+/**
+ * Build the LIMIT/OFFSET tail used by the primary search queries.
+ * Mutates `params` and returns the SQL fragment.
+ */
+function buildPaginationClause(
+  params: unknown[],
+  options: SearchPostOptions,
+): { limitParam: string; offsetParam: string } {
   const limit = options.limit ?? 20;
+  const page = options.page ?? 1;
+  const offset = (page - 1) * limit;
+
   params.push(limit);
   const limitParam = `$${params.length}`;
+  params.push(offset);
+  const offsetParam = `$${params.length}`;
 
-  return { filterClauses: filterParts.join('\n  '), limitParam };
+  return { limitParam, offsetParam };
 }
 
 // ─── Queries ───
@@ -69,7 +113,8 @@ export async function searchPostsByTsvector(
 ): Promise<SearchPostRow[]> {
   const params: unknown[] = [q];
 
-  const { filterClauses, limitParam } = buildPostSearchSuffix(params, options);
+  const filterClauses = buildFilterClauses(params, options);
+  const { limitParam, offsetParam } = buildPaginationClause(params, options);
 
   const sql = `
 SELECT
@@ -88,7 +133,7 @@ WHERE p.search_vector @@ query
   AND p.visibility = 'public'
   ${filterClauses}
 ORDER BY rank DESC
-LIMIT ${limitParam}`.trim();
+LIMIT ${limitParam} OFFSET ${offsetParam}`.trim();
 
   const result = await query<SearchPostRow>(sql, params);
   return result.rows;
@@ -100,7 +145,8 @@ export async function searchPostsByTrigram(
 ): Promise<SearchPostRow[]> {
   const params: unknown[] = [q];
 
-  const { filterClauses, limitParam } = buildPostSearchSuffix(params, options);
+  const filterClauses = buildFilterClauses(params, options);
+  const { limitParam, offsetParam } = buildPaginationClause(params, options);
 
   const sql = `
 SELECT
@@ -119,10 +165,35 @@ WHERE p.title % $1
   AND p.visibility = 'public'
   ${filterClauses}
 ORDER BY rank DESC
-LIMIT ${limitParam}`.trim();
+LIMIT ${limitParam} OFFSET ${offsetParam}`.trim();
 
   const result = await query<SearchPostRow>(sql, params);
   return result.rows;
+}
+
+/**
+ * Count posts matching the same WHERE clause as `searchPostsByTsvector`.
+ * Used to compute totalPages without fetching extra rows. Excludes
+ * ORDER BY / LIMIT / OFFSET — the count is page-independent.
+ */
+export async function countSearchPosts(q: string, options: SearchPostOptions): Promise<number> {
+  const params: unknown[] = [q];
+  const filterClauses = buildFilterClauses(params, options);
+
+  const sql = `
+SELECT COUNT(*) AS count
+FROM posts p
+JOIN users u ON u.id = p.author_id,
+plainto_tsquery('forge_search', $1) query
+WHERE p.search_vector @@ query
+  AND p.deleted_at IS NULL
+  AND p.visibility = 'public'
+  ${filterClauses}`.trim();
+
+  const result = await query<CountRow>(sql, params);
+  const row = result.rows[0];
+  if (!row) return 0;
+  return typeof row.count === 'number' ? row.count : Number.parseInt(row.count, 10);
 }
 
 export async function searchUsers(q: string, options: SearchUserOptions): Promise<SearchUserRow[]> {

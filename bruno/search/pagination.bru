@@ -1,0 +1,34 @@
+meta {
+  name: search pagination (page=2)
+  type: http
+  seq: 10
+}
+
+get {
+  url: {{baseUrl}}/api/search?q=fixture&tag=tag-pagination-fixture&page=2
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.snippets: isArray
+  res.body.page: eq 2
+  res.body.totalPages: isNumber
+}
+
+docs {
+  Page 2 of the seeded `tag-pagination-fixture` posts (25 fixture rows
+  across paginationuser, with the default limit of 20 → totalPages=2).
+  Verifies the offset path through searchPostsByTsvector and that the
+  trigram top-up does NOT fire on page>=2. Issue #49.
+
+  Query params:
+  - q: search term (required)
+  - tag: filter to the seeded fixture tag
+  - page: 1-indexed page number (z.coerce.number().int().min(1).max(1000))
+}

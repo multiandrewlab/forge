@@ -1,0 +1,27 @@
+meta {
+  name: Get Tag By Name - Not Found
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/tags/does-not-exist-12345
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+assert {
+  res.status: eq 404
+}
+
+docs {
+  Issue #49: 404 body is identical for "deleted" and "never existed"
+  cases — there is no enumeration channel for callers to distinguish
+  soft-deleted tags from non-existent ones.
+
+  Response: { error: "Tag not found" }
+}

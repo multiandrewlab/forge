@@ -33,14 +33,15 @@
       <span class="rounded bg-yellow-600/20 px-2 py-1 text-xs text-yellow-400">Draft</span>
     </div>
     <div v-if="post.tags.length > 0" class="mt-2 flex flex-wrap gap-1">
-      <span
+      <RouterLink
         v-for="tag in post.tags"
         :key="tag"
+        :to="{ name: 'tag-view', params: { name: tag } }"
         :data-testid="`post-tag-chip-${tag}`"
-        class="rounded bg-gray-700 px-2 py-0.5 text-xs text-gray-300"
+        class="rounded bg-gray-700 px-2 py-0.5 text-xs text-gray-300 hover:bg-gray-600"
       >
         #{{ tag }}
-      </span>
+      </RouterLink>
     </div>
   </div>
 </template>

@@ -1,0 +1,25 @@
+meta {
+  name: search pagination (page=0 → 400)
+  type: http
+  seq: 14
+}
+
+get {
+  url: {{baseUrl}}/api/search?q=typescript&page=0
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+assert {
+  res.status: eq 400
+}
+
+docs {
+  Validates that page=0 is rejected with 400. Page is 1-indexed —
+  the schema declares `page: z.coerce.number().int().min(1).max(1000)`.
+  Issue #49.
+}
