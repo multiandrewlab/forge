@@ -164,6 +164,19 @@ describe('<TagPage>', () => {
     expect(wrapper.find('[data-testid="tag-not-found"]').exists()).toBe(false);
   });
 
+  it('fetches posts via /api/posts?tag= (not /api/posts/feed?tag=)', async () => {
+    mockApiFetch
+      .mockResolvedValueOnce(makeRes(TAG))
+      .mockResolvedValueOnce(makeRes({ posts: [POST], cursor: null }));
+    await mountPage(router, 'typescript');
+    await flushPromises();
+    // First call is the tag-detail fetch; second call is the posts feed
+    expect(mockApiFetch).toHaveBeenCalledTimes(2);
+    const secondCallUrl = mockApiFetch.mock.calls[1]?.[0] as string;
+    expect(secondCallUrl).toMatch(/^\/api\/posts\?tag=typescript$/);
+    expect(secondCallUrl).not.toContain('/api/posts/feed');
+  });
+
   it('fetches feed even when feed responds with error (no posts shown)', async () => {
     mockApiFetch
       .mockResolvedValueOnce(makeRes(TAG))

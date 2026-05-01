@@ -74,7 +74,7 @@ async function load(name: string): Promise<void> {
     return;
   }
   tag.value = (await tagRes.json()) as TagDetail;
-  const feedRes = await apiFetch(`/api/posts/feed?tag=${encodeURIComponent(name)}`);
+  const feedRes = await apiFetch(`/api/posts?tag=${encodeURIComponent(name)}`);
   if (feedRes.ok) {
     const data = (await feedRes.json()) as { posts: PostWithAuthor[] };
     posts.value = data.posts;
