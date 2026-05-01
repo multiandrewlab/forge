@@ -35,12 +35,16 @@ export const test = authTest.extend<ResetFixtures>({
         }
         const ctx = await plainRequest.newContext();
         try {
+          const workerId = String(testInfo.workerIndex);
           const res = await ctx.post(`${API_BASE}/api/__test__/reset`, {
-            headers: { 'X-E2E-Secret': secret },
+            headers: {
+              'X-E2E-Secret': secret,
+              'X-E2E-Worker-Id': workerId,
+            },
           });
           if (!res.ok()) {
             const body = await res.text().catch(() => '<unreadable>');
-            throw new Error(`[e2e/reset] reset failed: HTTP ${res.status()}\n${body}`);
+            throw new Error(`[e2e/reset:w${workerId}] reset failed: HTTP ${res.status()}\n${body}`);
           }
         } finally {
           await ctx.dispose();
