@@ -9,6 +9,11 @@ export type UseAiGenerateReturn = {
   stop: () => void;
 };
 
+type E2EWindow = Window & {
+  __E2E__?: boolean;
+  __forgeE2eAiAbort?: () => void;
+};
+
 export function useAiGenerate(): UseAiGenerateReturn {
   const isGenerating = ref(false);
   const error = ref<string | null>(null);
@@ -28,6 +33,12 @@ export function useAiGenerate(): UseAiGenerateReturn {
     controller = new AbortController();
     isGenerating.value = true;
     error.value = null;
+
+    const win = window as E2EWindow;
+    const e2eHookEnabled = import.meta.env.MODE !== 'production' && win.__E2E__ === true;
+    if (e2eHookEnabled) {
+      win.__forgeE2eAiAbort = () => controller?.abort();
+    }
 
     try {
       const res = await fetch('/api/ai/generate', {
@@ -60,10 +71,13 @@ export function useAiGenerate(): UseAiGenerateReturn {
       if (!isAbort) {
         error.value = err instanceof Error ? err.message : 'Generation failed';
       }
+    } finally {
+      if (e2eHookEnabled) {
+        delete win.__forgeE2eAiAbort;
+      }
+      isGenerating.value = false;
+      controller = null;
     }
-
-    isGenerating.value = false;
-    controller = null;
   }
 
   return { isGenerating, error, start, stop };

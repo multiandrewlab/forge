@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
@@ -174,5 +174,157 @@ describe('useAiGenerate', () => {
     await start({ description: 'x', contentType: 'snippet' }, () => {});
     expect(error.value).toBe('Generation failed');
     expect(isGenerating.value).toBe(false);
+  });
+});
+
+/* ================================================================== */
+/*  E2E abort hook — issue #50                                         */
+/* ================================================================== */
+type E2EWindow = Window & {
+  __E2E__?: boolean;
+  __forgeE2eAiAbort?: () => void;
+};
+
+describe('useAiGenerate — E2E abort hook', () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    delete (window as E2EWindow).__E2E__;
+    delete (window as E2EWindow).__forgeE2eAiAbort;
+  });
+
+  it('case 1: __E2E__=true + MODE=development exposes window.__forgeE2eAiAbort during stream', async () => {
+    vi.stubEnv('MODE', 'development');
+    (window as E2EWindow).__E2E__ = true;
+
+    let signal: AbortSignal | undefined;
+    mockFetch.mockImplementation((_url: string, init: RequestInit) => {
+      signal = init.signal as AbortSignal;
+      return Promise.resolve(abortAwareHangingResponse(signal));
+    });
+
+    const { start, stop } = useAiGenerate();
+    const startP = start({ description: 'x', contentType: 'snippet', language: 'ts' }, () => {});
+    await new Promise((r) => setTimeout(r, 0));
+    expect((window as E2EWindow).__forgeE2eAiAbort).toBeDefined();
+    stop();
+    await startP;
+  });
+
+  it('case 2: __E2E__=false + MODE=development does NOT expose hook', async () => {
+    vi.stubEnv('MODE', 'development');
+
+    let signal: AbortSignal | undefined;
+    mockFetch.mockImplementation((_url: string, init: RequestInit) => {
+      signal = init.signal as AbortSignal;
+      return Promise.resolve(abortAwareHangingResponse(signal));
+    });
+
+    const { start, stop } = useAiGenerate();
+    const startP = start({ description: 'x', contentType: 'snippet', language: 'ts' }, () => {});
+    await new Promise((r) => setTimeout(r, 0));
+    expect((window as E2EWindow).__forgeE2eAiAbort).toBeUndefined();
+    stop();
+    await startP;
+  });
+
+  it('case 3: MODE=production + __E2E__=true does NOT expose hook (defense-in-depth)', async () => {
+    vi.stubEnv('MODE', 'production');
+    (window as E2EWindow).__E2E__ = true;
+
+    let signal: AbortSignal | undefined;
+    mockFetch.mockImplementation((_url: string, init: RequestInit) => {
+      signal = init.signal as AbortSignal;
+      return Promise.resolve(abortAwareHangingResponse(signal));
+    });
+
+    const { start, stop } = useAiGenerate();
+    const startP = start({ description: 'x', contentType: 'snippet', language: 'ts' }, () => {});
+    await new Promise((r) => setTimeout(r, 0));
+    expect((window as E2EWindow).__forgeE2eAiAbort).toBeUndefined();
+    stop();
+    await startP;
+  });
+
+  it('case 4: __E2E__=undefined + MODE=development does NOT expose hook', async () => {
+    vi.stubEnv('MODE', 'development');
+
+    let signal: AbortSignal | undefined;
+    mockFetch.mockImplementation((_url: string, init: RequestInit) => {
+      signal = init.signal as AbortSignal;
+      return Promise.resolve(abortAwareHangingResponse(signal));
+    });
+
+    const { start, stop } = useAiGenerate();
+    const startP = start({ description: 'x', contentType: 'snippet', language: 'ts' }, () => {});
+    await new Promise((r) => setTimeout(r, 0));
+    expect((window as E2EWindow).__forgeE2eAiAbort).toBeUndefined();
+    stop();
+    await startP;
+  });
+
+  it('case 5: hook calls controller.abort(); request signal is aborted', async () => {
+    vi.stubEnv('MODE', 'development');
+    (window as E2EWindow).__E2E__ = true;
+
+    let signal: AbortSignal | undefined;
+    mockFetch.mockImplementation((_url: string, init: RequestInit) => {
+      signal = init.signal as AbortSignal;
+      return Promise.resolve(abortAwareHangingResponse(signal));
+    });
+
+    const { start, isGenerating } = useAiGenerate();
+    const startP = start({ description: 'x', contentType: 'snippet', language: 'ts' }, () => {});
+    await new Promise((r) => setTimeout(r, 0));
+    const hook = (window as E2EWindow).__forgeE2eAiAbort;
+    expect(hook).toBeDefined();
+    hook?.();
+    expect(signal?.aborted).toBe(true);
+    await startP;
+    // Cleanup ran: hook deleted, isGenerating false (preserves existing AbortError behavior)
+    expect((window as E2EWindow).__forgeE2eAiAbort).toBeUndefined();
+    expect(isGenerating.value).toBe(false);
+  });
+
+  it('case 6: hook deleted in finally on success path', async () => {
+    vi.stubEnv('MODE', 'development');
+    (window as E2EWindow).__E2E__ = true;
+
+    mockFetch.mockResolvedValue(sseStreamOf(['event: done\ndata: {}\n\n']));
+    const { start } = useAiGenerate();
+    await start({ description: 'x', contentType: 'snippet', language: 'ts' }, () => {});
+    expect((window as E2EWindow).__forgeE2eAiAbort).toBeUndefined();
+  });
+
+  it('case 7: hook deleted in finally on AbortError path', async () => {
+    vi.stubEnv('MODE', 'development');
+    (window as E2EWindow).__E2E__ = true;
+
+    let signal: AbortSignal | undefined;
+    mockFetch.mockImplementation((_url: string, init: RequestInit) => {
+      signal = init.signal as AbortSignal;
+      return Promise.resolve(abortAwareHangingResponse(signal));
+    });
+
+    const { start, stop } = useAiGenerate();
+    const startP = start({ description: 'x', contentType: 'snippet', language: 'ts' }, () => {});
+    await new Promise((r) => setTimeout(r, 0));
+    stop();
+    await startP;
+    expect((window as E2EWindow).__forgeE2eAiAbort).toBeUndefined();
+  });
+
+  it('case 8: hook deleted in finally on non-Abort error path', async () => {
+    vi.stubEnv('MODE', 'development');
+    (window as E2EWindow).__E2E__ = true;
+
+    mockFetch.mockRejectedValue(new Error('boom'));
+    const { start, error } = useAiGenerate();
+    await start({ description: 'x', contentType: 'snippet', language: 'ts' }, () => {});
+    expect((window as E2EWindow).__forgeE2eAiAbort).toBeUndefined();
+    expect(error.value).toBe('boom');
   });
 });
