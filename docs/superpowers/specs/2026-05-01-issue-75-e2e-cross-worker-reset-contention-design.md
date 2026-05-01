@@ -202,7 +202,7 @@ So "fully disjoint" is true at the row-ownership layer; "fully lock-free" is not
 
 #### Tests required (`packages/server/src/__tests__/routes/__test__.test.ts`)
 
-All test cases below MUST be added; no `/* istanbul ignore */` exclusions are permitted on the new code paths. Coverage on the new/changed lines in `packages/server/src/routes/__test__.ts` MUST meet the line/branch/function/statement thresholds in `.coverage-thresholds.json` (the project's `packages/server` thresholds are the floor); thresholds MUST NOT be lowered as part of this PR.
+All test cases below MUST be added; no `/* istanbul ignore */` exclusions are permitted on the new code paths. Coverage on the new/changed lines in `packages/server/src/routes/__test__.ts` MUST meet the global thresholds in `.coverage-thresholds.json` (currently 100% lines/branches/functions/statements). Thresholds MUST NOT be lowered as part of this PR.
 
 Worker-scoped path:
 
@@ -211,6 +211,8 @@ Worker-scoped path:
 - Header valid + `Origin` header present → 403 (Origin guard runs first). `pgTransaction` not invoked. Audit log not emitted.
 - Header valid + invalid `X-E2E-Secret` → 403 (secret guard runs first). `pgTransaction` not invoked. Audit log not emitted.
 - Header valid + a `client.query` inside the transaction throws (e.g., the third DELETE) → `withTransaction` runs `ROLLBACK` on the same client (assert `client.query('ROLLBACK')` was called); error propagates to the route handler; route returns 500 with envelope `{ error, code }`. This guards against a regression where someone replaces `withTransaction` with ad-hoc `pool.query('BEGIN')` — the test asserts ROLLBACK on the same client object.
+
+**Test-wiring note** (resolves an iteration-3 ambiguity flagged by Architect): the `pgTransaction` deps field is wired in the test setup to the real `withTransaction` from `db/connection.ts`, with `getPool()` mocked to return a fake `pg.Pool` whose `connect()` resolves to a single spied `PoolClient`. This means the spied client receives all 7 calls per success case (BEGIN + 5 DELETEs + COMMIT) and 3 calls per failure case (BEGIN + the failing DELETE + ROLLBACK). Asserting "exactly N calls on the SAME client" gives the regression coverage the design intends — a future implementer cannot stub `pgTransaction` to just invoke the callback (which would skip BEGIN/COMMIT) without breaking the call-count assertions.
 
 Header validation (each returns 400 `{ error, code: 'INVALID_WORKER_ID', received }` and `pgTransaction` is NOT called and `pgQuery` is NOT called):
 
@@ -226,28 +228,33 @@ Cross-user data integrity (regression — guards against future resolver bugs co
 
 - Mock the closed-map lookup result; assert that for `X-E2E-Worker-Id: '0'`, the client.query receives `'a0…101'` as the parameter — never `'a0…001'` (alice), `'a0…003'` (carol), or `'a0…099'` (testuser). Tests that the validation-vs-resolution drift class is caught: a future change that logs `request.headers['x-e2e-worker-id']` directly without re-running through `WORKER_USER_IDS` would break this test.
 
-#### Schema-assertion test (`packages/server/src/__tests__/db/cascade-contract.test.ts`)
+#### Cascade-contract test — static analysis (`packages/server/src/__tests__/db/cascade-contract.test.ts`)
 
-The worker-scoped reset's correctness depends on FK `ON DELETE` behavior. A future migration that flips a CASCADE to RESTRICT or SET NULL silently changes the reset semantics. To bound that drift, add a schema-assertion test that introspects `information_schema.referential_constraints` and pins:
+The worker-scoped reset's correctness depends on FK `ON DELETE` behavior. A future migration that flips a CASCADE to RESTRICT or SET NULL silently changes the reset semantics. To bound that drift WITHOUT requiring a real-PG integration harness (which the repo does not have today — see `packages/server/src/__tests__/integration/search-trigger.test.ts` for the pre-existing TODO to establish one), add a **static-analysis test** that parses `packages/server/src/db/migrations/001_initial-schema.sql` as text — same pattern as `packages/server/src/__tests__/scripts/seed-sql-shape.test.ts`.
 
-- `posts.author_id` → `users.id`: `delete_rule = 'CASCADE'`
-- `post_revisions.post_id` → `posts.id`: `delete_rule = 'CASCADE'`
-- `post_files.post_id` → `posts.id`: `delete_rule = 'CASCADE'`
-- `post_tags.post_id` → `posts.id`: `delete_rule = 'CASCADE'`
-- `prompt_variables.post_id` → `posts.id`: `delete_rule = 'CASCADE'`
-- `bookmarks.user_id` → `users.id`: `delete_rule = 'CASCADE'`
-- `bookmarks.post_id` → `posts.id`: `delete_rule = 'CASCADE'`
-- `votes.user_id` → `users.id`: `delete_rule = 'CASCADE'`
-- `votes.post_id` → `posts.id`: `delete_rule = 'CASCADE'`
-- `user_tag_subscriptions.user_id` → `users.id`: `delete_rule = 'CASCADE'`
-- `comments.post_id` → `posts.id`: `delete_rule = 'CASCADE'`
-- `comments.parent_id` → `comments.id`: `delete_rule = 'CASCADE'`
-- `comments.author_id` → `users.id`: `delete_rule = 'SET NULL'`
-- `posts.forked_from_id` → `posts.id`: `delete_rule = 'SET NULL'`
+The test reads the migration SQL via `readFileSync`, normalizes whitespace, and asserts the literal `ON DELETE <RULE>` clause for each FK the worker-scoped reset depends on. Each assertion includes both the FK column AND the referenced table+column so a migration that REPLACES one CASCADE FK with a same-named SET NULL constraint on a different reference cannot pass:
 
-The test runs against the same Postgres the unit test harness uses (or a dedicated test DB if no live connection is available). It is cheaper than a full integration test of the worker-scoped reset and catches the exact failure mode the design depends on (FK rule drift).
+- `posts.author_id REFERENCES users(id) ON DELETE CASCADE`
+- `post_revisions.post_id REFERENCES posts(id) ON DELETE CASCADE`
+- `post_files.post_id REFERENCES posts(id) ON DELETE CASCADE`
+- `post_files.revision_id REFERENCES post_revisions(id) ON DELETE CASCADE`
+- `post_tags.post_id REFERENCES posts(id) ON DELETE CASCADE`
+- `post_tags.tag_id REFERENCES tags(id) ON DELETE CASCADE`
+- `prompt_variables.post_id REFERENCES posts(id) ON DELETE CASCADE`
+- `bookmarks.user_id REFERENCES users(id) ON DELETE CASCADE`
+- `bookmarks.post_id REFERENCES posts(id) ON DELETE CASCADE`
+- `votes.user_id REFERENCES users(id) ON DELETE CASCADE`
+- `votes.post_id REFERENCES posts(id) ON DELETE CASCADE`
+- `user_tag_subscriptions.user_id REFERENCES users(id) ON DELETE CASCADE`
+- `user_tag_subscriptions.tag_id REFERENCES tags(id) ON DELETE CASCADE`
+- `comments.post_id REFERENCES posts(id) ON DELETE CASCADE`
+- `comments.parent_id REFERENCES comments(id) ON DELETE CASCADE`
+- `comments.author_id REFERENCES users(id) ON DELETE SET NULL`
+- `posts.forked_from_id REFERENCES posts(id) ON DELETE SET NULL`
 
-Additionally, add a regression for the documented `forked_from_id SET NULL` cross-user side effect: seed alice with a post forked from one of actor's posts; run worker-scoped reset for actor; assert alice's post survives but its `forked_from_id` is now NULL. This converts the documented side effect into a tested invariant — a future migration changing it to CASCADE would be caught.
+The test fails noisily on the exact mode of failure the design fears: a future migration that changes a delete_rule the reset depends on. Implementation detail: the test must also scan migrations 002+ for `ALTER TABLE ... ALTER CONSTRAINT` or `DROP CONSTRAINT ... ADD CONSTRAINT ... ON DELETE …` clauses that override the rule from 001 — otherwise the contract is asserted against a stale baseline. A simple approach is to concatenate all `*.sql` migration files in order, then assert the LAST `ON DELETE <RULE>` clause for each constrained FK matches the expected rule. The test file lists this concatenation explicitly so a reviewer can see what's being asserted.
+
+The `forked_from_id SET NULL` cross-user side effect documented in Risks #3 is verified by the same test (the FK rule itself is the contract; the runtime cascade behavior is a Postgres invariant for that rule and does not need a separate runtime test). A real-PG integration test that exercises actual DELETE-and-observe semantics is **out of scope** for this PR — that work belongs to a future "establish integration test harness" issue (would also unblock the existing `search-trigger.test.ts` skip), and is NOT a prerequisite for shipping #75.
 
 **Deps surface change.** `TestRoutesDeps` gains a new field `pgTransaction` for the worker-scoped path. `pgQuery` is unchanged (legacy path keeps using it):
 
