@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { createPinia, setActivePinia } from 'pinia';
 
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
@@ -34,6 +35,8 @@ import { useAiGenerate } from '../../composables/useAiGenerate.js';
 describe('useAiGenerate', () => {
   beforeEach(() => {
     mockFetch.mockReset();
+    // Pinia per-test keeps the token unset so requests behave as anonymous.
+    setActivePinia(createPinia());
   });
 
   // (a) start streams tokens to onToken in order
@@ -175,6 +178,32 @@ describe('useAiGenerate', () => {
     expect(error.value).toBe('Generation failed');
     expect(isGenerating.value).toBe(false);
   });
+
+  // Auth: Authorization header is attached when the auth store has a token
+  it('attaches Authorization Bearer header when access token is set', async () => {
+    mockFetch.mockResolvedValue(sseStreamOf(['event: done\ndata: {}\n\n']));
+    const { useAuthStore } = await import('../../stores/auth.js');
+    const authStore = useAuthStore();
+    authStore.$patch({ accessToken: 'tok-xyz' });
+    const { start } = useAiGenerate();
+    await start({ description: 'x', contentType: 'snippet' }, () => {});
+    expect(mockFetch).toHaveBeenCalledOnce();
+    const init = mockFetch.mock.calls[0]?.[1] as RequestInit;
+    const headers = init.headers as Record<string, string>;
+    expect(headers.Authorization).toBe('Bearer tok-xyz');
+    expect(init.credentials).toBe('include');
+  });
+
+  // Auth: No Authorization header when access token is not set (anonymous request)
+  it('omits Authorization header when no access token is set', async () => {
+    mockFetch.mockResolvedValue(sseStreamOf(['event: done\ndata: {}\n\n']));
+    const { start } = useAiGenerate();
+    await start({ description: 'x', contentType: 'snippet' }, () => {});
+    expect(mockFetch).toHaveBeenCalledOnce();
+    const init = mockFetch.mock.calls[0]?.[1] as RequestInit;
+    const headers = init.headers as Record<string, string>;
+    expect(headers.Authorization).toBeUndefined();
+  });
 });
 
 /* ================================================================== */
@@ -188,6 +217,7 @@ type E2EWindow = Window & {
 describe('useAiGenerate — E2E abort hook', () => {
   beforeEach(() => {
     mockFetch.mockReset();
+    setActivePinia(createPinia());
   });
 
   afterEach(() => {

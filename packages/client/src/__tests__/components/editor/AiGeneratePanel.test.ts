@@ -108,6 +108,34 @@ describe('AiGeneratePanel', () => {
     expect(typeof callArgs?.[1]).toBe('function');
   });
 
+  // --- Test 4b: Empty language is omitted from the request ---
+  // The schema accepts `language` as optional but, when present, requires min(1).
+  // PostNewPage initialises language to '' until the user picks one or it's
+  // auto-detected, so the panel must drop it when empty rather than send `''`.
+  it('omits language from the start() payload when prop language is empty', async () => {
+    wrapper = mount(AiGeneratePanel, {
+      props: { ...defaultProps, language: '' },
+    });
+
+    await wrapper.find('[data-testid="ai-generate-toggle"]').trigger('click');
+    const textarea = wrapper.find('[data-testid="ai-generate-description"]');
+    await textarea.setValue('a fibonacci function');
+
+    mockStart.mockResolvedValue(undefined);
+
+    const submitBtn = wrapper.find('[data-testid="ai-generate-submit"]');
+    await submitBtn.trigger('click');
+    await nextTick();
+
+    expect(mockStart).toHaveBeenCalledOnce();
+    const callArgs = mockStart.mock.calls[0];
+    expect(callArgs?.[0]).toEqual({
+      description: 'a fibonacci function',
+      contentType: 'snippet',
+    });
+    expect((callArgs?.[0] as Record<string, unknown>).language).toBeUndefined();
+  });
+
   // --- Test 5: Tokens arriving → editorView.dispatch called with correct changes ---
   it('tokens arriving dispatches insert at current cursor position', async () => {
     wrapper = mount(AiGeneratePanel, { props: { ...defaultProps } });

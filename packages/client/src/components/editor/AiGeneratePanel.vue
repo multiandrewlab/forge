@@ -48,14 +48,15 @@ function onGenerate(): void {
     return;
   }
   panelState.value = 'generating';
-  start(
-    {
-      description: description.value,
-      contentType: props.contentType,
-      language: props.language,
-    },
-    onToken,
-  );
+  // language is optional in the schema but, when present, must be 1+ chars.
+  // PostNewPage initialises language to '' until the user picks one (or the
+  // language is auto-detected from content), so we omit it when empty.
+  const req: AiGenerateRequest = {
+    description: description.value,
+    contentType: props.contentType,
+    ...(props.language ? { language: props.language } : {}),
+  };
+  start(req, onToken);
 }
 
 function onStop(): void {

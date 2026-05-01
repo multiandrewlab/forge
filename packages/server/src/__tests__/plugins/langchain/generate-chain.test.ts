@@ -122,4 +122,48 @@ describe('streamGenerate', () => {
     }
     expect(out.join('')).toContain('typed output');
   });
+
+  it('treats `[done]` sentinel as end-of-stream and does not yield it', async () => {
+    const chain = makeFakeChain(['hello ', 'world', '[done]', 'after-done']);
+    const out: string[] = [];
+    for await (const tok of streamGenerate(chain, {
+      description: 'd',
+      contentType: 'snippet',
+    })) {
+      out.push(tok);
+    }
+    expect(out).toEqual(['hello ', 'world']);
+  });
+
+  it('throws a friendly Error when `[error:rate_limit]` sentinel arrives mid-stream', async () => {
+    const chain = makeFakeChain(['part ', '[error:rate_limit]']);
+    const drained: string[] = [];
+    await expect(
+      (async () => {
+        for await (const chunk of streamGenerate(chain, {
+          description: 'd',
+          contentType: 'snippet',
+        })) {
+          drained.push(chunk);
+        }
+      })(),
+    ).rejects.toThrow(/rate.?limit/i);
+    expect(drained).toEqual(['part ']);
+  });
+
+  it('throws a generic mock_error for unknown `[error:<code>]` sentinels', async () => {
+    const chain = makeFakeChain(['[error:weird_thing]']);
+    const drained: string[] = [];
+    await expect(
+      (async () => {
+        for await (const chunk of streamGenerate(chain, {
+          description: 'd',
+          contentType: 'snippet',
+        })) {
+          drained.push(chunk);
+        }
+      })(),
+    ).rejects.toThrow('mock_error:weird_thing');
+    expect(drained).toEqual([]);
+  });
 });

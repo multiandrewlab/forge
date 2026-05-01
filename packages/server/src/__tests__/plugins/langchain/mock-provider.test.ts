@@ -50,4 +50,37 @@ describe('ChatMock', () => {
       /only supports streaming/i,
     );
   });
+
+  it('paces the `mid-stream-cancel` script with a small per-chunk delay so e2e specs can abort mid-stream', async () => {
+    const model = new ChatMock({});
+    const collected: string[] = [];
+    const start = Date.now();
+    await mockScriptStorage.run('mid-stream-cancel', async () => {
+      const stream = await model.stream([new HumanMessage('anything')]);
+      for await (const chunk of stream) {
+        collected.push(typeof chunk.content === 'string' ? chunk.content : '');
+      }
+    });
+    const elapsed = Date.now() - start;
+    expect(collected).toEqual(mockScripts['mid-stream-cancel']);
+    // Two chunks * ~150ms each = >=300ms total; allow generous lower bound
+    // for slow CI without coupling to the exact delay constant.
+    expect(elapsed).toBeGreaterThanOrEqual(200);
+  });
+
+  it('paces the `generate-readme-short` script so e2e specs can observe loading state', async () => {
+    const model = new ChatMock({});
+    const collected: string[] = [];
+    const start = Date.now();
+    await mockScriptStorage.run('generate-readme-short', async () => {
+      const stream = await model.stream([new HumanMessage('anything')]);
+      for await (const chunk of stream) {
+        collected.push(typeof chunk.content === 'string' ? chunk.content : '');
+      }
+    });
+    const elapsed = Date.now() - start;
+    expect(collected).toEqual(mockScripts['generate-readme-short']);
+    // 4 chunks * ~150ms each = >=600ms total; allow generous lower bound for CI.
+    expect(elapsed).toBeGreaterThanOrEqual(400);
+  });
 });
