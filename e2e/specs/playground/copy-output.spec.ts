@@ -25,11 +25,10 @@ async function seedPromptPost(
   return post;
 }
 
-test('playground: copy button writes streamed content to clipboard', async ({
-  testuser,
-  context,
-}) => {
-  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+test('playground: copy button writes streamed content to clipboard', async ({ testuser }) => {
+  // testuser has its own browser context (per fixtures/auth.ts) — granting
+  // permissions on the default `context` fixture has no effect on this page.
+  await testuser.context().grantPermissions(['clipboard-read', 'clipboard-write']);
   await withMockScript(testuser, 'default');
   const post = await seedPromptPost(testuser, { content: 'Hi {{name}}!' });
 
