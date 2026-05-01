@@ -199,7 +199,7 @@ import SearchPagination from '@/components/search/SearchPagination.vue';
 const route = useRoute();
 const router = useRouter();
 const searchStore = useSearchStore();
-const { search } = useSearch();
+const { runSearch } = useSearch();
 
 // ── Route query params ───────────────────────────────────────────────
 const q = computed(() => {
@@ -250,6 +250,7 @@ function buildOpts(): SearchParams {
   if (typeFilter.value) opts.type = typeFilter.value;
   if (tagFilter.value) opts.tag = tagFilter.value;
   if (isFuzzy.value) opts.fuzzy = true;
+  if (isAi.value) opts.ai = true;
   if (authorFilter.value) opts.author = authorFilter.value;
   if (sinceFilter.value) opts.since = sinceFilter.value;
   if (pageParam.value > 1) opts.page = pageParam.value;
@@ -271,7 +272,7 @@ function presetClass(token: string | null): string {
 // (pagination, filter clicks) don't re-trigger the AI path. router.replace
 // keeps the back-button behaviour sane.
 async function runWithRewrite(): Promise<void> {
-  await search(q.value, buildOpts());
+  await runSearch(q.value, buildOpts());
   const resolved = searchStore.results?.aiResolvedFilters;
   if (resolved && isAi.value) {
     const newQuery: LocationQueryRaw = { ...route.query };

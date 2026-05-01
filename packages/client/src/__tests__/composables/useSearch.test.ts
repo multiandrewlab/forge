@@ -364,6 +364,34 @@ describe('useSearch', () => {
       expect(url).toContain('ai=true');
       expect(url).toContain('tag=foo');
     });
+
+    it('honors explicit opts.ai=true even when store.aiEnabled is false', async () => {
+      mockApiFetch.mockResolvedValue(mockResponse(FAKE_SEARCH_RESPONSE));
+      const store = useSearchStore();
+      // store.aiEnabled defaults to false — do NOT toggle it on
+      expect(store.aiEnabled).toBe(false);
+
+      const { search } = useSearch();
+      search('vue', { ai: true });
+      await vi.advanceTimersByTimeAsync(300);
+
+      const url = mockApiFetch.mock.calls[0][0] as string;
+      expect(url).toContain('ai=true');
+    });
+
+    it('honors explicit opts.ai=false even when store.aiEnabled is true', async () => {
+      mockApiFetch.mockResolvedValue(mockResponse(FAKE_SEARCH_RESPONSE));
+      const store = useSearchStore();
+      store.toggleAi();
+      expect(store.aiEnabled).toBe(true);
+
+      const { search } = useSearch();
+      search('vue', { ai: false });
+      await vi.advanceTimersByTimeAsync(300);
+
+      const url = mockApiFetch.mock.calls[0][0] as string;
+      expect(url).not.toContain('ai=');
+    });
   });
 });
 

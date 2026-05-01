@@ -7,6 +7,9 @@ import type { SearchResponse, SearchSnippet, UserSummary, AiAction } from '@forg
 import { useSearchStore } from '../../stores/search';
 
 // ── Mock useSearch ────────────────────────────────────────────────────
+// SearchPage uses `runSearch` (awaitable, non-debounced) — so the mock
+// here is wired to `runSearch` even though the assertion variable name
+// `mockSearch` is preserved for spec readability.
 const mockSearch = vi.fn();
 const mockClearResults = vi.fn();
 
@@ -16,6 +19,7 @@ vi.mock('../../composables/useSearch.js', () => ({
     results: ref<SearchResponse | null>(null),
     isLoading: ref(false),
     search: mockSearch,
+    runSearch: mockSearch,
     clearResults: mockClearResults,
   }),
 }));
@@ -586,6 +590,19 @@ describe('SearchPage.vue', () => {
     expect(mockSearch.mock.calls[0][0]).toBe('react');
     // Verify fuzzy is forwarded as opts.fuzzy
     expect(mockSearch.mock.calls[0][1]).toEqual({ fuzzy: true });
+  });
+
+  // ── Issue #49: ?ai=true threads through buildOpts ─────────────────
+  it('forwards ai=true from route.query.ai into search opts', async () => {
+    await router.push({ path: '/search', query: { q: 'foo', ai: 'true' } });
+    await router.isReady();
+
+    mount(SearchPage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    expect(mockSearch).toHaveBeenCalled();
+    expect(mockSearch.mock.calls[0][0]).toBe('foo');
+    expect(mockSearch.mock.calls[0][1]).toEqual(expect.objectContaining({ ai: true }));
   });
 
   // ── Issue #49: filter-chip-author ─────────────────────────────────

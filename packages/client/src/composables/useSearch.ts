@@ -12,6 +12,7 @@ export interface SearchParams {
   type?: string;
   tag?: string;
   fuzzy?: boolean;
+  ai?: boolean;
   author?: string;
   since?: string;
   page?: number;
@@ -44,7 +45,8 @@ export function useSearch() {
     const trimmed = q.trim();
     store.setLoading(true);
     try {
-      const url = buildSearchUrl(trimmed, opts, store.aiEnabled);
+      const aiEnabled = opts.ai ?? store.aiEnabled;
+      const url = buildSearchUrl(trimmed, opts, aiEnabled);
       const response = await apiFetch(url);
 
       if (!response.ok) {
@@ -88,6 +90,7 @@ export function useSearch() {
     aiEnabled,
     toggleAi: store.toggleAi,
     search,
+    runSearch,
     clearResults,
   };
 }
