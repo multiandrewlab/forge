@@ -69,6 +69,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Lint guard — testuser is reserved for Bruno
+        # Fails fast (before npm ci / heavy setup) if any e2e spec smuggles
+        # in a testuser reference. The 'actor' fixture is the only sanctioned
+        # way to log in as the worker's primary user; testuser is reserved
+        # for Bruno regression tests. See issue #75.
+        run: |
+          forbidden=$(grep -rEn "(testuser@example\.com|storageStatePath\(['\"]testuser['\"]\)|SEED_USERS\.testuser)" e2e/specs/ || true)
+          if [ -n "$forbidden" ]; then
+            echo "::error::testuser is reserved for Bruno; e2e specs must use the 'actor' fixture"
+            echo "$forbidden"
+            exit 1
+          fi
+
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
