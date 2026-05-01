@@ -39,7 +39,7 @@ vi.mock('pg', async () => {
   };
 });
 
-import { registerTestRoutes, E2E_RESET_LOCK_ID } from '../../routes/__test__.js';
+import { registerTestRoutes, E2E_RESET_LOCK_ID, WORKER_USER_IDS } from '../../routes/__test__.js';
 
 describe('registerTestRoutes — gating', () => {
   it('exports E2E_RESET_LOCK_ID as a 64-bit BigInt constant', () => {
@@ -232,15 +232,18 @@ describe('POST /api/__test__/reset — auth', () => {
   });
 });
 
-describe('POST /api/__test__/reset — worker-scoped path', () => {
-  type WorkerId = '0' | '1' | '2' | '3';
-  const WORKER_USER_IDS: Record<WorkerId, string> = {
-    '0': 'a0000000-0000-0000-0000-000000000101',
-    '1': 'a0000000-0000-0000-0000-000000000102',
-    '2': 'a0000000-0000-0000-0000-000000000103',
-    '3': 'a0000000-0000-0000-0000-000000000104',
-  };
+describe('WORKER_USER_IDS contract', () => {
+  it('pins the 4 worker user UUIDs (must match scripts/seed.sql)', () => {
+    expect(WORKER_USER_IDS).toEqual({
+      '0': 'a0000000-0000-0000-0000-000000000101',
+      '1': 'a0000000-0000-0000-0000-000000000102',
+      '2': 'a0000000-0000-0000-0000-000000000103',
+      '3': 'a0000000-0000-0000-0000-000000000104',
+    });
+  });
+});
 
+describe('POST /api/__test__/reset — worker-scoped path', () => {
   async function buildAppWithTestRoutes(opts: {
     pgQuery: (sql: string) => Promise<unknown>;
     pgTransaction: <T>(

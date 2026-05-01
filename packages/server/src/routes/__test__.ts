@@ -8,7 +8,9 @@ export const E2E_RESET_LOCK_ID = 0xe2e5e70n;
 
 // Closed map of allowed X-E2E-Worker-Id values to their per-worker user UUIDs.
 // Defends against validation drift: only these literal keys can resolve to a UUID.
-const WORKER_USER_IDS = {
+// Exported as the single source of truth — `scripts/seed.sql` (Task 3) and the
+// test suite both reference these literal UUIDs via this export.
+export const WORKER_USER_IDS = {
   '0': 'a0000000-0000-0000-0000-000000000101',
   '1': 'a0000000-0000-0000-0000-000000000102',
   '2': 'a0000000-0000-0000-0000-000000000103',
@@ -61,7 +63,7 @@ export async function registerTestRoutes(
     const raw = request.headers['x-e2e-worker-id'];
     if (typeof raw === 'string') {
       if (!Object.prototype.hasOwnProperty.call(WORKER_USER_IDS, raw)) {
-        app.log.warn(
+        request.log.warn(
           { route: 'worker-scoped-reject', received: raw.slice(0, 16) },
           'E2E worker-scoped reset rejected: invalid X-E2E-Worker-Id',
         );
@@ -79,7 +81,7 @@ export async function registerTestRoutes(
         await client.query('DELETE FROM comments               WHERE author_id = $1', [userId]);
         await client.query('DELETE FROM posts                  WHERE author_id = $1', [userId]);
       });
-      app.log.info(
+      request.log.info(
         { route: 'worker-scoped', workerId: raw, userId, ts: Date.now() },
         'E2E worker-scoped reset completed',
       );
@@ -91,7 +93,7 @@ export async function registerTestRoutes(
     try {
       seedSql = readFileSync(SEED_SQL_PATH, 'utf8');
     } catch (err) {
-      app.log.error({ err }, 'failed to read scripts/seed.sql');
+      request.log.error({ err }, 'failed to read scripts/seed.sql');
       return reply.code(500).send({ error: 'failed to read seed file' });
     }
 
@@ -102,7 +104,7 @@ export async function registerTestRoutes(
       await deps.pgQuery(`SELECT pg_advisory_unlock(${E2E_RESET_LOCK_ID.toString()})`);
     }
 
-    app.log.info(
+    request.log.info(
       { workerId: process.env.TEST_WORKER_INDEX ?? 'unknown', ts: Date.now() },
       'E2E reset completed',
     );
