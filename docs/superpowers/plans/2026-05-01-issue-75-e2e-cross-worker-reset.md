@@ -32,13 +32,51 @@
 | `e2e/specs/**/*.spec.ts` (97 files)                         | Modify | Mechanical `{ testuser }` → `{ actor }` migration                        |
 | `e2e/specs/_journey.spec.ts`                                | Modify | Hand-touch line 57 hardcoded login                                       |
 | `e2e/specs/auth/login-success.spec.ts`                      | Modify | Hand-touch line 10 hardcoded login credential                            |
+| `e2e/specs/auth/login-wrong-password.spec.ts`               | Modify | Hand-touch line 9 hardcoded login credential                             |
+| `e2e/specs/auth/login-redirect-after-login.spec.ts`         | Modify | Hand-touch line 15 hardcoded login credential                            |
+| `e2e/specs/auth/register-duplicate-email.spec.ts`           | Modify | Hand-touch line 22 + comment line 11                                     |
 | `e2e/specs/bookmarks/persists-across-sessions.spec.ts`      | Modify | Hand-touch line 48 hardcoded `storageStatePath('testuser')`              |
 | `e2e/specs/bookmarks/page-empty-state.spec.ts`              | Modify | Remove defensive cleanup loop                                            |
 | `e2e/specs/bookmarks/page-list.spec.ts`                     | Modify | Remove cross-worker-pollution comment                                    |
 | `e2e/specs/**` (≤15 in-scope titles/comments)               | Modify | Bounded testuser-named-actor rewrites (classified list before changes)   |
-| `.github/workflows/e2e.yml`                                 | Modify | Add CI grep lint guard for testuser smuggling patterns                   |
+| `.github/workflows/e2e-playwright.yml`                      | Modify | Add CI grep lint guard for testuser smuggling patterns                   |
 | `.github/workflows/e2e-burst.yml`                           | Create | Temporary `workflow_dispatch` running e2e suite 5× sequentially          |
 | `CLAUDE.md`                                                 | Modify | New "How E2E parallelism works" subsection + Bruno table updates         |
+
+---
+
+## Task 0: Persist approved plan for compaction recovery
+
+This task runs **once**, before Task 1 begins, after the plan-review-gate APPROVES and the user confirms.
+
+- [ ] **Step 0.1: Write the approved plan to `.beads/plans/active-plan.md`** with metadata frontmatter:
+
+```yaml
+---
+title: 'Issue #75 — E2E workers=4 cross-worker reset contention fix'
+issue: 75
+tracking-issue: 43
+status: in-progress
+plan-file: docs/superpowers/plans/2026-05-01-issue-75-e2e-cross-worker-reset.md
+design-file: docs/superpowers/specs/2026-05-01-issue-75-e2e-cross-worker-reset-contention-design.md
+branch: fix/e2e-cross-worker-reset
+plan-review-gate: APPROVED <YYYY-MM-DD> (iteration N of 3)
+user-approved: <YYYY-MM-DD>
+execution-method: <subagent-driven|orchestrated|parallel-session>
+---
+```
+
+Body content: a short pointer to the full plan file (the `plan-file:` path above). The full plan content does NOT need to be duplicated — the path is sufficient for `bd prime --work-type recovery`.
+
+- [ ] **Step 0.2: Verify the file exists and contains the metadata:**
+
+```bash
+test -f .beads/plans/active-plan.md && grep -q 'status: in-progress' .beads/plans/active-plan.md
+```
+
+Expected exit code: 0.
+
+- [ ] **Step 0.3: Do NOT commit `.beads/plans/active-plan.md`** — it is `.gitignore`d (verify with `git check-ignore -v .beads/plans/active-plan.md`). It's a local recovery artifact, not a project artifact.
 
 ---
 
@@ -715,35 +753,46 @@ restored in the next commit."
 
 ---
 
-## Task 7: Hand-touch the 3 specs that hardcode `testuser` strings
+## Task 7: Hand-touch the specs that hardcode `testuser` strings
 
 **Files:**
 
 - Modify: `e2e/specs/_journey.spec.ts`
 - Modify: `e2e/specs/auth/login-success.spec.ts`
+- Modify: `e2e/specs/auth/login-wrong-password.spec.ts`
+- Modify: `e2e/specs/auth/login-redirect-after-login.spec.ts`
+- Modify: `e2e/specs/auth/register-duplicate-email.spec.ts`
 - Modify: `e2e/specs/bookmarks/persists-across-sessions.spec.ts`
 
-- [ ] **Step 7.1: Re-grep for any literal `actor@example.com` or `actor` strings that the broad sed introduced incorrectly:**
+A re-grep at plan-write time found 5 `testuser@example.com` literal sites + 1 `storageStatePath('testuser')` site = 6 total. The mechanical sed in Task 6 converted all 6 incorrectly. Each needs a hand-touch to use the worker's user identity.
+
+- [ ] **Step 7.1: Re-grep for everything the broad sed touched incorrectly:**
 
 ```bash
-grep -rn '\bactor@example\.com\b\|storageStatePath(.actor.)' e2e/specs --include='*.spec.ts'
+grep -rEn 'actor@example\.com|storageStatePath\(.actor.\)' e2e/specs --include='*.spec.ts'
 ```
 
-These hits are wrong (the sed converted `testuser@example.com` → `actor@example.com`) and need fixing.
+Expected hit count: 6. If the grep returns more, treat each new hit as a hand-touch and document in the active plan before fixing.
 
-- [ ] **Step 7.2: Fix `e2e/specs/_journey.spec.ts:57`** (was `testuser@example.com` literal in fresh-login). Replace with worker user email derived from `testInfo.workerIndex`:
+- [ ] **Step 7.2: Fix `e2e/specs/_journey.spec.ts:57`** (fresh-login flow). Replace with worker user email. Ensure the test signature has `testInfo`:
 
 ```ts
-// Inside the test scope where testInfo is available:
+// test('...', async ({ page }, testInfo) => { ... })
 const workerEmail = `e2e_w${testInfo.workerIndex}@example.com`;
 await auth.loginEmail(page).fill(workerEmail);
 ```
 
-If this test does not currently take `testInfo` in its destructure, add it: `test('...', async ({ page }, testInfo) => { ... })`.
+- [ ] **Step 7.3: Fix `e2e/specs/auth/login-success.spec.ts:10`** — replace `actor@example.com` with `e2e_w${testInfo.workerIndex}@example.com`. Add `testInfo` to the test signature if missing.
 
-- [ ] **Step 7.3: Fix `e2e/specs/auth/login-success.spec.ts:10`** similarly — replace `actor@example.com` (sed-introduced) with `e2e_w${testInfo.workerIndex}@example.com`.
+- [ ] **Step 7.4: Fix `e2e/specs/auth/login-wrong-password.spec.ts:9`** — same pattern. The test asserts wrong-password rejection; using the worker's user email keeps the assertion intact (a worker-owned user must exist to be rejected for wrong password).
 
-- [ ] **Step 7.4: Fix `e2e/specs/bookmarks/persists-across-sessions.spec.ts:48`:**
+- [ ] **Step 7.5: Fix `e2e/specs/auth/login-redirect-after-login.spec.ts:15`** — same pattern.
+
+- [ ] **Step 7.6: Fix `e2e/specs/auth/register-duplicate-email.spec.ts`** (TWO sites in one file):
+  - **Line 22**: replace `actor@example.com` with `e2e_w${testInfo.workerIndex}@example.com`. Semantic: the test asserts "registering an email that already exists fails." Each worker's seeded user IS already in `users` post-seed, so re-registering the worker email is a duplicate — preserves the test's intent.
+  - **Line 11 (comment)**: update the comment from `// testuser@example.com is pinned in scripts/seed.sql and therefore exists` → `// e2e_w${N}@example.com is pinned in scripts/seed.sql per the per-worker pool and therefore exists`.
+
+- [ ] **Step 7.7: Fix `e2e/specs/bookmarks/persists-across-sessions.spec.ts:48`:**
 
 ```ts
 const workerUser = `e2e_w${testInfo.workerIndex}` as const;
@@ -752,27 +801,50 @@ const ctx = await browser.newContext({ storageState: storageStatePath(workerUser
 
 Cast or import `AuthUser` if needed.
 
-- [ ] **Step 7.5: Run typecheck:** `cd e2e && npx tsc --noEmit`. Expected: PASS.
+- [ ] **Step 7.8: Re-run the grep to confirm zero remaining hits:**
 
-- [ ] **Step 7.6: Run the 3 hand-touch specs locally:**
+```bash
+grep -rEn 'actor@example\.com|storageStatePath\(.actor.\)' e2e/specs --include='*.spec.ts'
+```
+
+Expected: zero results.
+
+- [ ] **Step 7.9: Run typecheck:** `cd e2e && npx tsc --noEmit`. Expected: PASS.
+
+- [ ] **Step 7.10: Run all hand-touched specs locally:**
 
 ```bash
 cd e2e
-npx playwright test specs/_journey.spec.ts specs/auth/login-success.spec.ts specs/bookmarks/persists-across-sessions.spec.ts --workers=1
+npx playwright test \
+  specs/_journey.spec.ts \
+  specs/auth/login-success.spec.ts \
+  specs/auth/login-wrong-password.spec.ts \
+  specs/auth/login-redirect-after-login.spec.ts \
+  specs/auth/register-duplicate-email.spec.ts \
+  specs/bookmarks/persists-across-sessions.spec.ts \
+  --workers=1
 ```
 
 Expected: ALL PASS.
 
-- [ ] **Step 7.7: Commit.**
+- [ ] **Step 7.11: Commit.**
 
 ```bash
-git add e2e/specs/_journey.spec.ts e2e/specs/auth/login-success.spec.ts e2e/specs/bookmarks/persists-across-sessions.spec.ts
-git commit -m "fix(e2e): #75 restore three specs that hardcode the worker user email
+git add e2e/specs/_journey.spec.ts \
+  e2e/specs/auth/login-success.spec.ts \
+  e2e/specs/auth/login-wrong-password.spec.ts \
+  e2e/specs/auth/login-redirect-after-login.spec.ts \
+  e2e/specs/auth/register-duplicate-email.spec.ts \
+  e2e/specs/bookmarks/persists-across-sessions.spec.ts
+git commit -m "fix(e2e): #75 restore six specs that hardcode the worker user identity
 
 The mechanical sed in the previous commit converted testuser@example.com
 literals into actor@example.com — wrong, since 'actor' is a fixture
 name not an email. Hand-touch each: derive the email from
-testInfo.workerIndex so each worker logs in as its own seeded user."
+testInfo.workerIndex so each worker logs in as its own seeded user.
+register-duplicate-email retains its 'duplicate-email rejection'
+semantic — the worker's user IS already in the seed, so re-registering
+the worker email is a duplicate."
 ```
 
 ---
@@ -905,9 +977,9 @@ Classified list committed to .beads/plans/active-plan.md."
 
 **Files:**
 
-- Modify: `.github/workflows/e2e.yml`
+- Modify: `.github/workflows/e2e-playwright.yml`
 
-- [ ] **Step 10.1: Locate the existing `e2e.yml` workflow.** Read it.
+- [ ] **Step 10.1: Locate the existing `e2e-playwright.yml` workflow.** Read it.
 
 - [ ] **Step 10.2: Add a new step early in the workflow** (before the playwright run, ideally after checkout):
 
@@ -989,7 +1061,7 @@ jobs:
           done
 ```
 
-(The exact environment + DB setup steps must mirror the existing `e2e.yml` workflow. Read `.github/workflows/e2e.yml` to copy the relevant `services:`, `env:`, and setup steps verbatim. The added bit is the 5x sequential loop.)
+(The exact environment + DB setup steps must mirror the existing `e2e-playwright.yml` workflow. Read `.github/workflows/e2e-playwright.yml` to copy the relevant `services:`, `env:`, and setup steps verbatim. The added bit is the 5x sequential loop.)
 
 - [ ] **Step 11.2: Confirm YAML syntax is valid:**
 
@@ -1086,22 +1158,49 @@ coverage requirements."
 
 ---
 
-## Task 13: Run e2e-burst, verify, knowledge capture, open PR
+## Task 13: Verify ACs, run e2e-burst, knowledge capture, open PR
 
-- [ ] **Step 13.1: Push the branch:** `git push -u origin fix/e2e-cross-worker-reset`.
+- [ ] **Step 13.1: Run the 10 issue-cited specs locally at workers=4 to confirm AC #1 spec-by-spec.** This is the explicit per-spec verification the AC asks for; the burst run validates the whole-suite signal in a later step.
 
-- [ ] **Step 13.2: Trigger the burst workflow** from the GitHub Actions UI (workflow_dispatch on the PR branch). Capture the run URL.
+```bash
+cd e2e
+npx playwright test \
+  specs/_journey.spec.ts \
+  specs/bookmarks/page-list.spec.ts \
+  specs/comments/edit-own.spec.ts \
+  specs/revisions/rollback-to-previous.spec.ts \
+  specs/bookmarks/page-empty-state.spec.ts \
+  specs/posts/delete-cascade.spec.ts \
+  specs/posts/edit-own-post.spec.ts \
+  specs/posts/publish-draft-to-public.spec.ts \
+  specs/voting/score-in-feed.spec.ts \
+  --workers=4 --retries=0
+```
 
-- [ ] **Step 13.3: Wait for the burst to complete.** Expected: ALL 5 sequential runs PASS (job ends green).
+Expected: ALL 10 specs PASS with 0 retries. (`_journey.spec.ts` covers both Phase 2 draft and Phase 4 social — the two distinct cases from the issue body.)
 
-- [ ] **Step 13.4: If any run fails:**
+- [ ] **Step 13.2: Run the global coverage gate locally** to confirm the 100/100/100/100 floor in `.coverage-thresholds.json`:
+
+```bash
+npm run test:coverage
+```
+
+Expected: PASS. If any metric drops below 100%, fix tests and re-run; do NOT proceed to PR until coverage is at the floor.
+
+- [ ] **Step 13.3: Push the branch:** `git push -u origin fix/e2e-cross-worker-reset`.
+
+- [ ] **Step 13.4: Trigger the burst workflow** from the GitHub Actions UI (workflow_dispatch on the PR branch). Capture the run URL.
+
+- [ ] **Step 13.5: Wait for the burst to complete.** Expected: ALL 5 sequential runs PASS (job ends green).
+
+- [ ] **Step 13.6: If any run fails:**
   - Pull the failure logs.
   - Determine if it's a flake unrelated to #75 (e.g., infrastructure) or a regression introduced by this PR.
   - For PR regressions: diagnose, fix, push, re-trigger burst. Do NOT request merge until 5x green.
 
-- [ ] **Step 13.5: Run `/self-reflect`** to capture learnings while implementation context is fresh. Commit the resulting knowledge-base updates.
+- [ ] **Step 13.7: Run `/self-reflect`** to capture learnings while implementation context is fresh. Commit the resulting knowledge-base updates.
 
-- [ ] **Step 13.6: Open the PR:**
+- [ ] **Step 13.8: Open the PR:**
 
 ```bash
 gh pr create --title "fix(e2e): #75 cross-worker reset contention via per-worker user pool" --body "$(cat <<'EOF'
@@ -1148,7 +1247,10 @@ EOF
 | globalSetup parallelized                      | Task 4 (4.3)                     |
 | Playwright config workers=4 / retries=0       | Task 5                           |
 | Spec migration mechanical                     | Task 6                           |
-| Spec migration hand-touch (3 sites)           | Task 7                           |
+| Spec migration hand-touch (6 sites)           | Task 7                           |
+| AC #1 — 10 specs pass at workers=4            | Task 13.1                        |
+| Global coverage gate pre-PR                   | Task 13.2                        |
+| Active plan persistence                       | Task 0                           |
 | Defensive workaround removal                  | Task 8                           |
 | Comment + test-name bounded migration         | Task 9                           |
 | CI lint guard                                 | Task 10                          |
