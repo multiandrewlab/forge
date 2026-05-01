@@ -6,9 +6,9 @@ test(
   { tag: '@no-reset' },
   async ({ browser }) => {
     // Anonymous context — the /register route assumes an unauthenticated
-    // viewer, so we don't reuse the testuser storageState fixture.
+    // viewer, so we don't reuse the actor storageState fixture.
     //
-    // testuser@example.com is pinned in scripts/seed.sql and therefore exists
+    // actor@example.com is pinned in scripts/seed.sql and therefore exists
     // in the users table whether or not the DB was reset. Submitting it
     // exercises the server's 409 path:
     //   packages/server/src/routes/auth.ts:80 →
@@ -19,7 +19,7 @@ test(
     const page = await ctx.newPage();
 
     await page.goto('/register');
-    await auth.registerEmail(page).fill('testuser@example.com');
+    await auth.registerEmail(page).fill('actor@example.com');
     await auth.registerName(page).fill('Duplicate Email User');
     await auth.registerPassword(page).fill('password123');
     await auth.registerConfirmPassword(page).fill('password123');

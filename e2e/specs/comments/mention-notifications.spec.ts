@@ -4,7 +4,7 @@ import { test } from '../../fixtures/reset.js';
 // No code paths exist in packages/server/src/routes/comments.ts or services/ that
 // parse @mentions or emit notifications. Activate this spec once the feature ships.
 test.fixme('comments: @mention generates a notification for the mentioned user', async ({
-  testuser: _testuser,
+  actor: _testuser,
   alice: _alice,
 }) => {
   // Posting a comment containing "@alice" should produce a notification for alice.

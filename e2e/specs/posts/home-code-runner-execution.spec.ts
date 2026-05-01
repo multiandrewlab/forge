@@ -9,7 +9,7 @@ import { posts } from '../../fixtures/selectors/posts.js';
 // reached 'done' or 'error'), so asserting `Exit: \d+` confirms completion.
 //
 // 15s timeout on `executionOutput` covers cold-start TS sandbox boot in CI;
-// the seeded revision (`const testFixture: string = "hello from testuser v3
+// the seeded revision (`const testFixture: string = "hello from actor v3
 // with more body"; export default testFixture;`) compiles + runs cleanly to
 // exit 0 with no stdout, so we cannot rely on output lines — the status bar
 // is the deterministic completion signal.
@@ -21,9 +21,7 @@ test('code-runner: alice runs the seeded snippet and sees output panel + complet
   // Click the list-item heading (h3) — the right-pane PostMetaHeader also
   // renders the title as h1 once a post is auto-selected, so a plain
   // getByText is ambiguous.
-  await alice
-    .getByRole('heading', { level: 3, name: 'Test Fixture Post (testuser-owned)' })
-    .click();
+  await alice.getByRole('heading', { level: 3, name: 'Test Fixture Post (actor-owned)' }).click();
 
   await expect(posts.codeRunner(alice)).toBeVisible({ timeout: 10000 });
 

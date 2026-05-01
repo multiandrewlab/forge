@@ -3,7 +3,7 @@ import { test, expect } from '../../fixtures/reset.js';
 import { auth } from '../../fixtures/selectors/auth.js';
 
 test('registering a fresh account redirects to home', { tag: '@no-reset' }, async ({ browser }) => {
-  // Anonymous context — drive a raw context so the testuser fixture's
+  // Anonymous context — drive a raw context so the actor fixture's
   // logged-in storageState isn't applied; the /register route assumes an
   // unauthenticated viewer.
   //

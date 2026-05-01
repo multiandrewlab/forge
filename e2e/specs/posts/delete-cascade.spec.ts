@@ -2,16 +2,16 @@ import { test, expect } from '../../fixtures/reset.js';
 import { posts } from '../../fixtures/selectors/posts.js';
 
 test('delete: cascade — post + comments + votes + bookmarks all vanish', async ({
-  testuser,
+  actor,
   alice,
 }) => {
-  // testuser creates a post (auth via refresh-token exchange — see
+  // actor creates a post (auth via refresh-token exchange — see
   // edit-own-post.spec.ts for canonical pattern).
-  const tuRefresh = await testuser.request.post('/api/auth/refresh');
+  const tuRefresh = await actor.request.post('/api/auth/refresh');
   expect(tuRefresh.ok()).toBe(true);
   const { accessToken: tuToken } = (await tuRefresh.json()) as { accessToken: string };
 
-  const created = await testuser.request.post('/api/posts', {
+  const created = await actor.request.post('/api/posts', {
     headers: { Authorization: `Bearer ${tuToken}` },
     data: {
       title: 'Cascade test',
@@ -29,7 +29,7 @@ test('delete: cascade — post + comments + votes + bookmarks all vanish', async
 
   // Alice gets her own access token (separate refresh-token exchange from her
   // own browser storage state) and creates a vote, bookmark, and comment on
-  // testuser's post. Endpoint shapes verified against:
+  // actor's post. Endpoint shapes verified against:
   //   - votes:     packages/server/src/routes/votes.ts:9     POST /api/posts/:id/vote
   //   - bookmarks: packages/server/src/routes/bookmarks.ts   POST /api/posts/:id/bookmark
   //   - comments:  packages/server/src/routes/comments.ts    POST /api/posts/:id/comments
@@ -56,20 +56,20 @@ test('delete: cascade — post + comments + votes + bookmarks all vanish', async
   });
   expect(commentRes.ok()).toBe(true);
 
-  // testuser deletes via UI — exercises the new dialog.
-  await testuser.goto(`/posts/${createdPostId}`);
-  await posts.postDeleteBtn(testuser).click();
-  await posts.postDeleteConfirm(testuser).click();
-  await expect(testuser).toHaveURL(/\/$/);
+  // actor deletes via UI — exercises the new dialog.
+  await actor.goto(`/posts/${createdPostId}`);
+  await posts.postDeleteBtn(actor).click();
+  await posts.postDeleteConfirm(actor).click();
+  await expect(actor).toHaveURL(/\/$/);
 
   // Cascade verification: the post itself returns 404. Postgres FK-cascade
   // (posts → comments / votes / bookmarks) implies all children are gone.
   //
   // Auth note: GET /api/posts/:id is auth-required after WU2 of issue #62, so
-  // the unauthenticated `request` fixture would 401 here. Reusing testuser's
+  // the unauthenticated `request` fixture would 401 here. Reusing actor's
   // bearer token keeps the assertion targeted at the 404 (post truly gone)
   // rather than masking it behind an auth challenge.
-  const postAfterDelete = await testuser.request.get(`/api/posts/${createdPostId}`, {
+  const postAfterDelete = await actor.request.get(`/api/posts/${createdPostId}`, {
     headers: { Authorization: `Bearer ${tuToken}` },
   });
   expect(postAfterDelete.status()).toBe(404);

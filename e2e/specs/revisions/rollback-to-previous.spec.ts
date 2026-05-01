@@ -2,16 +2,16 @@ import { test, expect } from '../../fixtures/reset.js';
 import { revisions } from '../../fixtures/selectors/revisions.js';
 
 test('rollback: confirming restore swaps the post body to the chosen revision', async ({
-  testuser,
+  actor,
 }) => {
   // Storage state has the refresh_token cookie; mint an access token from it.
   // (Same pattern as create-auto-on-edit.spec.ts and create-manual-via-button.spec.ts.)
-  const refresh = await testuser.request.post('/api/auth/refresh');
+  const refresh = await actor.request.post('/api/auth/refresh');
   expect(refresh.ok()).toBe(true);
   const { accessToken } = (await refresh.json()) as { accessToken: string };
 
   // 1. Create a post (auto-creates revision 1 with content "first body").
-  const created = await testuser.request.post('/api/posts', {
+  const created = await actor.request.post('/api/posts', {
     headers: { Authorization: `Bearer ${accessToken}` },
     data: {
       title: 'Rollback seed',
@@ -29,7 +29,7 @@ test('rollback: confirming restore swaps the post body to the chosen revision', 
 
   // 2. Add a 2nd revision via API with content "second body".
   // The post body is now "second body" (latest revision wins).
-  const rev2 = await testuser.request.post(`/api/posts/${createdPostId}/revisions`, {
+  const rev2 = await actor.request.post(`/api/posts/${createdPostId}/revisions`, {
     headers: { Authorization: `Bearer ${accessToken}` },
     data: { content: 'second body', message: 'Second' },
   });
@@ -40,16 +40,16 @@ test('rollback: confirming restore swaps the post body to the chosen revision', 
   // PostHistoryPage.vue is gated on `selectedIds.length === 1 && !isLatestSelected`
   // (PostHistoryPage.vue:37) — exactly one selection, NOT the newest. Selecting
   // .last() satisfies both conditions.
-  await testuser.goto(`/posts/${createdPostId}/history`);
-  await expect(revisions.revisionItem(testuser)).toHaveCount(2);
-  await revisions.revisionItem(testuser).last().click();
+  await actor.goto(`/posts/${createdPostId}/history`);
+  await expect(revisions.revisionItem(actor)).toHaveCount(2);
+  await revisions.revisionItem(actor).last().click();
 
   // 4. Open the confirm dialog and click Confirm.
-  await revisions.restoreTrigger(testuser).click();
-  await expect(revisions.restoreDialog(testuser)).toBeVisible();
-  await revisions.restoreConfirm(testuser).click();
+  await revisions.restoreTrigger(actor).click();
+  await expect(revisions.restoreDialog(actor)).toBeVisible();
+  await revisions.restoreConfirm(actor).click();
 
   // 5. Navigate to the post detail. The body should be rolled back to "first body".
-  await testuser.goto(`/posts/${createdPostId}`);
-  await expect(testuser.getByText(/first body/)).toBeVisible();
+  await actor.goto(`/posts/${createdPostId}`);
+  await expect(actor.getByText(/first body/)).toBeVisible();
 });

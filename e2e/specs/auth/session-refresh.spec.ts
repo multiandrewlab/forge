@@ -1,6 +1,6 @@
 import { test, expect } from '../../fixtures/reset.js';
 
-test('a 401 from a feed request triggers the refresh interceptor', async ({ testuser }) => {
+test('a 401 from a feed request triggers the refresh interceptor', async ({ actor }) => {
   // Two distinct code paths fire `POST /api/auth/refresh`:
   //   1. Boot-time: `packages/client/src/lib/restore-session.ts:16` calls
   //      it on every authenticated app load to rehydrate the in-memory access
@@ -15,7 +15,7 @@ test('a 401 from a feed request triggers the refresh interceptor', async ({ test
   // path was exercised" — expressed as a count to coexist deterministically
   // with the boot-time refresh we cannot suppress.
   let refreshCount = 0;
-  testuser.on('request', (req) => {
+  actor.on('request', (req) => {
     if (req.method() === 'POST' && req.url().includes('/api/auth/refresh')) {
       refreshCount += 1;
     }
@@ -23,7 +23,7 @@ test('a 401 from a feed request triggers the refresh interceptor', async ({ test
 
   // One-shot 401 on the feed; Playwright auto-detaches after `times: 1`,
   // so the post-refresh retry hits the real backend and the page recovers.
-  await testuser.route(
+  await actor.route(
     '**/api/posts**',
     (route) =>
       route.fulfill({
@@ -34,7 +34,7 @@ test('a 401 from a feed request triggers the refresh interceptor', async ({ test
     { times: 1 },
   );
 
-  await testuser.goto('/');
+  await actor.goto('/');
 
   await expect.poll(() => refreshCount, { timeout: 10_000 }).toBeGreaterThanOrEqual(2);
 });

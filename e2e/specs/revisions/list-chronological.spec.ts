@@ -1,8 +1,8 @@
 import { test, expect } from '../../fixtures/reset.js';
 import { revisions } from '../../fixtures/selectors/revisions.js';
 
-test('revisions: history page lists all 3 seeded revisions newest-first', async ({ testuser }) => {
-  // Seeded post c0000000-...-099 (testuser-owned snippet) has 3 revisions per
+test('revisions: history page lists all 3 seeded revisions newest-first', async ({ actor }) => {
+  // Seeded post c0000000-...-099 (actor-owned snippet) has 3 revisions per
   // scripts/seed.sql:
   //   - rev 1: "Initial version"
   //   - rev 2: "Second revision — added export"
@@ -11,10 +11,10 @@ test('revisions: history page lists all 3 seeded revisions newest-first', async 
   // revision_number DESC (packages/server/src/db/queries/revisions.ts), so
   // the timeline renders newest-first — the "Current" badge sits at index 0
   // (rev 3) and Rev 1 is last.
-  await testuser.goto('/posts/c0000000-0000-0000-0000-000000000099/history');
-  await expect(revisions.historyPage(testuser)).toBeVisible();
+  await actor.goto('/posts/c0000000-0000-0000-0000-000000000099/history');
+  await expect(revisions.historyPage(actor)).toBeVisible();
 
-  const items = revisions.revisionItem(testuser);
+  const items = revisions.revisionItem(actor);
   await expect(items).toHaveCount(3);
 
   // Verify newest-first order via the visible "Rev N" labels rendered by

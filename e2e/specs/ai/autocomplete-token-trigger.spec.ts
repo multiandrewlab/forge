@@ -11,9 +11,9 @@ async function openEditorOnNewPost(page: Page): Promise<void> {
   await page.locator('.cm-content').first().click();
 }
 
-test('ai: typing triggers autocomplete ghost text', async ({ testuser }) => {
-  await withMockScript(testuser, 'autocomplete-typescript-react');
-  await openEditorOnNewPost(testuser);
-  await testuser.keyboard.type('export function ');
-  await expect(ai.autocompleteSuggestion(testuser)).toBeVisible({ timeout: 5_000 });
+test('ai: typing triggers autocomplete ghost text', async ({ actor }) => {
+  await withMockScript(actor, 'autocomplete-typescript-react');
+  await openEditorOnNewPost(actor);
+  await actor.keyboard.type('export function ');
+  await expect(ai.autocompleteSuggestion(actor)).toBeVisible({ timeout: 5_000 });
 });

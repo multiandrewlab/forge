@@ -26,7 +26,7 @@ const FRESH_USER = {
 test.describe.serial('Phase 1 — auth: register, login, logout, relogin', () => {
   test('register a fresh account', { tag: '@no-reset' }, async ({ browser }) => {
     // Pre-condition: page is anonymous (we drive a raw context, not the
-    // testuser fixture). Tagged @no-reset so we don't wipe the user we just
+    // actor fixture). Tagged @no-reset so we don't wipe the user we just
     // created before the assertion runs in the next test in this describe block.
     const ctx = await browser.newContext();
     const page = await ctx.newPage();
@@ -43,18 +43,18 @@ test.describe.serial('Phase 1 — auth: register, login, logout, relogin', () =>
     await ctx.close();
   });
 
-  test('logout from a logged-in session', async ({ testuser }) => {
-    await testuser.goto('/');
-    await auth.userMenuTrigger(testuser).click();
-    await auth.logoutAction(testuser).click();
-    await expect(testuser).toHaveURL(/\/login/);
+  test('logout from a logged-in session', async ({ actor }) => {
+    await actor.goto('/');
+    await auth.userMenuTrigger(actor).click();
+    await auth.logoutAction(actor).click();
+    await expect(actor).toHaveURL(/\/login/);
   });
 
   test('relogin via the login form', async ({ browser }) => {
     const ctx = await browser.newContext(); // anonymous
     const page = await ctx.newPage();
     await page.goto('/login');
-    await auth.loginEmail(page).fill('testuser@example.com');
+    await auth.loginEmail(page).fill('actor@example.com');
     await auth.loginPassword(page).fill('password123');
     await auth.loginSubmit(page).click();
     await expect(page).toHaveURL('/');
@@ -63,14 +63,14 @@ test.describe.serial('Phase 1 — auth: register, login, logout, relogin', () =>
 });
 
 test.describe.serial('Phase 2 — draft', () => {
-  test('create a draft post and land on its view page', async ({ testuser }) => {
-    await testuser.goto('/posts/new');
-    await posts.newPostTitle(testuser).fill('Journey draft');
-    await posts.newPostBody(testuser).fill('Draft body content for the journey smoke.');
-    await posts.newPostSaveDraft(testuser).click();
-    await expect(testuser).toHaveURL(/\/posts\/[^/]+/);
-    await expect(posts.postTitle(testuser)).toContainText('Journey draft');
-    await expect(posts.draftBadge(testuser)).toBeVisible();
+  test('create a draft post and land on its view page', async ({ actor }) => {
+    await actor.goto('/posts/new');
+    await posts.newPostTitle(actor).fill('Journey draft');
+    await posts.newPostBody(actor).fill('Draft body content for the journey smoke.');
+    await posts.newPostSaveDraft(actor).click();
+    await expect(actor).toHaveURL(/\/posts\/[^/]+/);
+    await expect(posts.postTitle(actor)).toContainText('Journey draft');
+    await expect(posts.draftBadge(actor)).toBeVisible();
   });
 });
 
@@ -82,84 +82,84 @@ test.describe.serial('Phase 3 — publish (AI autocomplete + upload + publish)',
   // a screen-reader-only button with `ai-autocomplete-accept-btn`. The mock LLM
   // wiring is verified via Bruno's `bruno/ai/complete.bru`. Tracked for a polish
   // PR; skipped here to keep the journey deterministic.
-  test.skip('AI autocomplete inserts a suggestion', async ({ testuser }) => {
-    await withMockScript(testuser, 'autocomplete-typescript-react');
-    await testuser.goto('/posts/new');
-    await posts.newPostTitle(testuser).fill('Journey publish');
-    await posts.newPostBody(testuser).fill('export const ');
-    await expect(ai.autocompleteSuggestion(testuser)).toContainText('Button');
-    await testuser.keyboard.press('Tab');
+  test.skip('AI autocomplete inserts a suggestion', async ({ actor }) => {
+    await withMockScript(actor, 'autocomplete-typescript-react');
+    await actor.goto('/posts/new');
+    await posts.newPostTitle(actor).fill('Journey publish');
+    await posts.newPostBody(actor).fill('export const ');
+    await expect(ai.autocompleteSuggestion(actor)).toContainText('Button');
+    await actor.keyboard.press('Tab');
   });
 
-  test('upload a file and see its preview', async ({ testuser }) => {
+  test('upload a file and see its preview', async ({ actor }) => {
     // Self-contained: navigate + create a fresh draft so this passes even when
     // the autocomplete sub-test above is skipped.
-    await testuser.goto('/posts/new');
-    await posts.newPostTitle(testuser).fill('Journey publish');
-    await posts.newPostBody(testuser).fill('Body for upload phase.');
+    await actor.goto('/posts/new');
+    await posts.newPostTitle(actor).fill('Journey publish');
+    await posts.newPostBody(actor).fill('Body for upload phase.');
     await posts
-      .fileUploadInput(testuser)
+      .fileUploadInput(actor)
       .setInputFiles(join(__dirname, '..', 'fixtures', 'journey-asset.txt'));
-    await expect(posts.fileUploadPreview(testuser)).toBeVisible();
+    await expect(posts.fileUploadPreview(actor)).toBeVisible();
   });
 
-  test('publish the post', async ({ testuser }) => {
+  test('publish the post', async ({ actor }) => {
     // Self-contained: create a fresh draft, then publish.
-    await testuser.goto('/posts/new');
-    await posts.newPostTitle(testuser).fill('Journey publish');
-    await posts.newPostBody(testuser).fill('Body for publish phase.');
-    await posts.newPostPublish(testuser).click();
-    await expect(posts.publishedBadge(testuser)).toBeVisible();
+    await actor.goto('/posts/new');
+    await posts.newPostTitle(actor).fill('Journey publish');
+    await posts.newPostBody(actor).fill('Body for publish phase.');
+    await posts.newPostPublish(actor).click();
+    await expect(posts.publishedBadge(actor)).toBeVisible();
   });
 });
 
 test.describe.serial('Phase 4 — social (search + vote + bookmark + comment)', () => {
-  test('search finds the seeded snippet', async ({ testuser }) => {
-    // Use the unique title "Test Fixture Post (testuser-owned)" rather than
+  test('search finds the seeded snippet', async ({ actor }) => {
+    // Use the unique title "Test Fixture Post (actor-owned)" rather than
     // the generic "typescript" tag — many seeded snippets carry that tag and
     // the seeded fixture post does not rank highest for it.
-    await testuser.goto('/');
-    await shell.searchTrigger(testuser).click();
-    await search.searchInput(testuser).fill('fixture');
-    await search.searchResultItem(testuser).click();
-    await expect(testuser).toHaveURL(new RegExp(`/posts/${SEEDED_POST_ID}`));
+    await actor.goto('/');
+    await shell.searchTrigger(actor).click();
+    await search.searchInput(actor).fill('fixture');
+    await search.searchResultItem(actor).click();
+    await expect(actor).toHaveURL(new RegExp(`/posts/${SEEDED_POST_ID}`));
   });
 
-  test('upvote increments the visible score', async ({ testuser }) => {
-    await testuser.goto(`/posts/${SEEDED_POST_ID}`);
-    const before = (await voting.voteScore(testuser).textContent())?.trim() ?? '0';
-    await voting.upvoteBtn(testuser).click();
+  test('upvote increments the visible score', async ({ actor }) => {
+    await actor.goto(`/posts/${SEEDED_POST_ID}`);
+    const before = (await voting.voteScore(actor).textContent())?.trim() ?? '0';
+    await voting.upvoteBtn(actor).click();
     await expect
-      .poll(async () => (await voting.voteScore(testuser).textContent())?.trim())
+      .poll(async () => (await voting.voteScore(actor).textContent())?.trim())
       .not.toBe(before);
   });
 
-  test('toggling bookmark on shows the on-state icon', async ({ testuser }) => {
-    await testuser.goto(`/posts/${SEEDED_POST_ID}`);
-    await bookmarks.toggleBtn(testuser).click();
-    await expect(bookmarks.onIcon(testuser)).toBeVisible();
+  test('toggling bookmark on shows the on-state icon', async ({ actor }) => {
+    await actor.goto(`/posts/${SEEDED_POST_ID}`);
+    await bookmarks.toggleBtn(actor).click();
+    await expect(bookmarks.onIcon(actor)).toBeVisible();
   });
 
-  test('comment is posted and appears in the thread', async ({ testuser }) => {
+  test('comment is posted and appears in the thread', async ({ actor }) => {
     // The seeded post already carries one fixture comment (commentId fixture
     // in seed.sql) so we cannot rely on `commentBody.first()` reading the
     // newly-posted text — that would just match the seeded comment. Look up
     // the specific testid+text combination instead, which is unambiguous.
-    await testuser.goto(`/posts/${SEEDED_POST_ID}`);
-    await comments.input(testuser).fill('Journey comment.');
-    await comments.submit(testuser).click();
+    await actor.goto(`/posts/${SEEDED_POST_ID}`);
+    await comments.input(actor).fill('Journey comment.');
+    await comments.submit(actor).click();
     await expect(
-      testuser.getByTestId('comment-body').filter({ hasText: 'Journey comment.' }),
+      actor.getByTestId('comment-body').filter({ hasText: 'Journey comment.' }),
     ).toBeVisible();
     // Sanity: shared selector still resolves; keeps imports load-bearing.
-    await expect(comments.section(testuser)).toBeVisible();
+    await expect(comments.section(actor)).toBeVisible();
   });
 });
 
 test.describe.serial('Phase 5 — fork', () => {
-  // Use alice (not testuser) — PostActions.vue:117 disables the Fork button
-  // when the viewer is the author. The seeded post is testuser-owned, so
-  // testuser cannot fork it. alice is a separate seeded user with no special
+  // Use alice (not actor) — PostActions.vue:117 disables the Fork button
+  // when the viewer is the author. The seeded post is actor-owned, so
+  // actor cannot fork it. alice is a separate seeded user with no special
   // relationship to the post.
   test('fork the seeded post and land on the new post-edit page with attribution', async ({
     alice,

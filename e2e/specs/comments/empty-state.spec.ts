@@ -1,13 +1,13 @@
 import { test, expect } from '../../fixtures/reset.js';
 import { comments } from '../../fixtures/selectors/comments.js';
 
-test('comments: empty-state appears for a brand-new post', async ({ testuser }) => {
-  const refresh = await testuser.request.post('/api/auth/refresh');
+test('comments: empty-state appears for a brand-new post', async ({ actor }) => {
+  const refresh = await actor.request.post('/api/auth/refresh');
   expect(refresh.ok()).toBe(true);
   const { accessToken } = (await refresh.json()) as { accessToken: string };
   const auth = { Authorization: `Bearer ${accessToken}` };
 
-  const post = await testuser.request.post('/api/posts', {
+  const post = await actor.request.post('/api/posts', {
     headers: auth,
     data: {
       title: 'Empty seed',
@@ -23,9 +23,9 @@ test('comments: empty-state appears for a brand-new post', async ({ testuser }) 
     post: { id: postId },
   } = (await post.json()) as { post: { id: string } };
 
-  await testuser.goto(`/posts/${postId}`);
-  await expect(comments.empty(testuser)).toBeVisible();
-  await expect(comments.empty(testuser)).toHaveText('No comments yet.');
+  await actor.goto(`/posts/${postId}`);
+  await expect(comments.empty(actor)).toBeVisible();
+  await expect(comments.empty(actor)).toHaveText('No comments yet.');
   // Belt-and-suspenders: the comment list element is absent
-  await expect(comments.list(testuser)).toHaveCount(0);
+  await expect(comments.list(actor)).toHaveCount(0);
 });
