@@ -372,7 +372,7 @@ WU8 + WU9 can run in parallel. Every other WU is sequential.
   ```ts
   describe('missing-required-variables validation', () => {
     // Use the seeded required-var fixture post (added in WU3).
-    const REQUIRED_VAR_FIXTURE_POST_ID = 'c0000000-0000-0000-0000-000000000005';
+    const REQUIRED_VAR_FIXTURE_POST_ID = 'c0000000-0000-0000-0000-000000000050';
     const ALICE_PRIVATE_PROMPT_ID = '<seed alice's private prompt UUID>';
 
     it('case 1: missing single required var → 400 with code + missing[name]', async () => {
@@ -644,7 +644,7 @@ WU8 + WU9 can run in parallel. Every other WU is sequential.
   ```sql
   -- #50: dedicated required-var fixture post (one NULL-default variable)
   INSERT INTO posts (id, author_id, title, content_type, language, visibility, is_draft, created_at, updated_at) VALUES
-    ('c0000000-0000-0000-0000-000000000005', 'a0000000-0000-0000-0000-000000000099', 'Required-var Fixture (E2E + Bruno)', 'prompt', 'markdown', 'public', false, NOW(), NOW());
+    ('c0000000-0000-0000-0000-000000000050', 'a0000000-0000-0000-0000-000000000099', 'Required-var Fixture (E2E + Bruno)', 'prompt', 'markdown', 'public', false, NOW(), NOW());
   ```
 
   Find the `post_revisions` INSERT block and add an initial revision:
@@ -652,7 +652,7 @@ WU8 + WU9 can run in parallel. Every other WU is sequential.
   ```sql
   -- #50: initial revision for the required-var fixture post
   INSERT INTO post_revisions (id, post_id, author_id, content, summary, revision_number) VALUES
-    ('d0000000-0000-0000-0000-000000000006', 'c0000000-0000-0000-0000-000000000005', 'a0000000-0000-0000-0000-000000000099', 'Hello {{required_name}}!', 'Initial fixture for #50', 1);
+    ('d0000000-0000-0000-0000-000000000050', 'c0000000-0000-0000-0000-000000000050', 'a0000000-0000-0000-0000-000000000099', 'Hello {{required_name}}!', 'Initial fixture for #50', 1);
   ```
 
   Find the `prompt_variables` INSERT block and add the NULL-default row:
@@ -660,7 +660,7 @@ WU8 + WU9 can run in parallel. Every other WU is sequential.
   ```sql
   -- #50: required-var fixture row (NULL default — always required)
   INSERT INTO prompt_variables (id, post_id, name, placeholder, sort_order, default_value) VALUES
-    ('f0000000-0000-0000-0000-000000000004', 'c0000000-0000-0000-0000-000000000005', 'required_name', 'e.g., world', 0, NULL);
+    ('f0000000-0000-0000-0000-000000000050', 'c0000000-0000-0000-0000-000000000050', 'required_name', 'e.g., world', 0, NULL);
   ```
 
   **UUID note:** the implementer verifies `f0000000-...-000000000004` is unused before committing. If taken, pick the next-available `f0000000-...` UUID.
@@ -669,7 +669,7 @@ WU8 + WU9 can run in parallel. Every other WU is sequential.
 
   Run: `set -a && source .env && set +a && cd packages/server && npx tsx scripts/seed.ts` (or whatever the project's seed-application command is — check `package.json` scripts).
 
-  Expected: 0 errors. New rows visible via `psql -c "SELECT id FROM posts WHERE id='c0000000-0000-0000-0000-000000000005'"` (or equivalent).
+  Expected: 0 errors. New rows visible via `psql -c "SELECT id FROM posts WHERE id='c0000000-0000-0000-0000-000000000050'"` (or equivalent).
 
 - [ ] **Step 3.2.3: Confirm `props` row default**
 
@@ -738,7 +738,7 @@ WU8 + WU9 can run in parallel. Every other WU is sequential.
 
   body:json {
     {
-      "postId": "c0000000-0000-0000-0000-000000000005",
+      "postId": "c0000000-0000-0000-0000-000000000050",
       "variables": {}
     }
   }
@@ -1235,12 +1235,15 @@ WU8 + WU9 can run in parallel. Every other WU is sequential.
 
 - [ ] **Step 5.2.4: Implement the E2E hook restructure**
 
-  In `packages/client/src/composables/useAiGenerate.ts`, restructure `start()` to wrap the existing fetch + SSE in try/catch/finally, preserving:
+  In `packages/client/src/composables/useAiGenerate.ts`, restructure `start()` to wrap the existing fetch + SSE in try/catch/finally. **The current file has TWO distinct fallback strings — both are preserved verbatim, do NOT collapse them:**
+  - Line ~41: `error.value = 'Request failed'` in the `!res.ok` branch (request-level failure)
+  - Line ~50/61: `error.value = ... ?? 'Generation failed'` in the malformed-event / generic-catch branches (stream-level failure)
+
+  Other things to preserve:
   - `stop()` idempotent re-call at the top
   - `controller = new AbortController()` assignment to the outer-scope ref
-  - Existing AbortError suppression in catch (line 58-63)
-  - Existing cleanup `isGenerating.value = false; controller = null;` in finally (line 65-66)
-  - `'Generation failed'` fallback string
+  - Existing AbortError suppression in the catch
+  - Existing cleanup `isGenerating.value = false; controller = null;` in finally
 
   Add the THREE new lines (gated install, gated cleanup, plus the `e2eHookEnabled` const). See design §"Architecture/Feature 5" for the exact pseudocode.
 
@@ -1585,7 +1588,7 @@ WU8 + WU9 can run in parallel. Every other WU is sequential.
   - Run button enabled (all defaulted)
   - No load error visible
 
-  Also navigate to `/playground/c0000000-0000-0000-0000-000000000005` (the new fixture). Verify:
+  Also navigate to `/playground/c0000000-0000-0000-0000-000000000050` (the new fixture). Verify:
   - One input rendered with `*` indicator
   - Run button DISABLED until input filled
   - Live region beneath shows "Fill required variables to run"
@@ -1898,7 +1901,7 @@ If duplication grows, hoist this helper into `e2e/fixtures/playground-helpers.ts
   }) => {
     await withMockScript(testuser, 'default');
     // Use the new fixture post (one NULL-default var)
-    const fixturePostId = 'c0000000-0000-0000-0000-000000000005';
+    const fixturePostId = 'c0000000-0000-0000-0000-000000000050';
     await testuser.goto(`/playground/${fixturePostId}`);
 
     // Required indicator visible
@@ -1982,7 +1985,7 @@ If duplication grows, hoist this helper into `e2e/fixtures/playground-helpers.ts
     const res = await testuser.request.post('/api/playground/run', {
       headers: { Authorization: `Bearer ${accessToken}`, 'X-Mock-Script': 'default' },
       data: {
-        postId: 'c0000000-0000-0000-0000-000000000005', // required-var fixture
+        postId: 'c0000000-0000-0000-0000-000000000050', // required-var fixture
         variables: {},
       },
     });
@@ -2407,6 +2410,17 @@ async function openEditorOnNewPost(page: import('@playwright/test').Page) {
   ```
 
 ### Task 11.2 — File 3 follow-up issues
+
+- [ ] **Step 11.2.0: Create missing labels (one-time)**
+
+  Verify which labels exist: `gh label list --json name --jq '.[].name'`. The repo currently has `security` but does NOT have `a11y` or `tech-debt`. Create them:
+
+  ```bash
+  gh label create a11y --description "Accessibility concerns" --color "#0E8A16" || true
+  gh label create tech-debt --description "Technical debt or follow-up cleanup" --color "#FBCA04" || true
+  ```
+
+  The `|| true` guards against re-running this step on a branch where someone already created the labels.
 
 - [ ] **Step 11.2.1: Issue (a) — a11y retrofit**
 
