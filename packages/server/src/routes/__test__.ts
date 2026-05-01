@@ -19,6 +19,9 @@ export type TestRoutesDeps = {
   isCI: boolean;
   host: string;
   pgQuery: (sql: string) => Promise<unknown>;
+  pgTransaction: <T>(
+    fn: (client: { query: (sql: string, params?: unknown[]) => Promise<unknown> }) => Promise<T>,
+  ) => Promise<T>;
 };
 
 export async function registerTestRoutes(

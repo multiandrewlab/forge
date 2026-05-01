@@ -34,6 +34,7 @@ describe('registerTestRoutes — gating', () => {
       isCI: false,
       host: '127.0.0.1',
       pgQuery: async () => undefined,
+      pgTransaction: vi.fn(),
     });
     const res = await app.inject({ method: 'POST', url: '/api/__test__/reset' });
     expect(res.statusCode).toBe(404);
@@ -48,6 +49,7 @@ describe('registerTestRoutes — gating', () => {
       isCI: false,
       host: '127.0.0.1',
       pgQuery: async () => undefined,
+      pgTransaction: vi.fn(),
     });
     const res = await app.inject({ method: 'POST', url: '/api/__test__/reset' });
     expect(res.statusCode).toBe(404);
@@ -62,6 +64,7 @@ describe('registerTestRoutes — gating', () => {
       isCI: false,
       host: '0.0.0.0',
       pgQuery: async () => undefined,
+      pgTransaction: vi.fn(),
     });
     const res = await app.inject({ method: 'POST', url: '/api/__test__/reset' });
     expect(res.statusCode).toBe(404);
@@ -86,6 +89,7 @@ describe('POST /api/__test__/reset — auth', () => {
       pgQuery: async (sql) => {
         pgCalls.push(sql);
       },
+      pgTransaction: vi.fn(),
     });
     return app;
   }
@@ -193,6 +197,7 @@ describe('POST /api/__test__/reset — auth', () => {
         // This is deterministic regardless of seed.sql content.
         if (calls.length === 2) throw new Error('simulated DB failure');
       },
+      pgTransaction: vi.fn(),
     });
     const res = await app.inject({
       method: 'POST',
