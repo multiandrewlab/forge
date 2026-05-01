@@ -414,7 +414,7 @@ describe('usePlayground', () => {
               id: 'p1',
               title: 'T',
               contentType: 'prompt',
-              latestRevision: { content: 'Hi {{name}}!' },
+              revisions: [{ content: 'Hi {{name}}!' }],
             },
           }),
       } as unknown as Response);
@@ -462,7 +462,7 @@ describe('usePlayground', () => {
               id: 'p1',
               title: 'T',
               contentType: 'prompt',
-              latestRevision: { content: 'Hi {{name}}!' },
+              revisions: [{ content: 'Hi {{name}}!' }],
             },
           }),
       } as unknown as Response);
@@ -520,7 +520,7 @@ describe('usePlayground', () => {
               id: 'p1',
               title: 'T',
               contentType: 'prompt',
-              latestRevision: { content: 'Hi {{name}}!' },
+              revisions: [{ content: 'Hi {{name}}!' }],
             },
           }),
       } as unknown as Response);
@@ -558,7 +558,7 @@ describe('usePlayground', () => {
               id: 'post-1',
               title: 'T',
               contentType: 'prompt',
-              latestRevision: { content: 'Hi {{name}}!' },
+              revisions: [{ content: 'Hi {{name}}!' }],
             },
           }),
       } as unknown as Response);
@@ -610,7 +610,7 @@ describe('usePlayground', () => {
       expect(pg.currentPost.value).toBeNull();
     });
 
-    it('case 11e: fetchPost with missing latestRevision uses empty content', async () => {
+    it('case 11e: fetchPost with missing revisions uses empty content', async () => {
       mockApiFetch.mockResolvedValue({
         ok: true,
         json: () =>
@@ -619,7 +619,7 @@ describe('usePlayground', () => {
               id: 'p1',
               title: 'T',
               contentType: 'snippet',
-              latestRevision: null,
+              revisions: null,
             },
           }),
       } as unknown as Response);

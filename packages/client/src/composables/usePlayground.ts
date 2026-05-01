@@ -79,14 +79,14 @@ export function usePlayground(): UsePlaygroundReturn {
           id: string;
           title: string;
           contentType: ContentType;
-          latestRevision?: { content: string } | null;
+          revisions?: Array<{ content: string }> | null;
         };
       };
       currentPost.value = {
         id: data.post.id,
         title: data.post.title,
         contentType: data.post.contentType,
-        content: data.post.latestRevision?.content ?? '',
+        content: data.post.revisions?.[0]?.content ?? '',
       };
     } catch (err) {
       loadError.value = err instanceof Error ? err.message : 'Failed to load post';
