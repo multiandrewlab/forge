@@ -20,7 +20,7 @@ async function copyToClipboard(text: string): Promise<void> {
 </script>
 
 <template>
-  <div class="relative flex h-full flex-col">
+  <div data-testid="prompt-output" class="relative flex h-full flex-col">
     <div
       v-if="error"
       class="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400"
@@ -37,11 +37,14 @@ async function copyToClipboard(text: string): Promise<void> {
 
     <template v-else>
       <pre
+        data-testid="prompt-output-content"
         class="flex-1 overflow-auto whitespace-pre-wrap rounded-lg bg-surface p-4 font-mono text-sm text-gray-100"
         >{{ output }}</pre
       >
 
-      <div v-if="isRunning" class="mt-2 text-xs text-gray-400">Generating...</div>
+      <div v-if="isRunning" data-testid="prompt-output-loading" class="mt-2 text-xs text-gray-400">
+        Generating...
+      </div>
 
       <button
         v-if="output"

@@ -15,6 +15,7 @@ export class GhostWidget extends WidgetType {
   toDOM(): HTMLElement {
     const span = document.createElement('span');
     span.className = 'cm-ghost-text';
+    span.setAttribute('data-testid', 'ai-autocomplete-suggestion');
     span.style.opacity = '0.4';
     span.style.color = 'var(--text-muted, #999)';
     span.textContent = this.text;

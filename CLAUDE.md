@@ -252,6 +252,20 @@ Development patterns and standards are documented in `guides/`:
 - TypeScript strict mode, no `any` types
 - All quality gates must pass before PR creation
 
+## API Error Envelope Convention (introduced in #50)
+
+Structured error responses use the shape:
+
+```ts
+{ error: <human-readable string>, code: <UPPER_SNAKE>, ...details }
+```
+
+- `error` is the human-readable message — safe to render verbatim in the client UI.
+- `code` is the machine-readable identifier for client-side branching.
+- `...details` are optional structured fields specific to the error class (e.g., `missing: ['name', 'role']` for `MISSING_REQUIRED_VARIABLES`).
+
+Use this shape for any error where the client needs to branch on the error type or render structured details. For purely informational errors with no client-side discrimination, the legacy `{ error: '<string>' }` shape is acceptable. Existing routes are NOT retrofitted — apply the new shape going forward.
+
 ## Key Decisions
 
 <!-- Document important architectural decisions here so agents have context.

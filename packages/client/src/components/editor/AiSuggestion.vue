@@ -19,19 +19,27 @@ function onKeydown(ev: KeyboardEvent): void {
   if (!hasSuggestion) return;
   if (ev.key === 'Tab') {
     if (acceptGhostText(props.editorView)) {
+      // preventDefault stops the browser's focus-move; stopPropagation prevents
+      // CodeMirror's keymap (`indentWithTab`) from also running and overwriting
+      // our just-inserted text with indentation.
       ev.preventDefault();
+      ev.stopPropagation();
     }
     return;
   }
   dismissSuggestion();
 }
 
+// `useCapture: true` lets our handler run before CodeMirror's keymap (which is
+// registered as a bubble-phase listener). Without this, Tab is intercepted by
+// indentMore (`:indent-with-tab="true"` on CodeEditor.vue), the doc changes,
+// the ghost-text field clears, and `acceptGhostText` finds nothing to insert.
 onMounted(() => {
-  props.editorView.contentDOM.addEventListener('keydown', onKeydown);
+  props.editorView.contentDOM.addEventListener('keydown', onKeydown, true);
 });
 
 onBeforeUnmount(() => {
-  props.editorView.contentDOM.removeEventListener('keydown', onKeydown);
+  props.editorView.contentDOM.removeEventListener('keydown', onKeydown, true);
   cancel();
 });
 

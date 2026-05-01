@@ -1,0 +1,37 @@
+meta {
+  name: Run prompt with missing required variable returns 400
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/playground/run
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "postId": "{{requiredVarFixturePostId}}",
+    "variables": {}
+  }
+}
+
+assert {
+  res.status: eq 400
+}
+
+tests {
+  test("body has structured MISSING_REQUIRED_VARIABLES envelope", function() {
+    const body = res.getBody();
+    expect(body).to.have.property('error');
+    expect(body).to.have.property('code', 'MISSING_REQUIRED_VARIABLES');
+    expect(body).to.have.property('missing');
+    expect(body.missing).to.be.an('array').that.is.not.empty;
+    expect(body.missing).to.include('required_name');
+  });
+}

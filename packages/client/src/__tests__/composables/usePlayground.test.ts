@@ -309,4 +309,354 @@ describe('usePlayground', () => {
       stop();
     });
   });
+
+  /* ================================================================ */
+  /*  REV 3 additions — issue #50                                      */
+  /* ================================================================ */
+  describe('usePlayground — REV 3 additions', () => {
+    /* helper: build a Response object for run() with a JSON body */
+    function jsonResponse(status: number, body: unknown): Response {
+      return new Response(JSON.stringify(body), {
+        status,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+
+    it('case 1: 400 with MISSING_REQUIRED_VARIABLES sets error + missingVariables', async () => {
+      mockApiFetch.mockResolvedValue(
+        jsonResponse(400, {
+          error: 'Missing required variables: name',
+          code: 'MISSING_REQUIRED_VARIABLES',
+          missing: ['name'],
+        }),
+      );
+      const pg = usePlayground();
+      await pg.run('post-1', {});
+      expect(pg.error.value).toBe('Missing required variables: name');
+      expect(pg.missingVariables.value).toEqual(['name']);
+    });
+
+    it('case 2: 400 with VALIDATION_ERROR sets error, missingVariables stays []', async () => {
+      mockApiFetch.mockResolvedValue(
+        jsonResponse(400, { error: 'Bad input', code: 'VALIDATION_ERROR' }),
+      );
+      const pg = usePlayground();
+      await pg.run('post-1', {});
+      expect(pg.error.value).toBe('Bad input');
+      expect(pg.missingVariables.value).toEqual([]);
+    });
+
+    it('case 3: network error sets error fallback', async () => {
+      mockApiFetch.mockRejectedValue(new Error('network'));
+      const pg = usePlayground();
+      await pg.run('post-1', {});
+      expect(pg.error.value).toBe('network');
+      expect(pg.missingVariables.value).toEqual([]);
+    });
+
+    it('case 4: error.value cleared on next successful run', async () => {
+      mockApiFetch.mockResolvedValueOnce(
+        jsonResponse(400, { error: 'fail', code: 'VALIDATION_ERROR' }),
+      );
+      const pg = usePlayground();
+      await pg.run('post-1', {});
+      expect(pg.error.value).toBe('fail');
+
+      mockApiFetch.mockResolvedValueOnce(sseStreamOf(['event: done\ndata: {}\n\n']));
+      await pg.run('post-1', { name: 'world' });
+      expect(pg.error.value).toBeNull();
+    });
+
+    it('case 5: missingVariables cleared on next successful run', async () => {
+      mockApiFetch.mockResolvedValueOnce(
+        jsonResponse(400, {
+          error: 'x',
+          code: 'MISSING_REQUIRED_VARIABLES',
+          missing: ['name'],
+        }),
+      );
+      const pg = usePlayground();
+      await pg.run('post-1', {});
+      expect(pg.missingVariables.value).toEqual(['name']);
+
+      mockApiFetch.mockResolvedValueOnce(sseStreamOf(['event: done\ndata: {}\n\n']));
+      await pg.run('post-1', { name: 'world' });
+      expect(pg.missingVariables.value).toEqual([]);
+    });
+
+    it('case 6: missingVariables cleared when next run produces non-MRV 400', async () => {
+      mockApiFetch.mockResolvedValueOnce(
+        jsonResponse(400, {
+          error: 'x',
+          code: 'MISSING_REQUIRED_VARIABLES',
+          missing: ['name'],
+        }),
+      );
+      const pg = usePlayground();
+      await pg.run('post-1', {});
+      expect(pg.missingVariables.value).toEqual(['name']);
+
+      mockApiFetch.mockResolvedValueOnce(
+        jsonResponse(400, { error: 'other', code: 'VALIDATION_ERROR' }),
+      );
+      await pg.run('post-1', {});
+      expect(pg.missingVariables.value).toEqual([]);
+      expect(pg.error.value).toBe('other');
+    });
+
+    it('case 7: canRun transitions empty → full → cleared', async () => {
+      // Mock fetchPost: post with one required, non-defaulted variable
+      mockApiFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            post: {
+              id: 'p1',
+              title: 'T',
+              contentType: 'prompt',
+              revisions: [{ content: 'Hi {{name}}!' }],
+            },
+          }),
+      } as unknown as Response);
+      const pg = usePlayground();
+      await pg.fetchPost('p1');
+
+      // Mock fetchVariables: name has no default
+      mockApiFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            variables: [
+              {
+                id: 'v1',
+                postId: 'p1',
+                name: 'name',
+                placeholder: null,
+                defaultValue: null,
+                sortOrder: 0,
+              },
+            ],
+          }),
+      } as unknown as Response);
+      await pg.fetchVariables('p1');
+
+      // Empty inputValues
+      expect(pg.canRun.value).toBe(false);
+
+      // Fill in the value
+      pg.inputValues.value.name = 'world';
+      expect(pg.canRun.value).toBe(true);
+
+      // Clear it
+      pg.inputValues.value.name = '';
+      expect(pg.canRun.value).toBe(false);
+    });
+
+    it('case 8: requiredVariables recomputes when post variables change', async () => {
+      // First post: defaulted variable → no required vars
+      mockApiFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            post: {
+              id: 'p1',
+              title: 'T',
+              contentType: 'prompt',
+              revisions: [{ content: 'Hi {{name}}!' }],
+            },
+          }),
+      } as unknown as Response);
+      const pg = usePlayground();
+      await pg.fetchPost('p1');
+
+      mockApiFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            variables: [
+              {
+                id: 'v1',
+                postId: 'p1',
+                name: 'name',
+                placeholder: null,
+                defaultValue: 'world',
+                sortOrder: 0,
+              },
+            ],
+          }),
+      } as unknown as Response);
+      await pg.fetchVariables('p1');
+
+      expect(pg.requiredVariables.value).toEqual([]);
+
+      // Update variables: now non-defaulted
+      mockApiFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            variables: [
+              {
+                id: 'v1',
+                postId: 'p1',
+                name: 'name',
+                placeholder: null,
+                defaultValue: null,
+                sortOrder: 0,
+              },
+            ],
+          }),
+      } as unknown as Response);
+      await pg.fetchVariables('p1');
+
+      expect(pg.requiredVariables.value).toEqual(['name']);
+    });
+
+    it('case 9: canRun returns true when post has only opt-out vars', async () => {
+      mockApiFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            post: {
+              id: 'p1',
+              title: 'T',
+              contentType: 'prompt',
+              revisions: [{ content: 'Hi {{name}}!' }],
+            },
+          }),
+      } as unknown as Response);
+      const pg = usePlayground();
+      await pg.fetchPost('p1');
+
+      mockApiFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            variables: [
+              {
+                id: 'v1',
+                postId: 'p1',
+                name: 'name',
+                placeholder: null,
+                defaultValue: 'world',
+                sortOrder: 0,
+              },
+            ],
+          }),
+      } as unknown as Response);
+      await pg.fetchVariables('p1');
+
+      // All vars are defaulted → canRun is true even with empty inputs
+      expect(pg.canRun.value).toBe(true);
+    });
+
+    it('case 10: fetchPost populates currentPost', async () => {
+      mockApiFetch.mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            post: {
+              id: 'post-1',
+              title: 'T',
+              contentType: 'prompt',
+              revisions: [{ content: 'Hi {{name}}!' }],
+            },
+          }),
+      } as unknown as Response);
+      const pg = usePlayground();
+      await pg.fetchPost('post-1');
+      expect(pg.currentPost.value).toMatchObject({
+        id: 'post-1',
+        title: 'T',
+        contentType: 'prompt',
+      });
+      expect(pg.currentPost.value?.content).toBe('Hi {{name}}!');
+    });
+
+    it('case 11: fetchPost rejection sets loadError, currentPost stays null', async () => {
+      mockApiFetch.mockRejectedValue(new Error('not found'));
+      const pg = usePlayground();
+      await pg.fetchPost('post-1');
+      expect(pg.loadError.value).toMatch(/not found|Failed/);
+      expect(pg.currentPost.value).toBeNull();
+    });
+
+    it('case 11b: fetchPost non-ok with body.error sets loadError', async () => {
+      mockApiFetch.mockResolvedValue({
+        ok: false,
+        json: () => Promise.resolve({ error: 'Post not found' }),
+      } as unknown as Response);
+      const pg = usePlayground();
+      await pg.fetchPost('post-1');
+      expect(pg.loadError.value).toBe('Post not found');
+      expect(pg.currentPost.value).toBeNull();
+    });
+
+    it('case 11c: fetchPost non-ok with malformed body uses fallback', async () => {
+      mockApiFetch.mockResolvedValue({
+        ok: false,
+        json: () => Promise.reject(new Error('parse error')),
+      } as unknown as Response);
+      const pg = usePlayground();
+      await pg.fetchPost('post-1');
+      expect(pg.loadError.value).toBe('Failed to load post');
+      expect(pg.currentPost.value).toBeNull();
+    });
+
+    it('case 11d: fetchPost rejection with non-Error uses fallback', async () => {
+      mockApiFetch.mockRejectedValue('string rejection');
+      const pg = usePlayground();
+      await pg.fetchPost('post-1');
+      expect(pg.loadError.value).toBe('Failed to load post');
+      expect(pg.currentPost.value).toBeNull();
+    });
+
+    it('case 11e: fetchPost with missing revisions uses empty content', async () => {
+      mockApiFetch.mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            post: {
+              id: 'p1',
+              title: 'T',
+              contentType: 'snippet',
+              revisions: null,
+            },
+          }),
+      } as unknown as Response);
+      const pg = usePlayground();
+      await pg.fetchPost('p1');
+      expect(pg.currentPost.value?.content).toBe('');
+    });
+
+    it('case 11f: requiredVariables is empty when currentPost is null', () => {
+      const pg = usePlayground();
+      expect(pg.requiredVariables.value).toEqual([]);
+    });
+
+    it('case 11g: run with status 400 missing error/missing fields uses fallbacks', async () => {
+      mockApiFetch.mockResolvedValue(
+        new Response(JSON.stringify({ code: 'MISSING_REQUIRED_VARIABLES' }), {
+          status: 400,
+          headers: { 'content-type': 'application/json' },
+        }),
+      );
+      const pg = usePlayground();
+      await pg.run('post-1', {});
+      expect(pg.error.value).toBe('Request failed');
+      expect(pg.missingVariables.value).toEqual([]);
+    });
+
+    it('case 11h: run with status 400 + unparseable body uses fallback error', async () => {
+      // ok=false, json() rejects → body becomes {} → error fallback
+      mockApiFetch.mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: () => Promise.reject(new Error('parse fail')),
+      } as unknown as Response);
+      const pg = usePlayground();
+      await pg.run('post-1', {});
+      expect(pg.error.value).toBe('Request failed');
+      expect(pg.missingVariables.value).toEqual([]);
+    });
+  });
 });

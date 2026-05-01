@@ -21,6 +21,7 @@ import {
 } from '../db/queries/revisions.js';
 import { findFilesByRevisionId, createPostFile } from '../db/queries/post-files.js';
 import { toPost, toRevision, toPostWithRevision } from '../services/posts.js';
+import { syncVariablesFromContent } from '../services/playground.js';
 import { permanentKey } from '../services/files.js';
 import type { PostFileRow, PostRevisionRow } from '../db/queries/types.js';
 import { findFeedPosts, findFeedPostById } from '../db/queries/feed.js';
@@ -84,6 +85,13 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
       message: null,
       revisionNumber: 1,
     });
+
+    // Auto-extract {{vars}} from initial revision content into prompt_variables
+    // for prompt posts so the playground UI renders the right inputs without a
+    // separate "save variables" round-trip. Non-prompt posts skip this step.
+    if (contentType === ContentType.Prompt) {
+      await syncVariablesFromContent(postRow.id, revisionContent);
+    }
 
     if (parsed.data.tags && parsed.data.tags.length > 0) {
       for (const tagName of parsed.data.tags) {
@@ -326,6 +334,12 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
       revisionNumber: 1,
     });
 
+    // Auto-extract {{vars}} from forked content so the playground UI renders
+    // the right inputs for prompt forks. Non-prompt posts skip this step.
+    if (source.content_type === ContentType.Prompt) {
+      await syncVariablesFromContent(forkedPostRow.id, sourceWithRevision.content);
+    }
+
     // Copy files from source post's latest revision (shared storage_key, no object copy)
     const sourceRevisions = await findRevisionsByPostId(id);
     const latestSourceRevision = sourceRevisions[0];
@@ -405,6 +419,12 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
         content: parsed.data.content,
         message: parsed.data.message ?? null,
       });
+
+      // Re-sync prompt_variables when a prompt post's content changes so the
+      // playground UI reflects added/removed {{vars}} immediately.
+      if (existing.content_type === ContentType.Prompt) {
+        await syncVariablesFromContent(id, parsed.data.content);
+      }
 
       const revisionData = toRevision(revisionRow);
 
@@ -537,6 +557,12 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
       }
     }
 
+    // Re-sync prompt_variables when a prompt post's content changes so the
+    // playground UI reflects added/removed {{vars}} immediately.
+    if (existing.content_type === ContentType.Prompt) {
+      await syncVariablesFromContent(id, parsed.data.content);
+    }
+
     const revisionData = toRevision(revisionRow);
 
     const excludeWs = getExcludeWs(app, request);
@@ -631,6 +657,12 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
         content: targetRevision.content,
         message: `Restored from revision ${revisionNumber}`,
       });
+
+      // Re-sync prompt_variables when a prompt post's content changes so the
+      // playground UI reflects added/removed {{vars}} immediately.
+      if (existing.content_type === ContentType.Prompt) {
+        await syncVariablesFromContent(id, targetRevision.content);
+      }
 
       const revisionData = toRevision(revisionRow);
 

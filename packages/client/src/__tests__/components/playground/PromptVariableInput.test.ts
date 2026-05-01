@@ -170,4 +170,86 @@ describe('PromptVariableInput', () => {
     const input = wrapper.find('input[type="text"]');
     expect((input.element as HTMLInputElement).value).toBe('Rust');
   });
+
+  // --- Test 12: Required indicator visible when defaultValue is null ---
+  it('shows the required asterisk when defaultValue is null', () => {
+    const variable: PromptVariable = {
+      ...textVariable,
+      name: 'topic',
+      defaultValue: null,
+    };
+    const wrapper = mount(PromptVariableInput, {
+      props: { variable, modelValue: '' },
+    });
+
+    const indicator = wrapper.find('[data-testid="prompt-variable-required-topic"]');
+    expect(indicator.exists()).toBe(true);
+    expect(indicator.text()).toBe('*');
+    expect(wrapper.find('.sr-only').text()).toBe('required');
+  });
+
+  // --- Test 13: Required indicator hidden when defaultValue is non-empty ---
+  it('hides the required asterisk when defaultValue is a non-empty string', () => {
+    const variable: PromptVariable = {
+      ...textVariable,
+      name: 'topic',
+      defaultValue: 'JavaScript',
+    };
+    const wrapper = mount(PromptVariableInput, {
+      props: { variable, modelValue: '' },
+    });
+
+    expect(wrapper.find('[data-testid="prompt-variable-required-topic"]').exists()).toBe(false);
+    expect(wrapper.find('.sr-only').exists()).toBe(false);
+  });
+
+  // --- Test 14: Required indicator visible when defaultValue is whitespace-only ---
+  it('shows the required asterisk when defaultValue is whitespace-only', () => {
+    const variable: PromptVariable = {
+      ...textVariable,
+      name: 'topic',
+      defaultValue: '   ',
+    };
+    const wrapper = mount(PromptVariableInput, {
+      props: { variable, modelValue: '' },
+    });
+
+    expect(wrapper.find('[data-testid="prompt-variable-required-topic"]').exists()).toBe(true);
+  });
+
+  // --- Test 15: aria-required="true" on input when required ---
+  it('sets aria-required="true" and required on input when required', () => {
+    const variable: PromptVariable = {
+      ...textVariable,
+      defaultValue: null,
+    };
+    const wrapper = mount(PromptVariableInput, {
+      props: { variable, modelValue: '' },
+    });
+
+    const input = wrapper.find('input[type="text"]');
+    expect(input.attributes('aria-required')).toBe('true');
+    expect(input.attributes('required')).toBeDefined();
+  });
+
+  // --- Test 16: aria-required="false" on input when not required ---
+  it('sets aria-required="false" on input when not required', () => {
+    const wrapper = mount(PromptVariableInput, {
+      props: { variable: textVariable, modelValue: '' },
+    });
+
+    const input = wrapper.find('input[type="text"]');
+    expect(input.attributes('aria-required')).toBe('false');
+    expect(input.attributes('required')).toBeUndefined();
+  });
+
+  // --- Test 17: data-testids on label and input ---
+  it('renders data-testids for label and input scoped to variable name', () => {
+    const wrapper = mount(PromptVariableInput, {
+      props: { variable: textVariable, modelValue: '' },
+    });
+
+    expect(wrapper.find('[data-testid="prompt-variable-label-Language"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="prompt-variable-input-Language"]').exists()).toBe(true);
+  });
 });

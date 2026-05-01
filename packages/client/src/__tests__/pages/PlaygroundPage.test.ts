@@ -2,20 +2,32 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { createRouter, createMemoryHistory } from 'vue-router';
 import { setActivePinia, createPinia } from 'pinia';
-import { ref, nextTick } from 'vue';
+import { ref, computed, nextTick } from 'vue';
 import type { Router } from 'vue-router';
 import type { Pinia } from 'pinia';
 import type { Ref } from 'vue';
-import type { PromptVariable } from '@forge/shared';
+import type { PromptVariable, ContentType } from '@forge/shared';
 
 // --- Mock usePlayground composable ---
 const mockFetchVariables = vi.fn();
+const mockFetchPost = vi.fn();
 const mockRun = vi.fn();
 const mockStop = vi.fn();
 const mockVariables: Ref<PromptVariable[]> = ref([]);
 const mockIsRunning = ref(false);
 const mockError: Ref<string | null> = ref(null);
 const mockOutput = ref('');
+const mockLoadError: Ref<string | null> = ref(null);
+const mockMissingVariables: Ref<string[]> = ref([]);
+const mockInputValues = ref<Record<string, string>>({});
+type CurrentPost = {
+  id: string;
+  title: string;
+  contentType: ContentType;
+  content: string;
+} | null;
+const mockCurrentPost: Ref<CurrentPost> = ref(null);
+const mockCanRunRaw = ref(true);
 
 vi.mock('@/composables/usePlayground', () => ({
   usePlayground: () => ({
@@ -23,30 +35,36 @@ vi.mock('@/composables/usePlayground', () => ({
     isRunning: mockIsRunning,
     error: mockError,
     output: mockOutput,
+    currentPost: mockCurrentPost,
+    loadError: mockLoadError,
+    missingVariables: mockMissingVariables,
+    inputValues: mockInputValues,
+    requiredVariables: computed(() => []),
+    canRun: computed(() => mockCanRunRaw.value),
     fetchVariables: mockFetchVariables,
+    fetchPost: mockFetchPost,
     run: mockRun,
     stop: mockStop,
   }),
-}));
-
-// --- Mock apiFetch ---
-const mockApiFetch = vi.fn();
-
-vi.mock('@/lib/api', () => ({
-  apiFetch: (...args: unknown[]) => mockApiFetch(...args),
 }));
 
 // --- Mock child components ---
 vi.mock('@/components/playground/PlaygroundHeader.vue', () => ({
   default: {
     name: 'PlaygroundHeader',
-    props: ['title', 'isRunning'],
+    props: ['title', 'isRunning', 'canRun', 'sourcePostId', 'contentType'],
     emits: ['run', 'stop'],
+    // Mirror the real component's v-if/v-else split so a 'stop' emit cannot
+    // fire from a state the real PlaygroundHeader.vue would never allow.
+    // Without the split, tests could exercise impossible UI states.
     template:
       '<div data-testid="playground-header">' +
       '<span data-testid="header-title">{{ title }}</span>' +
-      '<button data-testid="run-btn" @click="$emit(\'run\')">Run</button>' +
-      '<button data-testid="stop-btn" @click="$emit(\'stop\')">Stop</button>' +
+      '<span data-testid="header-content-type">{{ contentType }}</span>' +
+      '<span data-testid="header-source-post-id">{{ sourcePostId }}</span>' +
+      '<span data-testid="header-can-run">{{ String(canRun) }}</span>' +
+      '<button v-if="!isRunning" data-testid="run-btn" @click="$emit(\'run\')">Run</button>' +
+      '<button v-else data-testid="stop-btn" @click="$emit(\'stop\')">Stop</button>' +
       '</div>',
   },
 }));
@@ -69,7 +87,7 @@ vi.mock('@/components/playground/PromptOutput.vue', () => ({
     name: 'PromptOutput',
     props: ['output', 'isRunning', 'error'],
     template:
-      '<div data-testid="prompt-output">' +
+      '<div data-testid="prompt-output-stub">' +
       '<span data-testid="output-text">{{ output }}</span>' +
       '</div>',
   },
@@ -113,19 +131,28 @@ describe('PlaygroundPage', () => {
     router = createTestRouter();
 
     mockFetchVariables.mockReset();
+    mockFetchPost.mockReset();
     mockRun.mockReset();
     mockStop.mockReset();
-    mockApiFetch.mockReset();
     mockVariables.value = [];
     mockIsRunning.value = false;
     mockError.value = null;
     mockOutput.value = '';
+    mockLoadError.value = null;
+    mockMissingVariables.value = [];
+    mockInputValues.value = {};
+    mockCanRunRaw.value = true;
+    mockCurrentPost.value = {
+      id: 'test-post-id',
+      title: 'My Prompt',
+      contentType: 'prompt',
+      content: 'Hello {{topic}}',
+    };
 
-    // Default: apiFetch returns a successful post response
-    mockApiFetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({ title: 'My Prompt' }),
+    mockFetchPost.mockImplementation(async () => {
+      // currentPost is already set in beforeEach for happy-path
     });
+    mockFetchVariables.mockResolvedValue(undefined);
   });
 
   async function mountPage(postId = 'test-post-id') {
@@ -140,11 +167,23 @@ describe('PlaygroundPage', () => {
   }
 
   describe('on mount', () => {
-    it('should fetch the post title using postId from route params', async () => {
+    it('should call fetchPost with postId from route params', async () => {
+      await mountPage('abc-123');
+      await flushPromises();
+
+      expect(mockFetchPost).toHaveBeenCalledWith('abc-123');
+    });
+
+    it('should render the post title from currentPost', async () => {
+      mockCurrentPost.value = {
+        id: 'abc-123',
+        title: 'My Prompt',
+        contentType: 'prompt',
+        content: '',
+      };
       const wrapper = await mountPage('abc-123');
       await flushPromises();
 
-      expect(mockApiFetch).toHaveBeenCalledWith('/api/posts/abc-123');
       expect(wrapper.find('[data-testid="header-title"]').text()).toBe('My Prompt');
     });
 
@@ -155,27 +194,71 @@ describe('PlaygroundPage', () => {
       expect(mockFetchVariables).toHaveBeenCalledWith('abc-123');
     });
 
-    it('should use default title "Playground" before post fetches', async () => {
-      // Make apiFetch hang so the title never updates
-      mockApiFetch.mockReturnValue(new Promise(() => {}));
+    it('should use default title "Playground" when currentPost is null', async () => {
+      mockCurrentPost.value = null;
 
       const wrapper = await mountPage();
-      // Don't flush — the fetch is still pending
       await nextTick();
 
       expect(wrapper.find('[data-testid="header-title"]').text()).toBe('Playground');
     });
 
-    it('should keep default title when apiFetch returns not ok', async () => {
-      mockApiFetch.mockResolvedValue({
-        ok: false,
-        json: async () => ({}),
-      });
+    it('reloads post + variables when route param changes (Fork redirect)', async () => {
+      // postId is computed from route.params.id (not captured-once at setup),
+      // so a Fork redirect that pushes /playground/<newId> on the same
+      // component instance must re-fetch against the new id rather than
+      // reusing stale data from the original mount.
+      const wrapper = await mountPage('post-A');
+      await flushPromises();
+      expect(mockFetchPost).toHaveBeenCalledWith('post-A');
+      expect(mockFetchVariables).toHaveBeenCalledWith('post-A');
 
-      const wrapper = await mountPage();
+      mockFetchPost.mockClear();
+      mockFetchVariables.mockClear();
+      await router.push('/playground/post-B');
       await flushPromises();
 
-      expect(wrapper.find('[data-testid="header-title"]').text()).toBe('Playground');
+      expect(mockFetchPost).toHaveBeenCalledWith('post-B');
+      expect(mockFetchVariables).toHaveBeenCalledWith('post-B');
+      // header-source-post-id reflects the new route param via :source-post-id="postId"
+      expect(wrapper.find('[data-testid="header-source-post-id"]').text()).toBe('post-B');
+    });
+
+    it('clears local input state on route param change (no leak across forks)', async () => {
+      // Mount first, THEN mutate variables so the variables watcher (no
+      // immediate) sees the mutation and seeds variableValues with the
+      // default. Otherwise the initial-value-equals-current case skips the
+      // watcher and variableValues stays empty.
+      await mountPage('post-A');
+      await flushPromises();
+      mockVariables.value = [createMockVariable({ id: 'v1', name: 'topic', defaultValue: 'AI' })];
+      await flushPromises();
+      expect(mockInputValues.value).toEqual({ topic: 'AI' });
+
+      // Stash old fetches and mark the new post navigation.
+      mockFetchPost.mockClear();
+      mockFetchVariables.mockClear();
+      await router.push('/playground/post-B');
+      await flushPromises();
+
+      // After navigating to a new post, the watcher resets inputValues to {}
+      // before fetching. With no variables for post-B, it stays empty —
+      // proves the for-loop delete + reassign covers the in-flight state.
+      expect(mockInputValues.value).toEqual({});
+      expect(mockFetchPost).toHaveBeenCalledWith('post-B');
+    });
+
+    it('skips data load when route param is empty (defensive guard)', async () => {
+      // postId computed falls back to '' when route.params.id is undefined;
+      // the watcher's `if (!newId) return` guards against firing fetchPost('').
+      router.push('/');
+      await router.isReady();
+      mount(PlaygroundPage, {
+        global: { plugins: [pinia, router] },
+      });
+      await flushPromises();
+      expect(mockFetchPost).not.toHaveBeenCalled();
+      expect(mockFetchVariables).not.toHaveBeenCalled();
     });
   });
 
@@ -187,6 +270,149 @@ describe('PlaygroundPage', () => {
       const header = wrapper.find('[data-testid="playground-header"]');
       expect(header.exists()).toBe(true);
       expect(wrapper.find('[data-testid="header-title"]').text()).toBe('My Prompt');
+    });
+
+    it('should pass sourcePostId to PlaygroundHeader', async () => {
+      const wrapper = await mountPage('post-42');
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid="header-source-post-id"]').text()).toBe('post-42');
+    });
+
+    it('should pass contentType from currentPost to PlaygroundHeader', async () => {
+      mockCurrentPost.value = {
+        id: 't',
+        title: 'T',
+        contentType: 'snippet',
+        content: '',
+      };
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid="header-content-type"]').text()).toBe('snippet');
+    });
+
+    it('should default contentType to "prompt" when currentPost is null', async () => {
+      mockCurrentPost.value = null;
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid="header-content-type"]').text()).toBe('prompt');
+    });
+
+    it('should pass canRun to PlaygroundHeader', async () => {
+      mockCanRunRaw.value = false;
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid="header-can-run"]').text()).toBe('false');
+    });
+  });
+
+  describe('error regions', () => {
+    it('renders the load-error region when loadError is set', async () => {
+      mockLoadError.value = 'Post not found';
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      const region = wrapper.find('[data-testid="playground-load-error"]');
+      expect(region.exists()).toBe(true);
+      expect(region.attributes('role')).toBe('alert');
+      expect(region.text()).toContain('Post not found');
+    });
+
+    it('hides the load-error region when loadError is null', async () => {
+      mockLoadError.value = null;
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid="playground-load-error"]').exists()).toBe(false);
+    });
+
+    it('renders the runtime error region when error is set', async () => {
+      mockError.value = 'Generation failed';
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      const region = wrapper.find('[data-testid="playground-error"]');
+      expect(region.exists()).toBe(true);
+      expect(region.attributes('role')).toBe('alert');
+      expect(region.text()).toContain('Generation failed');
+    });
+
+    it('hides the runtime error region when error is null', async () => {
+      mockError.value = null;
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid="playground-error"]').exists()).toBe(false);
+    });
+  });
+
+  describe('source disclosure', () => {
+    it('renders the prompt source disclosure', async () => {
+      mockCurrentPost.value = {
+        id: 'abc',
+        title: 'T',
+        contentType: 'prompt',
+        content: 'Hello {{topic}}',
+      };
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      const details = wrapper.find('[data-testid="playground-prompt-source"]');
+      expect(details.exists()).toBe(true);
+      const content = wrapper.find('[data-testid="playground-prompt-content"]');
+      expect(content.exists()).toBe(true);
+      expect(content.text()).toContain('Hello {{topic}}');
+    });
+
+    it('renders empty content when currentPost is null', async () => {
+      mockCurrentPost.value = null;
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      const content = wrapper.find('[data-testid="playground-prompt-content"]');
+      expect(content.text()).toBe('');
+    });
+  });
+
+  describe('run hint', () => {
+    it('shows run hint when canRun is false and not running', async () => {
+      mockCanRunRaw.value = false;
+      mockIsRunning.value = false;
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      const hint = wrapper.find('#playground-run-hint');
+      expect(hint.exists()).toBe(true);
+      expect(hint.text()).toContain('Fill required variables to run');
+    });
+
+    it('hides run hint when canRun is true', async () => {
+      mockCanRunRaw.value = true;
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      expect(wrapper.find('#playground-run-hint').exists()).toBe(false);
+    });
+
+    it('hides run hint when running', async () => {
+      mockCanRunRaw.value = false;
+      mockIsRunning.value = true;
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      expect(wrapper.find('#playground-run-hint').exists()).toBe(false);
+    });
+  });
+
+  describe('page testid', () => {
+    it('renders the playground-page testid wrapper', async () => {
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid="playground-page"]').exists()).toBe(true);
     });
   });
 
@@ -271,6 +497,20 @@ describe('PlaygroundPage', () => {
       // The user's value should be preserved, not overwritten
       expect((input.element as HTMLInputElement).value).toBe('Machine Learning');
     });
+
+    it('should sync variable values into inputValues for canRun derivation', async () => {
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      mockVariables.value = [createMockVariable({ id: 'v1', name: 'topic', defaultValue: null })];
+      await nextTick();
+      await nextTick();
+
+      const input = wrapper.find('[data-testid="variable-input"] input');
+      await input.setValue('AI');
+
+      expect(mockInputValues.value.topic).toBe('AI');
+    });
   });
 
   describe('run action', () => {
@@ -293,9 +533,14 @@ describe('PlaygroundPage', () => {
       const wrapper = await mountPage();
       await flushPromises();
 
+      // Stop button is rendered only when isRunning is true (mirrors the
+      // real PlaygroundHeader v-if/v-else split — see header stub above).
+      mockIsRunning.value = true;
+      await nextTick();
       await wrapper.find('[data-testid="stop-btn"]').trigger('click');
 
       expect(mockStop).toHaveBeenCalled();
+      mockIsRunning.value = false;
     });
   });
 
@@ -304,7 +549,7 @@ describe('PlaygroundPage', () => {
       const wrapper = await mountPage();
       await flushPromises();
 
-      expect(wrapper.find('[data-testid="prompt-output"]').exists()).toBe(true);
+      expect(wrapper.find('[data-testid="prompt-output-stub"]').exists()).toBe(true);
     });
 
     it('should pass streaming output to PromptOutput', async () => {

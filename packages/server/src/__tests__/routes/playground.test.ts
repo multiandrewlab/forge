@@ -11,6 +11,16 @@ vi.mock('../../services/playground.js', () => ({
   assemblePromptForPost: (...args: unknown[]) => mockAssemblePromptForPost(...args),
 }));
 
+const mockFindPostById = vi.fn();
+vi.mock('../../db/queries/posts.js', () => ({
+  findPostById: (...args: unknown[]) => mockFindPostById(...args),
+}));
+
+const mockFindRevisionsByPostId = vi.fn();
+vi.mock('../../db/queries/revisions.js', () => ({
+  findRevisionsByPostId: (...args: unknown[]) => mockFindRevisionsByPostId(...args),
+}));
+
 const mockCreatePlaygroundChain = vi.fn().mockReturnValue({});
 const mockStreamPlayground = vi.fn();
 vi.mock('../../plugins/langchain/chains/playground.js', () => ({
@@ -145,6 +155,37 @@ describe('POST /api/playground/run', () => {
   let app: FastifyInstance;
   let authToken: string;
 
+  // Default fixture: a public prompt post owned by testuser with NO required vars
+  // (all template vars have defaults). This keeps existing tests focused on
+  // streaming behaviour, not on the new validation pipeline.
+  const DEFAULT_POST_ROW = {
+    id: TEST_POST_ID,
+    author_id: TEST_USER_ID,
+    title: 'Default Test Prompt',
+    content_type: 'prompt',
+    language: null,
+    visibility: 'public',
+    is_draft: false,
+    forked_from_id: null,
+    link_url: null,
+    link_preview: null,
+    vote_count: 0,
+    view_count: 0,
+    search_vector: null,
+    deleted_at: null,
+    created_at: new Date('2026-01-01'),
+    updated_at: new Date('2026-01-01'),
+  };
+  const DEFAULT_REVISION_ROW = {
+    id: 'd0000000-0000-0000-0000-000000000005',
+    post_id: TEST_POST_ID,
+    author_id: TEST_USER_ID,
+    content: 'No vars here, just a static prompt body.',
+    message: null,
+    revision_number: 1,
+    created_at: new Date('2026-01-01'),
+  };
+
   beforeEach(async () => {
     app = await buildApp();
 
@@ -158,6 +199,13 @@ describe('POST /api/playground/run', () => {
     mockAssemblePromptForPost.mockReset();
     mockCreatePlaygroundChain.mockReset();
     mockCreatePlaygroundChain.mockReturnValue({});
+    mockFindPostById.mockReset();
+    mockFindRevisionsByPostId.mockReset();
+    mockGetVariablesForPost.mockReset();
+    // Default: post exists, has a no-var revision, no variable metadata.
+    mockFindPostById.mockResolvedValue(DEFAULT_POST_ROW);
+    mockFindRevisionsByPostId.mockResolvedValue([DEFAULT_REVISION_ROW]);
+    mockGetVariablesForPost.mockResolvedValue([]);
   });
 
   afterEach(async () => {
@@ -358,5 +406,362 @@ describe('POST /api/playground/run', () => {
     expect(second.headers['retry-after']).toBe('5');
 
     await first;
+  });
+
+  describe('missing-required-variables validation', () => {
+    // Fixtures mirror the real seed (#50): a public prompt post owned by testuser
+    // with one NULL-default variable named `required_name` and content
+    // 'Hello {{required_name}}!'.
+    const REQUIRED_VAR_FIXTURE_POST_ID = 'c0000000-0000-0000-0000-000000000050';
+    const DEMO_PROMPT_POST_ID = 'c0000000-0000-0000-0000-000000000004';
+    // For case 10 (caller cannot read post → 403): a private post owned by a
+    // different user. Mirrors real seed row c0000000-...-000000000006 but is
+    // injected via mock here since this is a unit test.
+    const PRIVATE_NOT_READABLE_POST_ID = 'c0000000-0000-0000-0000-000000000006';
+    const OTHER_USER_ID = 'a0000000-0000-0000-0000-000000000003';
+
+    const requiredVarPostRow = {
+      id: REQUIRED_VAR_FIXTURE_POST_ID,
+      author_id: TEST_USER_ID,
+      title: 'Required-var Fixture',
+      content_type: 'prompt',
+      language: null,
+      visibility: 'public',
+      is_draft: false,
+      forked_from_id: null,
+      link_url: null,
+      link_preview: null,
+      vote_count: 0,
+      view_count: 0,
+      search_vector: null,
+      deleted_at: null,
+      created_at: new Date('2026-01-01'),
+      updated_at: new Date('2026-01-01'),
+    };
+    const requiredVarRevisionRow = {
+      id: 'd0000000-0000-0000-0000-000000000050',
+      post_id: REQUIRED_VAR_FIXTURE_POST_ID,
+      author_id: TEST_USER_ID,
+      content: 'Hello {{required_name}}!',
+      message: 'Initial fixture for #50',
+      revision_number: 1,
+      created_at: new Date('2026-01-01'),
+    };
+    const requiredVarRow = {
+      id: 'f0000000-0000-0000-0000-000000000050',
+      post_id: REQUIRED_VAR_FIXTURE_POST_ID,
+      name: 'required_name',
+      placeholder: 'e.g., world',
+      sort_order: 0,
+      default_value: null,
+    };
+    const demoPostRow = { ...requiredVarPostRow, id: DEMO_PROMPT_POST_ID };
+    const demoRevisionRow = {
+      ...requiredVarRevisionRow,
+      id: 'd0000000-0000-0000-0000-000000000005',
+      post_id: DEMO_PROMPT_POST_ID,
+      content:
+        'Generate a React component with the following requirements: {{component_name}}, {{props}}, {{features}}',
+    };
+    const demoVarsAllDefaulted = [
+      {
+        id: 'f0000000-0000-0000-0000-000000000001',
+        post_id: DEMO_PROMPT_POST_ID,
+        name: 'component_name',
+        placeholder: 'e.g., UserProfile',
+        sort_order: 0,
+        default_value: 'MyComponent',
+      },
+      {
+        id: 'f0000000-0000-0000-0000-000000000002',
+        post_id: DEMO_PROMPT_POST_ID,
+        name: 'props',
+        placeholder: null,
+        sort_order: 1,
+        default_value: 'name: string, age: number',
+      },
+      {
+        id: 'f0000000-0000-0000-0000-000000000003',
+        post_id: DEMO_PROMPT_POST_ID,
+        name: 'features',
+        placeholder: null,
+        sort_order: 2,
+        default_value: 'responsive, accessible',
+      },
+    ];
+    const privateNotReadablePostRow = {
+      ...requiredVarPostRow,
+      id: PRIVATE_NOT_READABLE_POST_ID,
+      author_id: OTHER_USER_ID,
+      visibility: 'private',
+    };
+
+    beforeEach(() => {
+      // Default for these cases: required-var fixture post is the target.
+      mockFindPostById.mockResolvedValue(requiredVarPostRow);
+      mockFindRevisionsByPostId.mockResolvedValue([requiredVarRevisionRow]);
+      mockGetVariablesForPost.mockResolvedValue([requiredVarRow]);
+      mockAssemblePromptForPost.mockResolvedValue('Hello world!');
+      mockStreamPlayground.mockImplementation(() => streamOf(['ok']));
+    });
+
+    it('case 1: missing single required var → 400 with code + missing[required_name]', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/playground/run',
+        headers: { authorization: `Bearer ${authToken}` },
+        payload: { postId: REQUIRED_VAR_FIXTURE_POST_ID, variables: {} },
+      });
+      expect(res.statusCode).toBe(400);
+      const body = JSON.parse(res.payload) as {
+        error: string;
+        code: string;
+        missing: string[];
+      };
+      expect(body.code).toBe('MISSING_REQUIRED_VARIABLES');
+      expect(body.missing).toEqual(['required_name']);
+      expect(body.error).toMatch(/^Missing required variables/);
+    });
+
+    it('case 2: missing multiple required vars → 400 with all missing names', async () => {
+      // Inline fixture with TWO NULL-default required vars to exercise the
+      // multi-name path. (Seed only ships one such fixture; multi-missing is
+      // also covered by extractRequiredVariables unit tests.)
+      const twoVarPostId = 'c0000000-0000-0000-0000-000000000051';
+      mockFindPostById.mockResolvedValue({ ...requiredVarPostRow, id: twoVarPostId });
+      mockFindRevisionsByPostId.mockResolvedValue([
+        {
+          ...requiredVarRevisionRow,
+          post_id: twoVarPostId,
+          content: 'Hi {{first_name}} {{last_name}}!',
+        },
+      ]);
+      mockGetVariablesForPost.mockResolvedValue([
+        { ...requiredVarRow, name: 'first_name', post_id: twoVarPostId },
+        { ...requiredVarRow, name: 'last_name', post_id: twoVarPostId },
+      ]);
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/playground/run',
+        headers: { authorization: `Bearer ${authToken}` },
+        payload: { postId: twoVarPostId, variables: {} },
+      });
+      expect(res.statusCode).toBe(400);
+      const body = JSON.parse(res.payload) as {
+        code: string;
+        missing: string[];
+      };
+      expect(body.code).toBe('MISSING_REQUIRED_VARIABLES');
+      expect(body.missing.sort()).toEqual(['first_name', 'last_name']);
+    });
+
+    it('case 3: all required vars present → 200 + SSE', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/playground/run',
+        headers: { authorization: `Bearer ${authToken}` },
+        payload: {
+          postId: REQUIRED_VAR_FIXTURE_POST_ID,
+          variables: { required_name: 'world' },
+        },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.headers['content-type']).toMatch(/text\/event-stream/);
+    });
+
+    it('case 4: all vars empty → 400 with all in missing', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/playground/run',
+        headers: { authorization: `Bearer ${authToken}` },
+        payload: {
+          postId: REQUIRED_VAR_FIXTURE_POST_ID,
+          variables: { required_name: '' },
+        },
+      });
+      expect(res.statusCode).toBe(400);
+      const body = JSON.parse(res.payload) as {
+        code: string;
+        missing: string[];
+      };
+      expect(body.code).toBe('MISSING_REQUIRED_VARIABLES');
+      expect(body.missing).toEqual(['required_name']);
+    });
+
+    it('case 5: partial fill across multiple required vars → 400 with only the unfilled name', async () => {
+      // Same inline 2-var fixture as case 2, but submit ONLY first_name.
+      // Asserts the "still missing" array contains last_name and excludes
+      // the var the caller did supply.
+      const twoVarPostId = 'c0000000-0000-0000-0000-000000000051';
+      mockFindPostById.mockResolvedValue({ ...requiredVarPostRow, id: twoVarPostId });
+      mockFindRevisionsByPostId.mockResolvedValue([
+        {
+          ...requiredVarRevisionRow,
+          post_id: twoVarPostId,
+          content: 'Hi {{first_name}} {{last_name}}!',
+        },
+      ]);
+      mockGetVariablesForPost.mockResolvedValue([
+        { ...requiredVarRow, name: 'first_name', post_id: twoVarPostId },
+        { ...requiredVarRow, name: 'last_name', post_id: twoVarPostId },
+      ]);
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/playground/run',
+        headers: { authorization: `Bearer ${authToken}` },
+        payload: {
+          postId: twoVarPostId,
+          variables: { first_name: 'Andrew' },
+        },
+      });
+      expect(res.statusCode).toBe(400);
+      const body = JSON.parse(res.payload) as {
+        code: string;
+        missing: string[];
+      };
+      expect(body.code).toBe('MISSING_REQUIRED_VARIABLES');
+      expect(body.missing).toEqual(['last_name']);
+    });
+
+    it('case 6: defaultValue present + submitted value empty → request proceeds', async () => {
+      // Demo prompt: all vars defaulted, submit empty → all required-checks pass.
+      mockFindPostById.mockResolvedValue(demoPostRow);
+      mockFindRevisionsByPostId.mockResolvedValue([demoRevisionRow]);
+      mockGetVariablesForPost.mockResolvedValue(demoVarsAllDefaulted);
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/playground/run',
+        headers: { authorization: `Bearer ${authToken}` },
+        payload: { postId: DEMO_PROMPT_POST_ID, variables: {} },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.headers['content-type']).toMatch(/text\/event-stream/);
+    });
+
+    it('case 7: template has no {{vars}} → request proceeds', async () => {
+      mockFindRevisionsByPostId.mockResolvedValue([
+        { ...requiredVarRevisionRow, content: 'A static prompt with no template variables.' },
+      ]);
+      mockGetVariablesForPost.mockResolvedValue([]);
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/playground/run',
+        headers: { authorization: `Bearer ${authToken}` },
+        payload: { postId: REQUIRED_VAR_FIXTURE_POST_ID, variables: {} },
+      });
+      expect(res.statusCode).toBe(200);
+    });
+
+    it('case 8: submitted vars include extras not in template → ignored, request proceeds', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/playground/run',
+        headers: { authorization: `Bearer ${authToken}` },
+        payload: {
+          postId: REQUIRED_VAR_FIXTURE_POST_ID,
+          variables: { required_name: 'world', extra: 'ignored' },
+        },
+      });
+      expect(res.statusCode).toBe(200);
+    });
+
+    it('case 9: whitespace-only submitted value → treated as empty', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/playground/run',
+        headers: { authorization: `Bearer ${authToken}` },
+        payload: {
+          postId: REQUIRED_VAR_FIXTURE_POST_ID,
+          variables: { required_name: '   ' },
+        },
+      });
+      expect(res.statusCode).toBe(400);
+      const body = JSON.parse(res.payload) as { code: string };
+      expect(body.code).toBe('MISSING_REQUIRED_VARIABLES');
+    });
+
+    it('case 10: caller cannot read source post → 403, no missing field', async () => {
+      mockFindPostById.mockResolvedValue(privateNotReadablePostRow);
+      mockFindRevisionsByPostId.mockResolvedValue([
+        { ...requiredVarRevisionRow, post_id: PRIVATE_NOT_READABLE_POST_ID },
+      ]);
+      mockGetVariablesForPost.mockResolvedValue([]);
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/playground/run',
+        headers: { authorization: `Bearer ${authToken}` },
+        payload: { postId: PRIVATE_NOT_READABLE_POST_ID, variables: {} },
+      });
+      expect(res.statusCode).toBe(403);
+      const body = JSON.parse(res.payload) as {
+        error?: string;
+        code?: string;
+        missing?: string[];
+      };
+      expect(body.missing).toBeUndefined();
+      expect(body.code).toBeUndefined();
+    });
+
+    it('case 11: 400 response is application/json, never SSE', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/playground/run',
+        headers: { authorization: `Bearer ${authToken}` },
+        payload: { postId: REQUIRED_VAR_FIXTURE_POST_ID, variables: {} },
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.headers['content-type']).toMatch(/application\/json/);
+      expect(res.headers['content-type']).not.toMatch(/text\/event-stream/);
+    });
+
+    it('returns 404 when post does not exist (defensive guard)', async () => {
+      mockFindPostById.mockResolvedValue(null);
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/playground/run',
+        headers: { authorization: `Bearer ${authToken}` },
+        payload: { postId: REQUIRED_VAR_FIXTURE_POST_ID, variables: {} },
+      });
+      expect(res.statusCode).toBe(404);
+      const body = JSON.parse(res.payload) as { code: string };
+      expect(body.code).toBe('POST_NOT_FOUND');
+    });
+
+    it('returns 404 when post has no revisions (defensive guard)', async () => {
+      mockFindRevisionsByPostId.mockResolvedValue([]);
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/playground/run',
+        headers: { authorization: `Bearer ${authToken}` },
+        payload: { postId: REQUIRED_VAR_FIXTURE_POST_ID, variables: {} },
+      });
+      expect(res.statusCode).toBe(404);
+      const body = JSON.parse(res.payload) as { code: string };
+      expect(body.code).toBe('POST_NOT_FOUND');
+    });
+
+    it('case 12: rate-limit slot released after validation 400', async () => {
+      const r1 = await app.inject({
+        method: 'POST',
+        url: '/api/playground/run',
+        headers: { authorization: `Bearer ${authToken}` },
+        payload: { postId: REQUIRED_VAR_FIXTURE_POST_ID, variables: {} },
+      });
+      expect(r1.statusCode).toBe(400);
+      // Second request must succeed — the onResponse hook should have
+      // released the AI slot acquired in the aiGate preHandler. Asserting
+      // exactly 200 (not just "not 429") catches regressions that fail
+      // the second call with 400/500/etc. after slot release works.
+      const r2 = await app.inject({
+        method: 'POST',
+        url: '/api/playground/run',
+        headers: { authorization: `Bearer ${authToken}` },
+        payload: {
+          postId: REQUIRED_VAR_FIXTURE_POST_ID,
+          variables: { required_name: 'world' },
+        },
+      });
+      expect(r2.statusCode).toBe(200);
+    });
   });
 });

@@ -448,6 +448,91 @@ describe('post routes', () => {
       // 2 base + 5 tag queries = 7 total
       expect(mockQuery).toHaveBeenCalledTimes(7);
     });
+
+    // ─── #50 prompt-variable auto-sync on creation ─────────────────
+    it('auto-populates prompt_variables from {{vars}} when contentType=prompt', async () => {
+      const promptPostRow: PostRow = { ...samplePostRow, content_type: 'prompt' };
+      const promptRevisionRow: PostRevisionRow = {
+        ...sampleRevisionRow,
+        content: 'Hello {{name}}!',
+      };
+      const variableRow = {
+        id: 'v001',
+        post_id: postId,
+        name: 'name',
+        placeholder: null,
+        sort_order: 0,
+        default_value: null,
+      };
+
+      // 1. createPost
+      mockQuery.mockResolvedValueOnce({ rows: [promptPostRow], rowCount: 1 });
+      // 2. createRevision
+      mockQuery.mockResolvedValueOnce({ rows: [promptRevisionRow], rowCount: 1 });
+      // 3. syncVariablesFromContent → upsertPromptVariable('name', 0)
+      mockQuery.mockResolvedValueOnce({ rows: [variableRow], rowCount: 1 });
+      // 4. syncVariablesFromContent → deleteStalePromptVariables (keepNames=['name'])
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+      // 5. syncVariablesFromContent → findPromptVariablesByPostId
+      mockQuery.mockResolvedValueOnce({ rows: [variableRow], rowCount: 1 });
+      // 6. findFeedPostById
+      mockFindFeedPostById.mockResolvedValueOnce({ ...sampleFeedRow, content_type: 'prompt' });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/posts',
+        headers: { authorization: `Bearer ${token}` },
+        payload: {
+          title: 'Greeting prompt',
+          contentType: 'prompt',
+          visibility: 'public',
+          content: 'Hello {{name}}!',
+        },
+      });
+
+      expect(response.statusCode).toBe(201);
+
+      // Verify upsertPromptVariable was called with the extracted variable
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringMatching(/INSERT INTO prompt_variables/),
+        [postId, 'name', 0],
+      );
+      // Verify deleteStalePromptVariables was called with the kept names
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringMatching(/DELETE FROM prompt_variables WHERE post_id = \$1 AND name != ALL/),
+        [postId, ['name']],
+      );
+    });
+
+    it('does NOT populate prompt_variables for snippet posts (non-prompt skip)', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [samplePostRow], rowCount: 1 });
+      mockQuery.mockResolvedValueOnce({ rows: [sampleRevisionRow], rowCount: 1 });
+      mockFindFeedPostById.mockResolvedValueOnce(sampleFeedRow);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/posts',
+        headers: { authorization: `Bearer ${token}` },
+        payload: {
+          title: 'Snippet with brace lookalikes',
+          contentType: 'snippet',
+          language: 'typescript',
+          visibility: 'public',
+          content: 'const x = `{{not a var}}`;',
+        },
+      });
+
+      expect(response.statusCode).toBe(201);
+      // No prompt_variable queries should have been made
+      expect(mockQuery).not.toHaveBeenCalledWith(
+        expect.stringMatching(/INSERT INTO prompt_variables/),
+        expect.any(Array),
+      );
+      expect(mockQuery).not.toHaveBeenCalledWith(
+        expect.stringMatching(/DELETE FROM prompt_variables/),
+        expect.any(Array),
+      );
+    });
   });
 
   // ─── GET /api/posts/:id ────────────────────────────────────────────
@@ -911,6 +996,57 @@ describe('post routes', () => {
       expect(response.statusCode).toBe(401);
     });
 
+    // ─── #50 prompt-variable auto-sync on revision ─────────────────
+    it('re-syncs prompt_variables when a prompt post gets a new revision', async () => {
+      const promptPost: PostRow = { ...samplePostRow, content_type: 'prompt' };
+      const newRevision: PostRevisionRow = {
+        ...sampleRevisionRow,
+        revision_number: 2,
+        content: 'Hello {{name}}, you live in {{city}}!',
+      };
+      const varRow1 = {
+        id: 'v001',
+        post_id: postId,
+        name: 'name',
+        placeholder: null,
+        sort_order: 0,
+        default_value: null,
+      };
+      const varRow2 = { ...varRow1, id: 'v002', name: 'city', sort_order: 1 };
+
+      // findPostById ownership check (returns prompt post)
+      mockQuery.mockResolvedValueOnce({ rows: [promptPost], rowCount: 1 });
+      // createRevisionAtomic
+      mockQuery.mockResolvedValueOnce({ rows: [newRevision], rowCount: 1 });
+      // syncVariablesFromContent → upsert 'name'
+      mockQuery.mockResolvedValueOnce({ rows: [varRow1], rowCount: 1 });
+      // syncVariablesFromContent → upsert 'city'
+      mockQuery.mockResolvedValueOnce({ rows: [varRow2], rowCount: 1 });
+      // syncVariablesFromContent → deleteStale
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+      // syncVariablesFromContent → findPromptVariablesByPostId
+      mockQuery.mockResolvedValueOnce({ rows: [varRow1, varRow2], rowCount: 2 });
+      mockFindFeedPostById.mockResolvedValueOnce({ ...sampleFeedRow, content_type: 'prompt' });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/posts/${postId}/revisions`,
+        headers: { authorization: `Bearer ${token}` },
+        payload: { content: 'Hello {{name}}, you live in {{city}}!' },
+      });
+
+      expect(response.statusCode).toBe(201);
+      // Both new variables are upserted
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringMatching(/INSERT INTO prompt_variables/),
+        [postId, 'name', 0],
+      );
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringMatching(/INSERT INTO prompt_variables/),
+        [postId, 'city', 1],
+      );
+    });
+
     it('creates revision without message (message ?? null fallback branch)', async () => {
       mockQuery.mockResolvedValueOnce({ rows: [samplePostRow], rowCount: 1 });
       const noMsgRevision: PostRevisionRow = {
@@ -1047,6 +1183,75 @@ describe('post routes', () => {
         'feed',
         expect.objectContaining({ type: 'post:updated', channel: 'feed' }),
         undefined,
+      );
+    });
+
+    it('re-syncs prompt_variables in the file-aware path when post is prompt (#50)', async () => {
+      const stagedFileId = 'ff000000-0000-0000-0000-000000000050';
+      const newRevId = '880e8400-e29b-41d4-a716-446655440050';
+      const promptPost: PostRow = { ...samplePostRow, content_type: 'prompt' };
+
+      mockQuery.mockResolvedValueOnce({ rows: [promptPost], rowCount: 1 });
+
+      const newRevision: PostRevisionRow = {
+        ...sampleRevisionRow,
+        id: newRevId,
+        revision_number: 2,
+        content: 'Hello {{audience}}!',
+        message: null,
+      };
+      const stagedFile: PostFileRow = {
+        id: stagedFileId,
+        post_id: postId,
+        revision_id: null,
+        filename: 'prompt.md',
+        content: 'Hello {{audience}}!',
+        storage_key: null,
+        mime_type: 'text/markdown',
+        sort_order: 0,
+        file_size: 21,
+        created_at: new Date('2026-01-01'),
+      };
+      const variableRow = {
+        id: 'v050',
+        post_id: postId,
+        name: 'audience',
+        placeholder: null,
+        sort_order: 0,
+        default_value: null,
+      };
+
+      // Inside withTransaction:
+      mockClientQuery.mockResolvedValueOnce({ rows: [newRevision], rowCount: 1 });
+      mockClientQuery.mockResolvedValueOnce({ rows: [stagedFile], rowCount: 1 });
+      mockClientQuery.mockResolvedValueOnce({ rows: [], rowCount: 1 });
+      mockClientQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+      // After transaction: syncVariablesFromContent runs through `query`
+      // upsert 'audience'
+      mockQuery.mockResolvedValueOnce({ rows: [variableRow], rowCount: 1 });
+      // deleteStale
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+      // findPromptVariablesByPostId
+      mockQuery.mockResolvedValueOnce({ rows: [variableRow], rowCount: 1 });
+
+      mockFindFeedPostById.mockResolvedValueOnce({ ...sampleFeedRow, content_type: 'prompt' });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/posts/${postId}/revisions`,
+        headers: { authorization: `Bearer ${token}` },
+        payload: {
+          content: 'Hello {{audience}}!',
+          stagedFileIds: [stagedFileId],
+        },
+      });
+
+      expect(response.statusCode).toBe(201);
+      // The variable was upserted
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringMatching(/INSERT INTO prompt_variables/),
+        [postId, 'audience', 0],
       );
     });
 
@@ -1413,6 +1618,54 @@ describe('post routes', () => {
         headers: { authorization: `Bearer ${token}` },
       });
       expect(response.statusCode).toBe(400);
+    });
+
+    it('re-syncs prompt_variables when restoring a revision on a prompt post (#50)', async () => {
+      const promptPost: PostRow = { ...samplePostRow, content_type: 'prompt' };
+      const targetRevision: PostRevisionRow = {
+        ...sampleRevisionRow,
+        content: 'Restored: {{topic}}',
+      };
+      const restoredRow: PostRevisionRow = {
+        ...targetRevision,
+        id: '990e8400-e29b-41d4-a716-446655440050',
+        revision_number: 3,
+        message: 'Restored from revision 1',
+      };
+      const variableRow = {
+        id: 'v050',
+        post_id: postId,
+        name: 'topic',
+        placeholder: null,
+        sort_order: 0,
+        default_value: null,
+      };
+
+      // findPostById
+      mockQuery.mockResolvedValueOnce({ rows: [promptPost], rowCount: 1 });
+      // findRevision
+      mockQuery.mockResolvedValueOnce({ rows: [targetRevision], rowCount: 1 });
+      // createRevisionAtomic
+      mockQuery.mockResolvedValueOnce({ rows: [restoredRow], rowCount: 1 });
+      // syncVariablesFromContent: upsert 'topic'
+      mockQuery.mockResolvedValueOnce({ rows: [variableRow], rowCount: 1 });
+      // syncVariablesFromContent: deleteStale
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+      // syncVariablesFromContent: findPromptVariablesByPostId
+      mockQuery.mockResolvedValueOnce({ rows: [variableRow], rowCount: 1 });
+      mockFindFeedPostById.mockResolvedValueOnce({ ...sampleFeedRow, content_type: 'prompt' });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/posts/${postId}/revisions/1/restore`,
+        headers: { authorization: `Bearer ${token}` },
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringMatching(/INSERT INTO prompt_variables/),
+        [postId, 'topic', 0],
+      );
     });
 
     it('broadcasts to feed channel when feedRow exists', async () => {
@@ -1846,6 +2099,79 @@ describe('post routes', () => {
         headers: { authorization: `Bearer ${token}` },
       });
       expect(response.statusCode).toBe(404);
+    });
+
+    it('auto-syncs prompt_variables when forking a prompt post (#50)', async () => {
+      const promptSource: PostRow = {
+        ...sourcePostRow,
+        content_type: 'prompt',
+      };
+      const variableRow = {
+        id: 'v050',
+        post_id: postId,
+        name: 'goal',
+        placeholder: null,
+        sort_order: 0,
+        default_value: null,
+      };
+
+      // findPostById (source)
+      mockQuery.mockResolvedValueOnce({ rows: [promptSource], rowCount: 1 });
+      // findPostWithLatestRevision
+      mockQuery.mockResolvedValueOnce({
+        rows: [
+          {
+            ...promptSource,
+            revision_id: 'rev-1',
+            content: 'Tell me about {{goal}}',
+            revision_number: 1,
+            message: 'init',
+          },
+        ],
+        rowCount: 1,
+      });
+      // createForkedPost
+      const forkedPostRow = {
+        ...samplePostRow,
+        content_type: 'prompt',
+        forked_from_id: promptSource.id,
+        author_id: userId,
+      };
+      mockQuery.mockResolvedValueOnce({ rows: [forkedPostRow], rowCount: 1 });
+      // createRevision
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ ...sampleRevisionRow, content: 'Tell me about {{goal}}' }],
+        rowCount: 1,
+      });
+      // syncVariablesFromContent: upsert 'goal'
+      mockQuery.mockResolvedValueOnce({ rows: [variableRow], rowCount: 1 });
+      // syncVariablesFromContent: deleteStale
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+      // syncVariablesFromContent: findPromptVariablesByPostId
+      mockQuery.mockResolvedValueOnce({ rows: [variableRow], rowCount: 1 });
+      // findRevisionsByPostId (file carry-forward)
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ id: 'rev-1', post_id: promptSource.id, revision_number: 1 }],
+        rowCount: 1,
+      });
+      // findFilesByRevisionId
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+      // tag query
+      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+      mockFindFeedPostById.mockResolvedValueOnce({ ...sampleFeedRow, content_type: 'prompt' });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/posts/${promptSource.id}/fork`,
+        headers: { authorization: `Bearer ${token}` },
+      });
+
+      expect(response.statusCode).toBe(201);
+      // The variable was upserted on the FORKED post id
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringMatching(/INSERT INTO prompt_variables/),
+        [forkedPostRow.id, 'goal', 0],
+      );
     });
 
     it('returns 403 when trying to fork own post', async () => {

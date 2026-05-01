@@ -88,7 +88,7 @@ test.describe.serial('Phase 3 — publish (AI autocomplete + upload + publish)',
     await posts.newPostTitle(testuser).fill('Journey publish');
     await posts.newPostBody(testuser).fill('export const ');
     await expect(ai.autocompleteSuggestion(testuser)).toContainText('Button');
-    await ai.acceptSuggestion(testuser).click();
+    await testuser.keyboard.press('Tab');
   });
 
   test('upload a file and see its preview', async ({ testuser }) => {
