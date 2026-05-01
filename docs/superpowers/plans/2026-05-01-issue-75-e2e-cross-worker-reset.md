@@ -1006,7 +1006,7 @@ Expected output: `CLEAN`.
 - [ ] **Step 10.4: Commit.**
 
 ```bash
-git add .github/workflows/e2e.yml
+git add .github/workflows/e2e-playwright.yml
 git commit -m "ci(e2e): #75 add lint guard for testuser smuggling patterns
 
 Fails CI if any of three patterns reappear in e2e/specs/:
@@ -1024,69 +1024,93 @@ worker's primary user; testuser is reserved for Bruno regression tests."
 
 **Files:**
 
-- Create: `.github/workflows/e2e-burst.yml`
+- Modify: `.github/workflows/e2e-playwright.yml` — expose its job as a reusable workflow via `workflow_call`
+- Create: `.github/workflows/e2e-burst.yml` — calls the reusable workflow 5× sequentially
 
-- [ ] **Step 11.1: Create the file:**
+**Strategy:** Avoid YAML duplication of the ~200-line e2e setup (Postgres service, MinIO start, migrations, seed, server + preview, Playwright install). Refactor `e2e-playwright.yml` to add `workflow_call` as a trigger alongside its existing triggers; `e2e-burst.yml` calls it 5× via `needs:` chaining (sequential by construction). When the burst workflow is removed (per the follow-up issue), the `workflow_call` trigger on `e2e-playwright.yml` is also removed in the same cleanup.
+
+- [ ] **Step 11.1: Read `.github/workflows/e2e-playwright.yml`** and identify:
+  - The `on:` triggers block (typically `push:`, `pull_request:`, possibly `schedule:`).
+  - The single job (verified at plan-write time: `Playwright journey smoke`).
+
+- [ ] **Step 11.2: Add `workflow_call:` to the existing triggers block in `e2e-playwright.yml`:**
+
+```diff
+ on:
+   push: ...
+   pull_request: ...
++  workflow_call: {}
+```
+
+This is non-breaking: existing triggers continue to fire the workflow as before. The new `workflow_call` allows other workflows in the same repo to invoke it.
+
+- [ ] **Step 11.3: Run `yamllint` (if available) on `e2e-playwright.yml` to confirm syntax:**
+
+```bash
+yamllint .github/workflows/e2e-playwright.yml || echo "(yamllint not installed — skip)"
+```
+
+- [ ] **Step 11.4: Create `.github/workflows/e2e-burst.yml`:**
 
 ```yaml
 # TEMPORARY: pre-merge verification for issue #75. Removed when tracking
 # issue #43's green-run counter reaches 14 consecutive green main runs at
-# workers=4, retries=0. Removal tracked in <follow-up-issue-#> (filed at
+# workers=4, retries=0. Removal tracked in <FOLLOW_UP_ISSUE> (filed at
 # this PR's creation time).
+#
+# Calls .github/workflows/e2e-playwright.yml 5 times sequentially via
+# `needs:` chaining. Each iteration is a fresh job (clean env per run);
+# any failure aborts the chain immediately.
 
 name: e2e-burst (#75 verification)
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: {}
 
 jobs:
-  burst:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - run: npm ci
-      - run: npx playwright install --with-deps chromium
-      # ... include all the env / db setup the existing e2e workflow has ...
-      - name: Run e2e suite 5 times sequentially
-        run: |
-          for i in 1 2 3 4 5; do
-            echo "::group::Burst iteration $i"
-            cd e2e && npx playwright test --workers=4
-            cd ..
-            echo "::endgroup::"
-          done
+  iteration-1:
+    uses: ./.github/workflows/e2e-playwright.yml
+  iteration-2:
+    needs: iteration-1
+    uses: ./.github/workflows/e2e-playwright.yml
+  iteration-3:
+    needs: iteration-2
+    uses: ./.github/workflows/e2e-playwright.yml
+  iteration-4:
+    needs: iteration-3
+    uses: ./.github/workflows/e2e-playwright.yml
+  iteration-5:
+    needs: iteration-4
+    uses: ./.github/workflows/e2e-playwright.yml
 ```
 
-(The exact environment + DB setup steps must mirror the existing `e2e-playwright.yml` workflow. Read `.github/workflows/e2e-playwright.yml` to copy the relevant `services:`, `env:`, and setup steps verbatim. The added bit is the 5x sequential loop.)
-
-- [ ] **Step 11.2: Confirm YAML syntax is valid:**
+- [ ] **Step 11.5: Confirm YAML syntax:**
 
 ```bash
 yamllint .github/workflows/e2e-burst.yml || echo "(yamllint not installed — skip)"
 ```
 
-- [ ] **Step 11.3: File a follow-up tracking issue** (no automation; do this manually before opening the PR):
+- [ ] **Step 11.6: File the follow-up tracking issue:**
 
 ```bash
 gh issue create --title "Remove temporary e2e-burst.yml workflow_dispatch (post-#75)" \
-  --body "Once issue #43's green-run counter reaches 14 consecutive green main runs at workers=4, retries=0, remove .github/workflows/e2e-burst.yml. The workflow file references this issue in its top comment."
+  --body "Once issue #43's green-run counter reaches 14 consecutive green main runs at workers=4, retries=0, remove .github/workflows/e2e-burst.yml AND the 'workflow_call:' trigger added to .github/workflows/e2e-playwright.yml in the same cleanup. The workflow file references this issue in its top comment."
 ```
 
-Note the issue number returned. Update the workflow file's top comment with the actual `#NN`.
+Note the issue number returned. Update `e2e-burst.yml`'s top comment, replacing `<FOLLOW_UP_ISSUE>` with the actual `#NN`.
 
-- [ ] **Step 11.4: Commit.**
+- [ ] **Step 11.7: Commit.**
 
 ```bash
-git add .github/workflows/e2e-burst.yml
+git add .github/workflows/e2e-playwright.yml .github/workflows/e2e-burst.yml
 git commit -m "ci(e2e): #75 add temporary workflow_dispatch for burst verification
 
-Runs the e2e suite 5x sequentially at workers=4, retries=0 — exactly
-the AC condition. Manually triggered from the PR branch to gather
-pre-merge evidence. Removal tracked in <follow-up-issue>."
+e2e-playwright.yml gains a workflow_call trigger so e2e-burst.yml can
+invoke it 5x sequentially via needs chaining. Avoids YAML duplication
+of the ~200-line setup (services, MinIO, migrations, seed, server,
+preview, Playwright install). Removal tracked in <FOLLOW_UP_ISSUE>;
+the cleanup removes BOTH e2e-burst.yml AND the workflow_call trigger
+on e2e-playwright.yml."
 ```
 
 ---
@@ -1160,6 +1184,33 @@ coverage requirements."
 
 ## Task 13: Verify ACs, run e2e-burst, knowledge capture, open PR
 
+- [ ] **Step 13.0a: Broad `testuser` literal scan across the entire e2e tree** (not just `e2e/specs/`). Per design line 390: any hardcoded `testuser` string in `e2e/` outside `bruno/` is a smuggling site that the spec migration should have eliminated. Scope is broader than Task 7.1's `actor@example.com` recovery scan — this catches literals in helpers (`e2e/support/`, `e2e/fixtures/`) the broad sed never visited.
+
+```bash
+grep -rEn "['\"]testuser" e2e/ --include='*.ts' || echo "CLEAN"
+```
+
+Expected output: `CLEAN`. Any hit must be classified: (a) genuine bug → fix and add to follow-up commit; (b) intentional reference (e.g., a comment explaining "testuser is Bruno-only") → leave with a clarifying comment.
+
+- [ ] **Step 13.0b: Audit `SEED_USERS.testuser` references outside `e2e/specs/`.** The lint guard in Task 10 only scopes to `e2e/specs/`; helper files in `e2e/support/`, `e2e/fixtures/`, or `e2e/test-results/` could still reference the removed `testuser` member. The TypeScript narrowing of `AuthUser` in Task 4.1.1 should cause a compile failure in any such caller, but verify explicitly:
+
+```bash
+grep -rEn "SEED_USERS\.testuser|storageStatePath\(['\"]testuser['\"]\)" e2e/ --include='*.ts' || echo "CLEAN"
+```
+
+Expected output: `CLEAN`.
+
+- [ ] **Step 13.0c: Enumerate `@no-reset` specs and run each at workers=4 to confirm they still pass** (per design Risks #4):
+
+```bash
+grep -rln "@no-reset" e2e/specs --include='*.spec.ts' > /tmp/no-reset-specs.txt
+echo "@no-reset spec count: $(wc -l < /tmp/no-reset-specs.txt)"
+cd e2e
+xargs -a /tmp/no-reset-specs.txt npx playwright test --workers=4 --retries=0
+```
+
+Expected: ALL PASS. The PR description must list the specs from `/tmp/no-reset-specs.txt` so reviewers can audit the verified set. Document the file paths in the PR body under a `### @no-reset specs verified` heading.
+
 - [ ] **Step 13.1: Run the 10 issue-cited specs locally at workers=4 to confirm AC #1 spec-by-spec.** This is the explicit per-spec verification the AC asks for; the burst run validates the whole-suite signal in a later step.
 
 ```bash
@@ -1225,6 +1276,18 @@ EOF
 ```
 
 (Replace `<BURST_URL>` and `<FOLLOW_UP_ISSUE>` with actual values.)
+
+---
+
+## Rebuttals — design-rooted plan items (iteration-2 plan-review-gate)
+
+The Scope & Alignment reviewer in iteration 2 flagged two items as scope creep. Both are explicit design-doc requirements imposed by the design-review-gate (which iterated 3 times across PM/Architect/Designer/Security/CTO before approval):
+
+1. **Task 2 (cascade-contract test pinning 17 FK delete rules)** — the design's CTO reviewer in iteration 2 of the design gate flagged "Cascade contract is not protected by an automated test" as a BLOCKING issue. Resolution applied in iteration 3 of the design gate per CTO's recommended option (b): static-analysis test against migration SQL text. The design (lines under "Cascade-contract test — static analysis") enumerates the full 17-FK list and documents the rationale: the worker-scoped reset's correctness depends on the FK CASCADE/SET NULL behavior of these constraints; any future migration that flips one silently breaks the reset semantics. The plan honors its source of truth (the design); it would be a deviation to omit this. Not scope creep — design-mandated.
+
+2. **Task 12.3 (Bruno coverage path-prefix exception in CLAUDE.md)** — the design's CTO reviewer in iteration 1 of the design gate flagged "Bruno coverage decision is missing" as a BLOCKING issue (CLAUDE.md says "every feature that adds or modifies API endpoints MUST include Bruno request files. This is a BLOCKING requirement."). The PR modifies `POST /api/__test__/reset`; the design resolved this by documenting an explicit path-prefix exception in CLAUDE.md, with the constraint that the exception applies ONLY to routes under `/api/__test__/*` that inherit ALL FIVE existing guards. This is policy-clarifying language required to prevent the Bruno gate from blocking PR merge. Not scope creep — required by the design's resolution of a Bruno coverage requirement in CLAUDE.md.
+
+If a future plan-review iteration flags these again, this section is the rebuttal evidence: both items trace to specific, in-the-record blockers raised and resolved during design review.
 
 ---
 
