@@ -2,6 +2,7 @@ import { test as base, type Page } from '@playwright/test';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { attachE2EInitScript } from './init-script.js';
 
 // `e2e/package.json` declares `"type": "module"`, so __dirname is undefined.
 // Derive it from import.meta.url for ESM compatibility.
@@ -37,18 +38,21 @@ export const test = base.extend<AuthFixtures>({
   testuser: async ({ browser }, use) => {
     const ctx = await browser.newContext({ storageState: storageStatePath('testuser') });
     const page = await ctx.newPage();
+    await attachE2EInitScript(page);
     await use(page);
     await ctx.close();
   },
   alice: async ({ browser }, use) => {
     const ctx = await browser.newContext({ storageState: storageStatePath('alice') });
     const page = await ctx.newPage();
+    await attachE2EInitScript(page);
     await use(page);
     await ctx.close();
   },
   carol: async ({ browser }, use) => {
     const ctx = await browser.newContext({ storageState: storageStatePath('carol') });
     const page = await ctx.newPage();
+    await attachE2EInitScript(page);
     await use(page);
     await ctx.close();
   },
