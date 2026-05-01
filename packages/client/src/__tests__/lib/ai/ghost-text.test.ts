@@ -77,4 +77,13 @@ describe('ghost text extension', () => {
     const w = new GhostWidget('x');
     expect(w.ignoreEvent()).toBe(true);
   });
+
+  it('renders the ghost-text widget with data-testid="ai-autocomplete-suggestion"', () => {
+    const view = makeView('const x = ');
+    view.dispatch({ effects: setGhostText.of('42;') });
+    const widget = view.dom.querySelector('[data-testid="ai-autocomplete-suggestion"]');
+    expect(widget).not.toBeNull();
+    expect(widget?.classList.contains('cm-ghost-text')).toBe(true);
+    view.destroy();
+  });
 });

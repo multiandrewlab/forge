@@ -75,7 +75,7 @@ watch(isGenerating, (generating) => {
 </script>
 
 <template>
-  <div class="ai-generate-panel">
+  <section data-testid="ai-generate-panel" class="ai-generate-panel">
     <!-- Toggle button: visible in collapsed and expanded states, not during generating -->
     <button
       v-if="panelState !== 'generating'"
@@ -122,6 +122,7 @@ watch(isGenerating, (generating) => {
     <!-- Generating state -->
     <div
       v-if="panelState === 'generating'"
+      data-testid="ai-generate-loading"
       class="flex items-center gap-2 rounded border border-surface-500 bg-surface-700 p-3"
     >
       <span class="text-sm text-gray-300">Generating...</span>
@@ -133,5 +134,5 @@ watch(isGenerating, (generating) => {
         Stop
       </button>
     </div>
-  </div>
+  </section>
 </template>
