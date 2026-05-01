@@ -32,6 +32,42 @@ async function seedPromptPost(
   });
   expect(created.ok()).toBeTruthy();
   const { post } = await created.json();
+  // A cross-worker /api/__test__/reset can wipe the post between the POST
+  // above and the page's later GET /api/posts/:id, surfacing a "Post not
+  // found" page with no variable inputs. Poll the GET here so callers get
+  // a post id that's already visible to the testuser; if a reset wiped it,
+  // re-POST and try again. Bounded to a few attempts so transient 404s
+  // surface as a real failure rather than hanging.
+  return ensurePostVisible(page, post, accessToken, options);
+}
+
+async function ensurePostVisible(
+  page: Page,
+  post: { id: string },
+  accessToken: string,
+  options: { content?: string; title?: string },
+): Promise<{ id: string }> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const verify = await page.request.get(`/api/posts/${post.id}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (verify.ok()) return post;
+    const recreated = await page.request.post('/api/posts', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      data: {
+        title: options.title ?? `e2e-prompt-${Date.now()}`,
+        contentType: 'prompt',
+        language: 'markdown',
+        content: options.content ?? 'Hello {{name}}!',
+        visibility: 'public',
+        isDraft: false,
+      },
+    });
+    if (recreated.ok()) {
+      const { post: newPost } = await recreated.json();
+      post = newPost;
+    }
+  }
   return post;
 }
 
@@ -105,11 +141,15 @@ test('playground: open prompt page renders header, source disclosure (collapsed)
 test('playground: post with multiple required vars renders all + gates Run', async ({
   testuser,
 }) => {
+  // Uses the seeded multi-required-var fixture post (c0000000-...-000000000051)
+  // rather than ad-hoc seedPromptPost(). seedPromptPost POSTs a fresh post and
+  // then immediately navigates to /playground/<id>; the page's GET /api/posts/:id
+  // can race with a cross-worker /api/__test__/reset and 404 (the page renders
+  // "Post not found" with no variable inputs). Seeded fixtures survive every
+  // reset deterministically.
+  const MULTI_VAR_FIXTURE_POST_ID = 'c0000000-0000-0000-0000-000000000051';
   await withMockScript(testuser, 'default');
-  const post = await seedPromptPost(testuser, {
-    content: 'Hello {{name}}, you are a {{role}} working on {{project}}.',
-  });
-  await testuser.goto(`/playground/${post.id}`);
+  await testuser.goto(`/playground/${MULTI_VAR_FIXTURE_POST_ID}`);
 
   await expect(playground.variableInput(testuser, 'name')).toBeVisible();
   await expect(playground.variableInput(testuser, 'role')).toBeVisible();

@@ -53,7 +53,9 @@ INSERT INTO posts (id, author_id, title, content_type, language, visibility, is_
   ('c0000000-0000-0000-0000-000000000099', 'a0000000-0000-0000-0000-000000000099', 'Test Fixture Post (testuser-owned)', 'snippet', 'typescript', 'public', false, 0),
   ('c0000000-0000-0000-0000-000000000098', 'a0000000-0000-0000-0000-000000000099', 'Forge E2E Draft Sandbox (testuser)', 'snippet', 'typescript', 'public', true, 0),
   -- #50: dedicated required-var fixture post (one NULL-default variable). Used by bruno/playground/run-prompt-missing-required.bru and e2e/specs/playground/missing-variable-error.spec.ts.
-  ('c0000000-0000-0000-0000-000000000050', 'a0000000-0000-0000-0000-000000000099', 'Required-var Fixture (E2E + Bruno)', 'prompt', NULL, 'public', false, 0);
+  ('c0000000-0000-0000-0000-000000000050', 'a0000000-0000-0000-0000-000000000099', 'Required-var Fixture (E2E + Bruno)', 'prompt', NULL, 'public', false, 0),
+  -- #50: dedicated multi-required-var fixture post (three NULL-default variables). Used by e2e/specs/playground/playground-run.spec.ts:multiple-required-vars to avoid the cross-worker reset race in ad-hoc seedPromptPost (a freshly-POSTed post can be wiped between client POST and the page's GET when another worker resets the DB).
+  ('c0000000-0000-0000-0000-000000000051', 'a0000000-0000-0000-0000-000000000099', 'Multi-required-var Fixture (E2E)', 'prompt', NULL, 'public', false, 0);
 
 -- Update link post
 UPDATE posts SET
@@ -84,7 +86,9 @@ INSERT INTO post_revisions (id, post_id, author_id, content, message, revision_n
   ('d0000000-0000-0000-0000-000000000100', 'c0000000-0000-0000-0000-000000000099', 'a0000000-0000-0000-0000-000000000099', E'const testFixture: string = "hello from testuser v2";\nexport default testFixture;', 'Second revision — added export', 2),
   ('d0000000-0000-0000-0000-000000000101', 'c0000000-0000-0000-0000-000000000099', 'a0000000-0000-0000-0000-000000000099', E'const testFixture: string = "hello from testuser v3 with more body";\nexport default testFixture;\n// trailing comment for diff visibility', 'Third revision — comment + body change', 3),
   -- #50: initial revision for the required-var fixture post
-  ('d0000000-0000-0000-0000-000000000050', 'c0000000-0000-0000-0000-000000000050', 'a0000000-0000-0000-0000-000000000099', 'Hello {{required_name}}!', 'Initial fixture for #50', 1);
+  ('d0000000-0000-0000-0000-000000000050', 'c0000000-0000-0000-0000-000000000050', 'a0000000-0000-0000-0000-000000000099', 'Hello {{required_name}}!', 'Initial fixture for #50', 1),
+  -- #50: initial revision for the multi-required-var fixture post
+  ('d0000000-0000-0000-0000-000000000051', 'c0000000-0000-0000-0000-000000000051', 'a0000000-0000-0000-0000-000000000099', 'Hello {{name}}, you are a {{role}} working on {{project}}.', 'Initial fixture for #50 multi-var', 1);
 
 -- ============================================================
 -- Post Tags
@@ -155,7 +159,11 @@ INSERT INTO prompt_variables (id, post_id, name, placeholder, sort_order, defaul
   ('f0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000004', 'props', 'e.g., name: string, age: number', 1, 'name: string, age: number'),  -- #50: was NULL; required-var gating would surprise-block the demo prompt
   ('f0000000-0000-0000-0000-000000000003', 'c0000000-0000-0000-0000-000000000004', 'features', 'e.g., loading state, error handling', 2, 'responsive, accessible'),
   -- #50: required-var fixture row (NULL default — always required)
-  ('f0000000-0000-0000-0000-000000000050', 'c0000000-0000-0000-0000-000000000050', 'required_name', 'e.g., world', 0, NULL);
+  ('f0000000-0000-0000-0000-000000000050', 'c0000000-0000-0000-0000-000000000050', 'required_name', 'e.g., world', 0, NULL),
+  -- #50: multi-required-var fixture rows (three NULL-default vars — all required)
+  ('f0000000-0000-0000-0000-000000000051', 'c0000000-0000-0000-0000-000000000051', 'name', 'e.g., Andrew', 0, NULL),
+  ('f0000000-0000-0000-0000-000000000052', 'c0000000-0000-0000-0000-000000000051', 'role', 'e.g., engineer', 1, NULL),
+  ('f0000000-0000-0000-0000-000000000053', 'c0000000-0000-0000-0000-000000000051', 'project', 'e.g., forge', 2, NULL);
 
 -- ============================================================
 -- Pagination fixture posts (Issue #49 — deterministic data
