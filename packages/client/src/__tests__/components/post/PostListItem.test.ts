@@ -45,6 +45,7 @@ function createTestRouter() {
       { path: '/', component: { template: '<div />' } },
       { path: '/posts/:id', component: { template: '<div />' } },
       { path: '/user/:id', name: 'user-profile', component: { template: '<div />' } },
+      { path: '/tags/:name', name: 'tag-view', component: { template: '<div />' } },
     ],
   });
 }
@@ -321,6 +322,53 @@ describe('PostListItem', () => {
         global: { plugins: [router] },
       });
       await wrapper.find('[data-testid="post-list-item-bookmark-toggle-btn"]').trigger('click');
+      expect(wrapper.emitted('select')).toBeFalsy();
+    });
+  });
+
+  // ── Issue #49: tag chips ──────────────────────────────────────
+  describe('tag chips', () => {
+    it('renders post-tag-chip-<name> for each tag', () => {
+      const router = createTestRouter();
+      const taggedPost: PostWithAuthor = { ...mockPost, tags: ['react', 'typescript'] };
+      const wrapper = mount(PostListItem, {
+        props: { post: taggedPost, selected: false },
+        global: { plugins: [router] },
+      });
+      expect(wrapper.find('[data-testid="post-tag-chip-react"]').exists()).toBe(true);
+      expect(wrapper.find('[data-testid="post-tag-chip-typescript"]').exists()).toBe(true);
+    });
+
+    it('does NOT render any tag chips when post.tags is empty', () => {
+      const router = createTestRouter();
+      const wrapper = mount(PostListItem, {
+        props: { post: mockPost, selected: false },
+        global: { plugins: [router] },
+      });
+      expect(wrapper.find('[data-testid^="post-tag-chip-"]').exists()).toBe(false);
+    });
+
+    it('each tag chip is a RouterLink to /tags/:name', () => {
+      const router = createTestRouter();
+      const taggedPost: PostWithAuthor = { ...mockPost, tags: ['react'] };
+      const wrapper = mount(PostListItem, {
+        props: { post: taggedPost, selected: false },
+        global: { plugins: [router], stubs: { RouterLink: RouterLinkStub } },
+      });
+      const chip = wrapper.find('[data-testid="post-tag-chip-react"]');
+      expect(chip.exists()).toBe(true);
+      const link = chip.getComponent(RouterLinkStub);
+      expect(link.props('to')).toEqual({ name: 'tag-view', params: { name: 'react' } });
+    });
+
+    it('tag chip click does NOT emit select (click.stop prevents card navigation)', async () => {
+      const router = createTestRouter();
+      const taggedPost: PostWithAuthor = { ...mockPost, tags: ['react'] };
+      const wrapper = mount(PostListItem, {
+        props: { post: taggedPost, selected: false },
+        global: { plugins: [router] },
+      });
+      await wrapper.find('[data-testid="post-tag-chip-react"]').trigger('click');
       expect(wrapper.emitted('select')).toBeFalsy();
     });
   });

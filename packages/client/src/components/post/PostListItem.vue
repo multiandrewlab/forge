@@ -29,6 +29,18 @@
       </span>
     </div>
     <h3 class="mb-1 text-sm font-medium text-gray-100">{{ post.title }}</h3>
+    <div v-if="post.tags && post.tags.length > 0" class="mb-1 flex flex-wrap gap-1">
+      <RouterLink
+        v-for="tag in post.tags"
+        :key="tag"
+        :to="{ name: 'tag-view', params: { name: tag } }"
+        :data-testid="`post-tag-chip-${tag}`"
+        class="rounded bg-gray-700 px-2 py-0.5 text-xs text-gray-300 hover:bg-gray-600"
+        @click.stop
+      >
+        #{{ tag }}
+      </RouterLink>
+    </div>
     <div class="flex items-center gap-3 text-xs text-gray-500">
       <span data-testid="post-list-item-vote-score" class="flex items-center gap-1">
         <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
