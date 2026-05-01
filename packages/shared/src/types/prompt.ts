@@ -42,3 +42,37 @@ export function assemblePrompt(template: string, variables: Record<string, strin
     return value !== undefined ? value : `{{${name}}}`;
   });
 }
+
+/**
+ * Returns the names of variables that are REQUIRED for prompt assembly.
+ *
+ * A variable is required iff:
+ *   - it appears in the content (`{{name}}` syntax), AND
+ *   - its `PromptVariable.defaultValue` is null/undefined or empty-after-trim,
+ *     OR it's missing from the `variables` array entirely.
+ *
+ * Note: a variable in `variables[]` but not in `content` is NOT required —
+ * it's not extracted at all. A variable in `content` but not in `variables[]`
+ * IS required (treated as undefaulted). This asymmetry is intentional: the
+ * data model allows a "loose" variable in content with no metadata row,
+ * which we treat as the strictest case (required).
+ *
+ * Pure function. No side effects.
+ */
+export function extractRequiredVariables(content: string, variables: PromptVariable[]): string[] {
+  const inContent = extractVariables(content);
+  const meta = new Map(variables.map((v) => [v.name, v]));
+  const required = new Set<string>();
+  for (const name of inContent) {
+    const v = meta.get(name);
+    if (!v) {
+      required.add(name);
+      continue;
+    }
+    const dv = v.defaultValue;
+    if (dv === null || dv === undefined || dv.trim() === '') {
+      required.add(name);
+    }
+  }
+  return Array.from(required);
+}

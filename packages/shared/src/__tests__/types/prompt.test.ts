@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { PromptVariable } from '../../types/prompt';
-import { extractVariables, assemblePrompt } from '../../types/prompt';
+import { extractVariables, assemblePrompt, extractRequiredVariables } from '../../types/prompt';
 
 describe('PromptVariable type', () => {
   it('shape is correct with all fields', () => {
@@ -119,5 +119,75 @@ describe('assemblePrompt', () => {
 
   it('handles empty variables record', () => {
     expect(assemblePrompt('{{a}} and {{b}}', {})).toBe('{{a}} and {{b}}');
+  });
+});
+
+describe('extractRequiredVariables', () => {
+  const v = (
+    name: string,
+    defaultValue: string | null | undefined = undefined,
+  ): PromptVariable => ({
+    id: `id-${name}`,
+    postId: 'p1',
+    name,
+    placeholder: '',
+    defaultValue: defaultValue ?? null,
+    sortOrder: 0,
+  });
+
+  it('returns [] for empty content', () => {
+    expect(extractRequiredVariables('', [])).toEqual([]);
+  });
+
+  it('returns [] when content has no {{vars}}', () => {
+    expect(extractRequiredVariables('plain text', [v('name')])).toEqual([]);
+  });
+
+  it('marks {{var}} as required when defaultValue is undefined', () => {
+    const vars: PromptVariable[] = [
+      {
+        id: 'id-name',
+        postId: 'p1',
+        name: 'name',
+        placeholder: '',
+        defaultValue: undefined as unknown as string | null,
+        sortOrder: 0,
+      },
+    ];
+    expect(extractRequiredVariables('Hi {{name}}!', vars)).toEqual(['name']);
+  });
+
+  it('marks {{var}} as required when defaultValue is null', () => {
+    expect(extractRequiredVariables('Hi {{name}}!', [v('name', null)])).toEqual(['name']);
+  });
+
+  it("marks {{var}} as required when defaultValue is ''", () => {
+    expect(extractRequiredVariables('Hi {{name}}!', [v('name', '')])).toEqual(['name']);
+  });
+
+  it('marks {{var}} as required when defaultValue is whitespace-only', () => {
+    expect(extractRequiredVariables('Hi {{name}}!', [v('name', '   ')])).toEqual(['name']);
+  });
+
+  it("does NOT mark {{var}} as required when defaultValue is '0'", () => {
+    expect(extractRequiredVariables('Hi {{name}}!', [v('name', '0')])).toEqual([]);
+  });
+
+  it('does NOT mark {{var}} as required when defaultValue is a non-empty string', () => {
+    expect(extractRequiredVariables('Hi {{name}}!', [v('name', 'world')])).toEqual([]);
+  });
+
+  it('treats variable in content but missing from variables[] as required', () => {
+    expect(extractRequiredVariables('Hi {{stranger}}!', [v('name', 'world')])).toEqual([
+      'stranger',
+    ]);
+  });
+
+  it('returns [] for variable in variables[] but not in content', () => {
+    expect(extractRequiredVariables('plain', [v('unused', null)])).toEqual([]);
+  });
+
+  it('deduplicates duplicate {{var}} references', () => {
+    expect(extractRequiredVariables('{{name}} and {{name}}', [v('name', null)])).toEqual(['name']);
   });
 });
