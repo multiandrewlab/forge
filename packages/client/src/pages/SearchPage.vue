@@ -131,58 +131,66 @@
         Searching...
       </div>
 
-      <!-- No results -->
-      <div v-else-if="hasNoResults" class="py-12 text-center">
-        <p class="text-gray-400">
-          No results for <span class="font-medium text-gray-200">{{ q }}</span>
-        </p>
-        <button
-          v-if="!isFuzzy"
-          data-testid="try-fuzzy-link"
-          class="mt-3 text-sm text-primary hover:underline"
-          @click="tryFuzzy"
-        >
-          Try fuzzy search
-        </button>
-      </div>
+      <template v-else>
+        <!--
+          No results banner: shown when there are no real-content matches
+          (snippets + people). AI Actions still render below so the user
+          has a fallback path even on a no-match query.
+        -->
+        <div v-if="hasNoResults" class="py-12 text-center">
+          <p class="text-gray-400">
+            No results for <span class="font-medium text-gray-200">{{ q }}</span>
+          </p>
+          <button
+            v-if="!isFuzzy"
+            data-testid="try-fuzzy-link"
+            class="mt-3 text-sm text-primary hover:underline"
+            @click="tryFuzzy"
+          >
+            Try fuzzy search
+          </button>
+        </div>
 
-      <!-- Result groups -->
-      <div v-else-if="searchStore.results">
-        <SearchResultGroup
-          title="Snippets"
-          :items="searchStore.results.snippets"
-          variant="snippet"
-          :active-global-index="-1"
-          :start-index="0"
-          @select="onSelect"
-          @add-author-filter="addAuthorFilter"
-        />
-        <SearchResultGroup
-          title="AI Actions"
-          :items="searchStore.results.aiActions"
-          variant="aiAction"
-          :active-global-index="-1"
-          :start-index="searchStore.results.snippets.length"
-          @select="onSelect"
-          @add-author-filter="addAuthorFilter"
-        />
-        <SearchResultGroup
-          title="People"
-          :items="searchStore.results.people"
-          variant="person"
-          :active-global-index="-1"
-          :start-index="searchStore.results.snippets.length + searchStore.results.aiActions.length"
-          @select="onSelect"
-          @add-author-filter="addAuthorFilter"
-        />
+        <!-- Result groups (render whenever results exist) -->
+        <div v-if="searchStore.results">
+          <SearchResultGroup
+            title="Snippets"
+            :items="searchStore.results.snippets"
+            variant="snippet"
+            :active-global-index="-1"
+            :start-index="0"
+            @select="onSelect"
+            @add-author-filter="addAuthorFilter"
+          />
+          <SearchResultGroup
+            title="AI Actions"
+            :items="searchStore.results.aiActions"
+            variant="aiAction"
+            :active-global-index="-1"
+            :start-index="searchStore.results.snippets.length"
+            @select="onSelect"
+            @add-author-filter="addAuthorFilter"
+          />
+          <SearchResultGroup
+            title="People"
+            :items="searchStore.results.people"
+            variant="person"
+            :active-global-index="-1"
+            :start-index="
+              searchStore.results.snippets.length + searchStore.results.aiActions.length
+            "
+            @select="onSelect"
+            @add-author-filter="addAuthorFilter"
+          />
 
-        <!-- Pagination (issue #49) -->
-        <SearchPagination
-          :page="searchStore.page"
-          :total-pages="searchStore.totalPages"
-          @change="setPage"
-        />
-      </div>
+          <!-- Pagination (issue #49) -->
+          <SearchPagination
+            :page="searchStore.page"
+            :total-pages="searchStore.totalPages"
+            @change="setPage"
+          />
+        </div>
+      </template>
     </template>
   </div>
 </template>
@@ -238,10 +246,16 @@ const pageParam = computed(() => {
 });
 
 // ── Derived state ────────────────────────────────────────────────────
+//
+// "No results" is keyed on real content matches (snippets + people).
+// AI Actions are synthesized from the query itself (e.g. "Generate a
+// foo tutorial") and are present even for nonsense queries — counting
+// them as "results" would suppress the try-fuzzy-link affordance,
+// which is the whole point of the no-results state.
 const hasNoResults = computed(() => {
   const r = searchStore.results;
   if (r === null) return true;
-  return r.snippets.length === 0 && r.aiActions.length === 0 && r.people.length === 0;
+  return r.snippets.length === 0 && r.people.length === 0;
 });
 
 // ── Helpers ─────────────────────────────────────────────────────────

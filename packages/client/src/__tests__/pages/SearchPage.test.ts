@@ -282,6 +282,22 @@ describe('SearchPage.vue', () => {
     expect(fuzzyLink.exists()).toBe(true);
   });
 
+  // ── hasNoResults ignores aiActions (synthesized from query) ──
+  it('shows "Try fuzzy search" link even when aiActions is non-empty (snippets + people are empty)', async () => {
+    await router.push({ path: '/search', query: { q: 'xyznotfound' } });
+    await router.isReady();
+
+    // Server populates aiActions for ANY query — they should not count as
+    // "results" for the no-results / try-fuzzy-link gate.
+    store.setResults(makeResults([], [aiAction], []));
+
+    const wrapper = mount(SearchPage, { global: { plugins: [router] } });
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="try-fuzzy-link"]').exists()).toBe(true);
+    expect(wrapper.text()).toContain('No results for');
+  });
+
   // ── DoD #8: Try fuzzy toggles ?fuzzy=true ──
   it('"Try fuzzy search" link adds fuzzy=true to route', async () => {
     await router.push({ path: '/search', query: { q: 'xyznotfound' } });
