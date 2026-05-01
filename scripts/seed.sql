@@ -51,7 +51,9 @@ INSERT INTO posts (id, author_id, title, content_type, language, visibility, is_
   ('c0000000-0000-0000-0000-000000000012', 'a0000000-0000-0000-0000-000000000001', 'SQL Performance Tuning', 'document', NULL, 'public', false, 40),
   -- testuser-owned fixture post for Bruno regression tests
   ('c0000000-0000-0000-0000-000000000099', 'a0000000-0000-0000-0000-000000000099', 'Test Fixture Post (testuser-owned)', 'snippet', 'typescript', 'public', false, 0),
-  ('c0000000-0000-0000-0000-000000000098', 'a0000000-0000-0000-0000-000000000099', 'Forge E2E Draft Sandbox (testuser)', 'snippet', 'typescript', 'public', true, 0);
+  ('c0000000-0000-0000-0000-000000000098', 'a0000000-0000-0000-0000-000000000099', 'Forge E2E Draft Sandbox (testuser)', 'snippet', 'typescript', 'public', true, 0),
+  -- #50: dedicated required-var fixture post (one NULL-default variable). Used by bruno/playground/run-prompt-missing-required.bru and e2e/specs/playground/missing-variable-error.spec.ts.
+  ('c0000000-0000-0000-0000-000000000050', 'a0000000-0000-0000-0000-000000000099', 'Required-var Fixture (E2E + Bruno)', 'prompt', NULL, 'public', false, 0);
 
 -- Update link post
 UPDATE posts SET
@@ -80,7 +82,9 @@ INSERT INTO post_revisions (id, post_id, author_id, content, message, revision_n
   ,
   ('d0000000-0000-0000-0000-000000000098', 'c0000000-0000-0000-0000-000000000098', 'a0000000-0000-0000-0000-000000000099', 'const draftFixture: string = "draft body for E2E publish-toggle test";', 'Initial draft version', 1),
   ('d0000000-0000-0000-0000-000000000100', 'c0000000-0000-0000-0000-000000000099', 'a0000000-0000-0000-0000-000000000099', E'const testFixture: string = "hello from testuser v2";\nexport default testFixture;', 'Second revision — added export', 2),
-  ('d0000000-0000-0000-0000-000000000101', 'c0000000-0000-0000-0000-000000000099', 'a0000000-0000-0000-0000-000000000099', E'const testFixture: string = "hello from testuser v3 with more body";\nexport default testFixture;\n// trailing comment for diff visibility', 'Third revision — comment + body change', 3);
+  ('d0000000-0000-0000-0000-000000000101', 'c0000000-0000-0000-0000-000000000099', 'a0000000-0000-0000-0000-000000000099', E'const testFixture: string = "hello from testuser v3 with more body";\nexport default testFixture;\n// trailing comment for diff visibility', 'Third revision — comment + body change', 3),
+  -- #50: initial revision for the required-var fixture post
+  ('d0000000-0000-0000-0000-000000000050', 'c0000000-0000-0000-0000-000000000050', 'a0000000-0000-0000-0000-000000000099', 'Hello {{required_name}}!', 'Initial fixture for #50', 1);
 
 -- ============================================================
 -- Post Tags
@@ -148,8 +152,10 @@ INSERT INTO comments (id, post_id, author_id, parent_id, line_number, revision_i
 -- ============================================================
 INSERT INTO prompt_variables (id, post_id, name, placeholder, sort_order, default_value) VALUES
   ('f0000000-0000-0000-0000-000000000001', 'c0000000-0000-0000-0000-000000000004', 'component_name', 'e.g., UserProfile', 0, 'MyComponent'),
-  ('f0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000004', 'props', 'e.g., name: string, age: number', 1, NULL),
-  ('f0000000-0000-0000-0000-000000000003', 'c0000000-0000-0000-0000-000000000004', 'features', 'e.g., loading state, error handling', 2, 'responsive, accessible');
+  ('f0000000-0000-0000-0000-000000000002', 'c0000000-0000-0000-0000-000000000004', 'props', 'e.g., name: string, age: number', 1, 'name: string, age: number'),  -- #50: was NULL; required-var gating would surprise-block the demo prompt
+  ('f0000000-0000-0000-0000-000000000003', 'c0000000-0000-0000-0000-000000000004', 'features', 'e.g., loading state, error handling', 2, 'responsive, accessible'),
+  -- #50: required-var fixture row (NULL default — always required)
+  ('f0000000-0000-0000-0000-000000000050', 'c0000000-0000-0000-0000-000000000050', 'required_name', 'e.g., world', 0, NULL);
 
 -- ============================================================
 -- Pagination fixture posts (Issue #49 — deterministic data
