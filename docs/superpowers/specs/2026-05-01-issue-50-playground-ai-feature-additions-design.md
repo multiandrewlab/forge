@@ -626,7 +626,7 @@ export const ai = {
 
 **Create:**
 
-```
+```text
 docs/superpowers/specs/2026-05-01-issue-50-playground-ai-feature-additions-design.md  (this file)
 e2e/fixtures/init-script.ts                                                            (E2E init helper)
 e2e/fixtures/selectors/playground.ts                                                   (selector shard)
@@ -638,7 +638,7 @@ packages/client/src/__tests__/components/playground/PlaygroundHeader.test.ts    
 
 **Modify:**
 
-```
+```text
 scripts/seed.sql                                                  (line 151: props default 'name: string, age: number'; ALSO add new prompt post c0000000-...-000000000005 with one NULL-default variable as the required-var fixture for Bruno + E2E)
 packages/shared/src/types/prompt.ts                              (extractRequiredVariables helper)
 packages/server/src/routes/playground.ts                         (validation pipeline rewrite)
@@ -657,7 +657,7 @@ bruno/playground/run-prompt-invalid.bru                          (verify post-ch
 
 **Tests added/updated:**
 
-```
+```text
 packages/shared/src/__tests__/types/prompt.test.ts                (extractRequiredVariables — 11 cases)
 packages/server/src/__tests__/routes/playground.test.ts           (missing-var 400 — 12 cases incl. authz + slot-release)
 packages/client/src/__tests__/composables/usePlayground.test.ts   (canRun + error + requiredVariables + currentPost — 11 cases)

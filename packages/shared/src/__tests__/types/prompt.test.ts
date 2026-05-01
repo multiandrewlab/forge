@@ -190,4 +190,13 @@ describe('extractRequiredVariables', () => {
   it('deduplicates duplicate {{var}} references', () => {
     expect(extractRequiredVariables('{{name}} and {{name}}', [v('name', null)])).toEqual(['name']);
   });
+
+  it('ignores empty/whitespace-only placeholder names ({{   }})', () => {
+    // {{   }} is a malformed template, not a "required '' variable" — must
+    // not surface an empty-string key in `missing` (would render as a blank
+    // chip in the UI and confuse error envelopes).
+    expect(extractRequiredVariables('{{   }}', [])).toEqual([]);
+    // Mixed: real var stays required, the blank placeholder is dropped.
+    expect(extractRequiredVariables('Hi {{ }} {{name}}!', [v('name', null)])).toEqual(['name']);
+  });
 });

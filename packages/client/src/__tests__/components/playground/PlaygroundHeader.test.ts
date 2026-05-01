@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
+import { nextTick } from 'vue';
 import PlaygroundHeader from '@/components/playground/PlaygroundHeader.vue';
 
 const mockForkPost = vi.fn();
@@ -230,6 +231,56 @@ describe('PlaygroundHeader', () => {
       await w.find('[data-testid="playground-fork-btn"]').trigger('click');
       await flushPromises();
       expect(order).toEqual(['fork', 'push']);
+    });
+
+    it('case 5: rapid double-click only forks once (isForking guard)', async () => {
+      // Stall forkPost so the "second click" lands while the first is in
+      // flight. Two issues to navigate in test setup:
+      //   1) After the first click, isForking flips true and the button
+      //      gains :disabled — a subsequent trigger('click') on a disabled
+      //      button does NOT call the @click handler in jsdom (handler is
+      //      gated by the disabled attribute), so we'd never enter handleFork
+      //      a second time and the early-return guard at line 35 would not
+      //      be exercised.
+      //   2) Calling handleFork programmatically would require defineExpose,
+      //      which we don't want to add purely for tests.
+      // Workaround: dispatch the second click event directly via the Event
+      // constructor, which bypasses the disabled gate and reaches Vue's
+      // bound handler — proving the in-script `if (isForking.value) return;`
+      // guard is the second line of defense (the :disabled is the first).
+      let resolveFork!: (id: string) => void;
+      mockForkPost.mockImplementation(
+        () =>
+          new Promise<string>((res) => {
+            resolveFork = res;
+          }),
+      );
+      const w = mount(PlaygroundHeader, {
+        props: {
+          title: 'T',
+          isRunning: false,
+          canRun: true,
+          sourcePostId: 'src',
+          contentType: 'prompt',
+        },
+      });
+      const btn = w.find('[data-testid="playground-fork-btn"]');
+      const btnEl = btn.element as HTMLButtonElement;
+      await btn.trigger('click');
+      // First click is in flight, button is disabled.
+      expect(mockForkPost).toHaveBeenCalledTimes(1);
+      expect(btnEl.disabled).toBe(true);
+      // Second click via dispatchEvent (bypasses disabled gate) — must hit
+      // the script-level isForking guard and NOT re-enter forkPost.
+      btnEl.dispatchEvent(new Event('click', { bubbles: true }));
+      await nextTick();
+      expect(mockForkPost).toHaveBeenCalledTimes(1);
+      resolveFork('new-id');
+      await flushPromises();
+      expect(mockPush).toHaveBeenCalledTimes(1);
+      expect(mockPush).toHaveBeenCalledWith('/playground/new-id');
+      // After settle, the guard releases so a future fork can proceed.
+      expect(btnEl.disabled).toBe(false);
     });
   });
 });

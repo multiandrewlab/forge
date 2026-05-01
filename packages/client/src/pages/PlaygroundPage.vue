@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, computed, onMounted, watch } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { usePlayground } from '@/composables/usePlayground';
 import PlaygroundHeader from '@/components/playground/PlaygroundHeader.vue';
@@ -7,7 +7,12 @@ import PromptVariableInput from '@/components/playground/PromptVariableInput.vue
 import PromptOutput from '@/components/playground/PromptOutput.vue';
 
 const route = useRoute();
-const postId = route.params.id as string;
+// postId tracks route.params.id so a Fork redirect from /playground/A to
+// /playground/B (same component instance, different param) re-runs the
+// data load against the new id rather than re-using stale data fetched
+// for A. Captured-once postId would otherwise leak into run()/handleRun()
+// and call /api/playground/run with the wrong post.
+const postId = computed<string>(() => (route.params.id as string) ?? '');
 
 const {
   variables,
@@ -24,29 +29,42 @@ const {
   stop,
 } = usePlayground();
 
-const variableValues = reactive<Record<string, string>>({});
+// Use a ref<Record> rather than reactive() so a Fork redirect can replace
+// the whole object via .value = {} — clearing stale keys from the previous
+// post in one assignment, no per-key delete (which ESLint's
+// no-dynamic-delete rule rejects).
+const variableValues = ref<Record<string, string>>({});
 
 const title = computed(() => currentPost.value?.title ?? 'Playground');
 const contentType = computed(() => currentPost.value?.contentType ?? 'prompt');
 
 function getVarValue(name: string): string {
-  return variableValues[name] ?? '';
+  return variableValues.value[name] ?? '';
 }
 
 function setVarValue(name: string, value: string): void {
-  variableValues[name] = value;
+  variableValues.value[name] = value;
   inputValues.value[name] = value;
 }
 
-onMounted(async () => {
-  await Promise.all([fetchPost(postId), fetchVariables(postId)]);
-});
+watch(
+  postId,
+  async (newId) => {
+    if (!newId) return;
+    // Reset per-post local input state so a Fork redirect doesn't carry
+    // stale values from the previous post into the new playground.
+    variableValues.value = {};
+    inputValues.value = {};
+    await Promise.all([fetchPost(newId), fetchVariables(newId)]);
+  },
+  { immediate: true },
+);
 
 watch(variables, (vars) => {
   for (const v of vars) {
-    if (!(v.name in variableValues)) {
+    if (!(v.name in variableValues.value)) {
       const initial = v.defaultValue ?? '';
-      variableValues[v.name] = initial;
+      variableValues.value[v.name] = initial;
       inputValues.value[v.name] = initial;
     }
   }
@@ -55,7 +73,7 @@ watch(variables, (vars) => {
 defineExpose({ getVarValue });
 
 function handleRun(): void {
-  run(postId, { ...variableValues });
+  run(postId.value, { ...variableValues.value });
 }
 </script>
 

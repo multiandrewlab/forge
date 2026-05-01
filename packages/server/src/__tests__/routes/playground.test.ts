@@ -588,11 +588,39 @@ describe('POST /api/playground/run', () => {
       expect(body.missing).toEqual(['required_name']);
     });
 
-    it('case 5: partial fill — fixture has only 1 var so identical to case 4 (documented)', () => {
-      // Fixture-limited: real seed post has 1 required var. Partial-fill across
-      // multiple required vars is covered by case 2 (inline 2-var fixture)
-      // and by extractRequiredVariables unit tests.
-      expect(true).toBe(true);
+    it('case 5: partial fill across multiple required vars → 400 with only the unfilled name', async () => {
+      // Same inline 2-var fixture as case 2, but submit ONLY first_name.
+      // Asserts the "still missing" array contains last_name and excludes
+      // the var the caller did supply.
+      const twoVarPostId = 'c0000000-0000-0000-0000-000000000051';
+      mockFindPostById.mockResolvedValue({ ...requiredVarPostRow, id: twoVarPostId });
+      mockFindRevisionsByPostId.mockResolvedValue([
+        {
+          ...requiredVarRevisionRow,
+          post_id: twoVarPostId,
+          content: 'Hi {{first_name}} {{last_name}}!',
+        },
+      ]);
+      mockGetVariablesForPost.mockResolvedValue([
+        { ...requiredVarRow, name: 'first_name', post_id: twoVarPostId },
+        { ...requiredVarRow, name: 'last_name', post_id: twoVarPostId },
+      ]);
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/playground/run',
+        headers: { authorization: `Bearer ${authToken}` },
+        payload: {
+          postId: twoVarPostId,
+          variables: { first_name: 'Andrew' },
+        },
+      });
+      expect(res.statusCode).toBe(400);
+      const body = JSON.parse(res.payload) as {
+        code: string;
+        missing: string[];
+      };
+      expect(body.code).toBe('MISSING_REQUIRED_VARIABLES');
+      expect(body.missing).toEqual(['last_name']);
     });
 
     it('case 6: defaultValue present + submitted value empty → request proceeds', async () => {
@@ -720,8 +748,10 @@ describe('POST /api/playground/run', () => {
         payload: { postId: REQUIRED_VAR_FIXTURE_POST_ID, variables: {} },
       });
       expect(r1.statusCode).toBe(400);
-      // Second request must NOT 429 — the onResponse hook should have
-      // released the AI slot acquired in the aiGate preHandler.
+      // Second request must succeed — the onResponse hook should have
+      // released the AI slot acquired in the aiGate preHandler. Asserting
+      // exactly 200 (not just "not 429") catches regressions that fail
+      // the second call with 400/500/etc. after slot release works.
       const r2 = await app.inject({
         method: 'POST',
         url: '/api/playground/run',
@@ -731,7 +761,7 @@ describe('POST /api/playground/run', () => {
           variables: { required_name: 'world' },
         },
       });
-      expect(r2.statusCode).not.toBe(429);
+      expect(r2.statusCode).toBe(200);
     });
   });
 });

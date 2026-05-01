@@ -54,14 +54,17 @@ vi.mock('@/components/playground/PlaygroundHeader.vue', () => ({
     name: 'PlaygroundHeader',
     props: ['title', 'isRunning', 'canRun', 'sourcePostId', 'contentType'],
     emits: ['run', 'stop'],
+    // Mirror the real component's v-if/v-else split so a 'stop' emit cannot
+    // fire from a state the real PlaygroundHeader.vue would never allow.
+    // Without the split, tests could exercise impossible UI states.
     template:
       '<div data-testid="playground-header">' +
       '<span data-testid="header-title">{{ title }}</span>' +
       '<span data-testid="header-content-type">{{ contentType }}</span>' +
       '<span data-testid="header-source-post-id">{{ sourcePostId }}</span>' +
       '<span data-testid="header-can-run">{{ String(canRun) }}</span>' +
-      '<button data-testid="run-btn" @click="$emit(\'run\')">Run</button>' +
-      '<button data-testid="stop-btn" @click="$emit(\'stop\')">Stop</button>' +
+      '<button v-if="!isRunning" data-testid="run-btn" @click="$emit(\'run\')">Run</button>' +
+      '<button v-else data-testid="stop-btn" @click="$emit(\'stop\')">Stop</button>' +
       '</div>',
   },
 }));
@@ -198,6 +201,64 @@ describe('PlaygroundPage', () => {
       await nextTick();
 
       expect(wrapper.find('[data-testid="header-title"]').text()).toBe('Playground');
+    });
+
+    it('reloads post + variables when route param changes (Fork redirect)', async () => {
+      // postId is computed from route.params.id (not captured-once at setup),
+      // so a Fork redirect that pushes /playground/<newId> on the same
+      // component instance must re-fetch against the new id rather than
+      // reusing stale data from the original mount.
+      const wrapper = await mountPage('post-A');
+      await flushPromises();
+      expect(mockFetchPost).toHaveBeenCalledWith('post-A');
+      expect(mockFetchVariables).toHaveBeenCalledWith('post-A');
+
+      mockFetchPost.mockClear();
+      mockFetchVariables.mockClear();
+      await router.push('/playground/post-B');
+      await flushPromises();
+
+      expect(mockFetchPost).toHaveBeenCalledWith('post-B');
+      expect(mockFetchVariables).toHaveBeenCalledWith('post-B');
+      // header-source-post-id reflects the new route param via :source-post-id="postId"
+      expect(wrapper.find('[data-testid="header-source-post-id"]').text()).toBe('post-B');
+    });
+
+    it('clears local input state on route param change (no leak across forks)', async () => {
+      // Mount first, THEN mutate variables so the variables watcher (no
+      // immediate) sees the mutation and seeds variableValues with the
+      // default. Otherwise the initial-value-equals-current case skips the
+      // watcher and variableValues stays empty.
+      await mountPage('post-A');
+      await flushPromises();
+      mockVariables.value = [createMockVariable({ id: 'v1', name: 'topic', defaultValue: 'AI' })];
+      await flushPromises();
+      expect(mockInputValues.value).toEqual({ topic: 'AI' });
+
+      // Stash old fetches and mark the new post navigation.
+      mockFetchPost.mockClear();
+      mockFetchVariables.mockClear();
+      await router.push('/playground/post-B');
+      await flushPromises();
+
+      // After navigating to a new post, the watcher resets inputValues to {}
+      // before fetching. With no variables for post-B, it stays empty —
+      // proves the for-loop delete + reassign covers the in-flight state.
+      expect(mockInputValues.value).toEqual({});
+      expect(mockFetchPost).toHaveBeenCalledWith('post-B');
+    });
+
+    it('skips data load when route param is empty (defensive guard)', async () => {
+      // postId computed falls back to '' when route.params.id is undefined;
+      // the watcher's `if (!newId) return` guards against firing fetchPost('').
+      router.push('/');
+      await router.isReady();
+      mount(PlaygroundPage, {
+        global: { plugins: [pinia, router] },
+      });
+      await flushPromises();
+      expect(mockFetchPost).not.toHaveBeenCalled();
+      expect(mockFetchVariables).not.toHaveBeenCalled();
     });
   });
 
@@ -472,9 +533,14 @@ describe('PlaygroundPage', () => {
       const wrapper = await mountPage();
       await flushPromises();
 
+      // Stop button is rendered only when isRunning is true (mirrors the
+      // real PlaygroundHeader v-if/v-else split — see header stub above).
+      mockIsRunning.value = true;
+      await nextTick();
       await wrapper.find('[data-testid="stop-btn"]').trigger('click');
 
       expect(mockStop).toHaveBeenCalled();
+      mockIsRunning.value = false;
     });
   });
 

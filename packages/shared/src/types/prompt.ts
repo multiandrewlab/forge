@@ -64,6 +64,10 @@ export function extractRequiredVariables(content: string, variables: PromptVaria
   const meta = new Map(variables.map((v) => [v.name, v]));
   const required = new Set<string>();
   for (const name of inContent) {
+    // Skip empty / whitespace-only placeholder names (e.g. `{{   }}` or
+    // `{{}}`) — they're malformed templates, not a "required '' variable",
+    // and surfacing an empty key in `missing` confuses clients/UI.
+    if (name.trim() === '') continue;
     const v = meta.get(name);
     if (!v) {
       required.add(name);

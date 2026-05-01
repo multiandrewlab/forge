@@ -29,6 +29,9 @@ test('ai: Tab key inserts the suggested text', async ({ testuser }) => {
   // plus the first chars of the accepted suggestion. Using `.cm-line` excludes the
   // ghost widget DOM (which lives outside .cm-line in the inline-widget decoration).
   const lineText = (await testuser.locator('.cm-line').first().textContent()) ?? '';
+  // Pre-typed text must survive acceptance — guards against regressions where Tab
+  // replaces the original typed prefix with the suggestion alone.
+  expect(lineText).toContain('export function ');
   const expectedPrefix = ghostText.trim().slice(0, 10);
   expect(lineText).toContain(expectedPrefix);
 });

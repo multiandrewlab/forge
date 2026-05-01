@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import type { ContentType } from '@forge/shared';
 import { usePosts } from '@/composables/usePosts';
@@ -24,14 +25,25 @@ defineEmits<{
 }>();
 
 const router = useRouter();
+// Fork is a non-idempotent write. The button stays mounted while the
+// network call + redirect resolve, so a fast double-click here would
+// create two forks and race the navigation. Gate with isForking and
+// reflect it in :disabled to also block the click visually.
+const isForking = ref(false);
 
 async function handleFork(): Promise<void> {
-  const newPostId = await usePosts().forkPost(props.sourcePostId);
-  if (!newPostId) return;
-  if (props.contentType === 'prompt') {
-    await router.push(`/playground/${newPostId}`);
-  } else {
-    await router.push(`/posts/${newPostId}/edit`);
+  if (isForking.value) return;
+  isForking.value = true;
+  try {
+    const newPostId = await usePosts().forkPost(props.sourcePostId);
+    if (!newPostId) return;
+    if (props.contentType === 'prompt') {
+      await router.push(`/playground/${newPostId}`);
+    } else {
+      await router.push(`/posts/${newPostId}/edit`);
+    }
+  } finally {
+    isForking.value = false;
   }
 }
 </script>
@@ -70,7 +82,8 @@ async function handleFork(): Promise<void> {
       <button
         v-if="sourcePostId"
         data-testid="playground-fork-btn"
-        class="rounded border border-surface-500 px-4 py-1.5 text-sm font-medium text-gray-300 hover:bg-surface-600 hover:text-white"
+        :disabled="isForking"
+        class="rounded border border-surface-500 px-4 py-1.5 text-sm font-medium text-gray-300 hover:bg-surface-600 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
         @click="handleFork"
       >
         Fork
