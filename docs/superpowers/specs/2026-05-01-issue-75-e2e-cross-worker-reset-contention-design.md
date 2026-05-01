@@ -129,19 +129,33 @@ const userId = WORKER_USER_IDS[raw];
 
 Why a closed map (not a regex + UUID template): bounds blast radius if validation drifts in a future change. An attacker (or a confused future caller) passing `'constructor'`, `'__proto__'`, `'99'`, or any non-`'0'..'3'` value cannot resolve to a non-fixture UUID — the lookup returns `undefined` and the branch returns 400.
 
-Execution:
+**Header-absent vs empty-string semantics — intentional asymmetry.** Three header states are distinguished:
 
-```sql
-BEGIN;
-  DELETE FROM bookmarks              WHERE user_id   = $1;
-  DELETE FROM votes                  WHERE user_id   = $1;
-  DELETE FROM user_tag_subscriptions WHERE user_id   = $1;
-  DELETE FROM comments               WHERE author_id = $1;
-  DELETE FROM posts                  WHERE author_id = $1;
-COMMIT;
+| `request.headers['x-e2e-worker-id']` | Behavior                     | Rationale                                                              |
+| ------------------------------------ | ---------------------------- | ---------------------------------------------------------------------- |
+| `undefined` (header missing)         | Falls through to legacy path | No worker-scoped intent; preserves Bruno + manual-reset compatibility. |
+| Array (duplicate header lines)       | Falls through to legacy path | Malformed protocol-level state; do NOT silently route to scoped path.  |
+| `''` (empty string)                  | 400 `INVALID_WORKER_ID`      | Caller tried to set the header but produced empty; surface the bug.    |
+| `'0'..'3'`                           | Worker-scoped path           | Valid worker ID.                                                       |
+| Anything else (string)               | 400 `INVALID_WORKER_ID`      | Invalid worker ID; surface to caller.                                  |
+
+This asymmetry is intentional — a future "fix" that maps empty-string to legacy would silently swallow client bugs. Document this with an inline code comment.
+
+Execution — runs on a single PoolClient via `withTransaction` to ensure atomicity:
+
+```ts
+await deps.pgTransaction(async (client) => {
+  await client.query('DELETE FROM bookmarks              WHERE user_id   = $1', [userId]);
+  await client.query('DELETE FROM votes                  WHERE user_id   = $1', [userId]);
+  await client.query('DELETE FROM user_tag_subscriptions WHERE user_id   = $1', [userId]);
+  await client.query('DELETE FROM comments               WHERE author_id = $1', [userId]);
+  await client.query('DELETE FROM posts                  WHERE author_id = $1', [userId]);
+});
 ```
 
-The five DELETEs are wrapped in a single transaction so a mid-sequence failure leaves the worker's working set fully intact rather than half-wiped (Architect review's atomicity concern). `$1` is parameterized — never string-interpolated. No advisory lock (disjoint working sets across workers; row-level locks on shared `tags` rows via the `tag_post_count` triggers suffice — see Concurrency note below).
+**Critical implementation note**: the legacy path's `pgQuery` deps surface uses `pool.query()`, which checks out a NEW connection per call. Wrapping multiple `pgQuery` calls in `BEGIN; ...; COMMIT;` strings would NOT form a real transaction — each statement could land on a different pooled connection, leaving BEGIN/COMMIT as no-ops. The worker-scoped path therefore uses a different deps primitive: `pgTransaction`, wired in `app.ts` to the existing `withTransaction(fn: (client: PoolClient) => Promise<T>)` helper in `packages/server/src/db/connection.ts`. `withTransaction` checks out a single client, runs `BEGIN`, the work, `COMMIT` (or `ROLLBACK` on throw), and releases the client. All five DELETEs in the worker-scoped reset run on that one client. `$1` is bound via the pg extended-protocol `params` array — never string-interpolated.
+
+No advisory lock (disjoint working sets across workers; row-level locks on shared `tags` rows via the `tag_post_count` triggers suffice — see Concurrency note below).
 
 Cascade analysis (verified against `packages/server/src/db/migrations/001_initial-schema.sql`):
 
@@ -153,10 +167,22 @@ Cascade analysis (verified against `packages/server/src/db/migrations/001_initia
 
 The actor user row stays. The refresh_token cookie in the test's storage state continues to validate (server is stateless — no sessions table; the `/api/auth/refresh` route does call `findUserById(payload.id)` and returns 401 if the user is missing, but since the design preserves the user row, the cookie remains valid).
 
-Audit log on the scoped branch logs the worker ID from the validated header (not `process.env.TEST_WORKER_INDEX`, which is a Playwright env var with no meaning on the server):
+Audit log on the scoped branch logs the worker ID from the validated header (not `process.env.TEST_WORKER_INDEX`, which is a Playwright env var with no meaning on the server). Includes a `route` structured field so log filters can distinguish scoped from legacy reset events without parsing the message string:
 
 ```ts
-app.log.info({ workerId: raw, userId, ts: Date.now() }, 'E2E worker-scoped reset completed');
+app.log.info(
+  { route: 'worker-scoped', workerId: raw, userId, ts: Date.now() },
+  'E2E worker-scoped reset completed',
+);
+```
+
+Validation rejections also log (at `warn` level) with the truncated `received` value — symmetric with the success-path log and aids CI forensics:
+
+```ts
+app.log.warn(
+  { route: 'worker-scoped-reject', received: raw.slice(0, 16) },
+  'E2E worker-scoped reset rejected: invalid X-E2E-Worker-Id',
+);
 ```
 
 Return `204 No Content`.
@@ -176,30 +202,69 @@ So "fully disjoint" is true at the row-ownership layer; "fully lock-free" is not
 
 #### Tests required (`packages/server/src/__tests__/routes/__test__.test.ts`)
 
-All test cases below MUST be added; no `/* istanbul ignore */` exclusions are permitted on the new code paths. Coverage gate (`.coverage-thresholds.json`) is enforced as a blocking step before PR.
+All test cases below MUST be added; no `/* istanbul ignore */` exclusions are permitted on the new code paths. Coverage on the new/changed lines in `packages/server/src/routes/__test__.ts` MUST meet the line/branch/function/statement thresholds in `.coverage-thresholds.json` (the project's `packages/server` thresholds are the floor); thresholds MUST NOT be lowered as part of this PR.
 
 Worker-scoped path:
 
-- header `X-E2E-Worker-Id: '0'` → 5 expected DELETE statements with `e2e_w0`'s UUID, in a transaction (BEGIN…COMMIT), `pg_advisory_lock` is NOT called, audit log includes `workerId: '0'`, `userId: 'a0…101'`. Returns 204.
-- same for `'1'`, `'2'`, `'3'` — at minimum one positive case per worker ID to confirm the closed map.
-- header `X-E2E-Worker-Id: '0'` plus `Origin` header present → 403 (Origin guard runs first). Audit log not invoked.
-- header `X-E2E-Worker-Id: '0'` plus invalid X-E2E-Secret → 403 (secret guard runs first). Audit log not invoked.
-- header `X-E2E-Worker-Id: '0'` plus a DELETE that throws → transaction rolls back; no rows deleted; 500 with envelope `{ error, code }`.
+- header `X-E2E-Worker-Id: '0'` → `pgTransaction` is invoked with a function that issues exactly 5 `client.query` calls in this order: `DELETE FROM bookmarks WHERE user_id = $1` with `['a0…101']`, then `votes`, then `user_tag_subscriptions`, then `comments WHERE author_id`, then `posts WHERE author_id`. Assert all 5 calls land on the SAME client instance (mock provides a single client; spy on its query method). `pgQuery` is NOT called. `pg_advisory_lock` is NOT called. Audit log includes `workerId: '0'`, `userId: 'a0…101'`, `route: 'worker-scoped'`. Returns 204.
+- Same shape for `'1'`, `'2'`, `'3'` — one positive case per worker ID to confirm the closed map.
+- Header valid + `Origin` header present → 403 (Origin guard runs first). `pgTransaction` not invoked. Audit log not emitted.
+- Header valid + invalid `X-E2E-Secret` → 403 (secret guard runs first). `pgTransaction` not invoked. Audit log not emitted.
+- Header valid + a `client.query` inside the transaction throws (e.g., the third DELETE) → `withTransaction` runs `ROLLBACK` on the same client (assert `client.query('ROLLBACK')` was called); error propagates to the route handler; route returns 500 with envelope `{ error, code }`. This guards against a regression where someone replaces `withTransaction` with ad-hoc `pool.query('BEGIN')` — the test asserts ROLLBACK on the same client object.
 
-Header validation (each returns 400 `{ error, code: 'INVALID_WORKER_ID', received }` and pgQuery is NOT called):
+Header validation (each returns 400 `{ error, code: 'INVALID_WORKER_ID', received }` and `pgTransaction` is NOT called and `pgQuery` is NOT called):
 
-- `'4'`, `'-1'`, `'abc'`, `''` (empty string), `'00'` (leading zero), `' 0 '` (whitespace), `'0\n'` (trailing newline), `'０'` (full-width Unicode digit), `'__proto__'`, `'constructor'`.
-- Header value is an array (duplicate header lines): rejected as non-string.
+- `'4'`, `'-1'`, `'abc'`, `''` (empty string), `'00'` (leading zero), `' 0 '` (whitespace), `'0\n'` (trailing newline), `'０'` (full-width Unicode digit), `'__proto__'`, `'constructor'`, `'toString'`.
+- Header value is an array (duplicate header lines): rejected as non-string, falls through to legacy path (NOT 400). This is the documented intentional asymmetry: missing or array-typed header → legacy intent; empty string → malformed worker-scoped intent → 400.
+- Audit log on rejection: a `warn`-level log entry is emitted with the truncated `received` value (defense for CI forensics).
 
 Legacy path (regression):
 
-- no header → existing global-TRUNCATE + re-seed + advisory-lock-then-unlock behavior. Audit log unchanged. Returns 204. Confirms Bruno path is unaffected.
+- No header → existing global-TRUNCATE + re-seed + advisory-lock-then-unlock behavior. `pgQuery` is invoked; `pgTransaction` is NOT. Audit log unchanged. Returns 204. Confirms Bruno path is unaffected.
 
-Cross-user data integrity (regression — confirms the worker-scoped reset never wipes a sibling user):
+Cross-user data integrity (regression — guards against future resolver bugs collapsing onto a shared user):
 
-- seed alice/carol/testuser with rows; run worker-scoped reset for `'0'`; assert alice's, carol's, and testuser's rows are unchanged.
+- Mock the closed-map lookup result; assert that for `X-E2E-Worker-Id: '0'`, the client.query receives `'a0…101'` as the parameter — never `'a0…001'` (alice), `'a0…003'` (carol), or `'a0…099'` (testuser). Tests that the validation-vs-resolution drift class is caught: a future change that logs `request.headers['x-e2e-worker-id']` directly without re-running through `WORKER_USER_IDS` would break this test.
 
-The `pgQuery` signature in `TestRoutesDeps` is currently `(sql: string) => Promise<unknown>` — single-arg, no params. The worker-scoped path needs parameterized binding, so the signature is extended to `(sql: string, params?: unknown[]) => Promise<unknown>` (backward-compatible). Existing callers (legacy path) remain untyped-params, the worker-scoped path passes `[userId]`. Test mocks update accordingly.
+#### Schema-assertion test (`packages/server/src/__tests__/db/cascade-contract.test.ts`)
+
+The worker-scoped reset's correctness depends on FK `ON DELETE` behavior. A future migration that flips a CASCADE to RESTRICT or SET NULL silently changes the reset semantics. To bound that drift, add a schema-assertion test that introspects `information_schema.referential_constraints` and pins:
+
+- `posts.author_id` → `users.id`: `delete_rule = 'CASCADE'`
+- `post_revisions.post_id` → `posts.id`: `delete_rule = 'CASCADE'`
+- `post_files.post_id` → `posts.id`: `delete_rule = 'CASCADE'`
+- `post_tags.post_id` → `posts.id`: `delete_rule = 'CASCADE'`
+- `prompt_variables.post_id` → `posts.id`: `delete_rule = 'CASCADE'`
+- `bookmarks.user_id` → `users.id`: `delete_rule = 'CASCADE'`
+- `bookmarks.post_id` → `posts.id`: `delete_rule = 'CASCADE'`
+- `votes.user_id` → `users.id`: `delete_rule = 'CASCADE'`
+- `votes.post_id` → `posts.id`: `delete_rule = 'CASCADE'`
+- `user_tag_subscriptions.user_id` → `users.id`: `delete_rule = 'CASCADE'`
+- `comments.post_id` → `posts.id`: `delete_rule = 'CASCADE'`
+- `comments.parent_id` → `comments.id`: `delete_rule = 'CASCADE'`
+- `comments.author_id` → `users.id`: `delete_rule = 'SET NULL'`
+- `posts.forked_from_id` → `posts.id`: `delete_rule = 'SET NULL'`
+
+The test runs against the same Postgres the unit test harness uses (or a dedicated test DB if no live connection is available). It is cheaper than a full integration test of the worker-scoped reset and catches the exact failure mode the design depends on (FK rule drift).
+
+Additionally, add a regression for the documented `forked_from_id SET NULL` cross-user side effect: seed alice with a post forked from one of actor's posts; run worker-scoped reset for actor; assert alice's post survives but its `forked_from_id` is now NULL. This converts the documented side effect into a tested invariant — a future migration changing it to CASCADE would be caught.
+
+**Deps surface change.** `TestRoutesDeps` gains a new field `pgTransaction` for the worker-scoped path. `pgQuery` is unchanged (legacy path keeps using it):
+
+```ts
+export type TestRoutesDeps = {
+  env: { ENABLE_TEST_ROUTES?: string; NODE_ENV?: string };
+  secret: string;
+  isCI: boolean;
+  host: string;
+  pgQuery: (sql: string) => Promise<unknown>; // legacy path — pool.query, no params
+  pgTransaction: <T>(
+    fn: (client: { query: (sql: string, params?: unknown[]) => Promise<unknown> }) => Promise<T>,
+  ) => Promise<T>; // worker-scoped path — single PoolClient, atomic
+};
+```
+
+In `packages/server/src/app.ts`, `pgTransaction` is wired to the existing `withTransaction` helper from `packages/server/src/db/connection.ts`. Test mocks expose a single in-memory client whose `query()` is spied — assertions then verify all five DELETEs (plus the implicit BEGIN/COMMIT inside `withTransaction`) land on the same client.
 
 ### Seed: `scripts/seed.sql`
 
@@ -317,14 +382,37 @@ Parallelizing keeps globalSetup wall-clock time roughly constant vs today's 3-us
 - `e2e/specs/bookmarks/persists-across-sessions.spec.ts:48` — hardcodes `storageStatePath('testuser')`. Replace with `storageStatePath(\`e2e_w${testInfo.workerIndex}\`)`(cast as`AuthUser` if needed).
 - A grep across all 115 specs (`grep -rn "['\"]testuser" e2e/specs`) is required during implementation to catch any other hardcoded literals before the PR opens. The implementation work unit lists this grep as a verification step.
 
-**Comment + test-name migration:** The fixture rename leaves comments and `test('...')` titles that reference "testuser" by name (e.g., "testuser deletes via UI", "comments: testuser sees alice's new comment"). These are misleading after the migration ("which testuser?"). The implementation work unit reworks affected comments and test titles to use neutral language (e.g., "actor deletes via UI", "comments: actor sees alice's new comment via websocket broadcast"). A grep across `e2e/specs/` for the literal `testuser` (case-sensitive) drives the rewrite list — expected count is approximately 30+ surviving references after the mechanical sed.
+**Comment + test-name migration — scope bounded:** The fixture rename leaves comments and `test('...')` titles that reference "testuser" by name. To keep this PR's diff focused on functional changes, the rewrite is **bounded to the cases where the original text became semantically wrong**, not all surviving references:
+
+- **In scope (rewritten in this PR):** test titles + comments where "testuser" referred specifically to the logged-in primary actor (e.g., `test('comments: testuser sees alice's new comment via websocket broadcast')` — the spec now logs in as `e2e_wN`, so this title is wrong; rewrite to `'comments: actor sees alice's new comment'`).
+- **Out of scope (deferred to a follow-up):** comments where "testuser" is generic ("the test user") rather than referring to the seeded fixture identity. These remain readable post-rename.
+
+The implementation generates the in-scope rewrite list during the work unit by running `grep -rn "testuser" e2e/specs/`, classifying each hit as in-scope or out-of-scope, and committing the classified list to the active plan before any rewrites. Reviewers can verify exhaustiveness against the committed list. Expected in-scope count: ≤ 15 (test titles + a handful of inline comments tightly bound to the renamed identity); the remaining ~15 are deferred.
 
 **Defensive-workaround removal:** Two specs contain workarounds for the contention this PR eliminates. They are REMOVED as part of this PR (not retained as defense-in-depth — keeping them would signal to future contributors that cross-worker pollution is still possible in user-owned state, which by construction it is not):
 
 - `e2e/specs/bookmarks/page-empty-state.spec.ts` lines 6–24 (the `for (const p of posts) { toggle off }` cleanup loop) — strip and rewrite the spec to its post-migration form: simply navigate and assert the empty state.
 - `e2e/specs/bookmarks/page-list.spec.ts` line 8 ("filter to dodge cross-worker pollution") comment + line 39 `.filter({ hasText: uniqueTitle })` — the unique-title generation can stay (it's harmless and disambiguates failure messages), but the comment about cross-worker pollution is removed.
 
-**Lint guard:** Add a CI check (`grep -E '\bSEED_USERS\.testuser\b' e2e/specs/` or similar) that fails if a future spec re-introduces `testuser` as a logged-in fixture user. The exact mechanism (eslint rule, pre-commit grep, or CI job) is implementer's choice; the design's invariant is "no e2e spec logs in as testuser."
+**Lint guard — concrete:** Add a CI-job grep step in `.github/workflows/e2e.yml` (not pre-commit, which can be `--no-verify`-bypassed) that runs:
+
+```bash
+# Fails CI if any of these patterns appear in e2e/specs/
+forbidden=$(grep -rEn "(testuser@example\.com|storageStatePath\(['\"]testuser['\"]\)|SEED_USERS\.testuser)" e2e/specs/ || true)
+if [ -n "$forbidden" ]; then
+  echo "::error::testuser is reserved for Bruno; e2e specs must use the 'actor' fixture"
+  echo "$forbidden"
+  exit 1
+fi
+```
+
+This fails on three smuggling patterns:
+
+1. `testuser@example.com` literal string (the most common smuggling pattern, used by the three hand-touch sites today).
+2. `storageStatePath('testuser')` or `storageStatePath("testuser")` calls.
+3. `SEED_USERS.testuser` references (would 404 once removed from the export, but belt-and-braces).
+
+A pre-commit version is acceptable IN ADDITION TO the CI step (not instead of) — pre-commit fast-fails locally, CI is the enforcement floor. ESLint custom rules considered and rejected: e2e/ already has a small set of project-specific specs to enforce, and a grep step is more obviously correct (no AST parser pitfalls) and easier to read in CI logs.
 
 ### Documentation: `CLAUDE.md`
 
@@ -332,9 +420,9 @@ Three updates:
 
 1. **New subsection: "How E2E parallelism works"** — placed near the existing "Testing" section. Explains: per-worker user pool (`e2e_w0..3`), worker-scoped reset via `X-E2E-Worker-Id` header, the `actor` fixture pattern, why testuser stayed Bruno-only, why `workers: 4` is hardcoded (pool size), what to do if pool needs to grow (expand `WORKER_USER_IDS` in `__test__.ts` AND seed.sql AND bump `workers:`).
 
-2. **Bruno > Seeded fixtures table update** — add `e2e_w0..3` rows alongside the existing `testuser`/`alice`/`carol`/etc. entries, noting they are E2E-only and Bruno does not use them. Make explicit that testuser is the Bruno-only fixture: "testuser is reserved for Bruno regression tests (sequential, immune to E2E parallelism). E2E specs MUST NOT log in as testuser — use the `actor` fixture, which resolves to the worker's own `e2e_w${N}` user."
+2. **Bruno > Seeded fixtures table update** — add `e2e_w0..3` rows alongside the existing `testuser`/`alice`/`carol`/etc. entries, noting they are E2E-only and Bruno does not use them. Make explicit that testuser is the Bruno-only fixture: "testuser is reserved for Bruno regression tests (sequential, immune to E2E parallelism). Bruno's collection-root auth bootstrap (`bruno/collection.bru`) calls `POST /api/auth/login` with testuser credentials; it does NOT call `/api/__test__/reset`. E2E specs MUST NOT log in as testuser — use the `actor` fixture, which resolves to the worker's own `e2e_w${N}` user."
 
-3. **Bruno coverage exception for `__test__/*`** — add a note in the "Bruno API Tests > Requirements" section: "Endpoints under `/api/__test__/*` are excluded from the Bruno coverage requirement. They are gated by `ENABLE_TEST_ROUTES=1` + `NODE_ENV ∈ {dev,test}` + loopback-only-outside-CI + `X-E2E-Secret` and are unreachable in production. Test coverage for these endpoints is unit-test-only (`packages/server/src/__tests__/routes/__test__.test.ts`)."
+3. **Bruno coverage exception for `__test__/*`** — add a note in the "Bruno API Tests > Requirements" section: "**Path-prefix exception:** Endpoints under the `/api/__test__/*` prefix are excluded from the Bruno coverage requirement. This exception applies ONLY to routes that (a) live under that prefix AND (b) inherit ALL FIVE existing guards: `ENABLE_TEST_ROUTES=1`, `NODE_ENV ∈ {dev,test}`, loopback-only-outside-CI, `X-E2E-Secret` timingSafeEqual, and `Origin` header rejection. No other route may invoke this exception. Adding a new test-only route requires placing it under `/api/__test__/*` AND inheriting all five guards. Test coverage for these endpoints is unit-test-only (`packages/server/src/__tests__/routes/__test__.test.ts`)."
 
 ## Data flow (per-test lifecycle)
 
@@ -371,6 +459,8 @@ Next test in this worker repeats
 ```
 
 Concurrency: all 4 workers run independently. Each worker's reset DELETEs operate on disjoint working sets (`user_id` / `author_id` matches one of `e2e_w0..3`). `alice`, `carol`, and `testuser` rows are never touched by worker-scoped reset.
+
+Within a single worker, Playwright runs specs sequentially (`fullyParallel: false`); the reset → test-body → next-reset cadence has no within-worker concurrent-reset race. The threat model only needs to consider cross-worker concurrency, which the per-worker user pool isolates by row ownership.
 
 ## Verification
 
