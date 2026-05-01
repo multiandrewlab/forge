@@ -18,6 +18,27 @@ vi.mock('node:fs', async () => {
   };
 });
 
+// Spy client used by the "real withTransaction" rollback test below. The pg
+// module is mocked at module-load so `new Pool()` returns a Pool whose
+// connect() yields this client; the rollback test mutates query.mockImpl.
+const mockClientForRollback = {
+  query: vi.fn(),
+  release: vi.fn(),
+};
+vi.mock('pg', async () => {
+  const actual = await vi.importActual<typeof import('pg')>('pg');
+  class MockPool {
+    connect = vi.fn().mockResolvedValue(mockClientForRollback);
+    query = vi.fn();
+    end = vi.fn();
+  }
+  return {
+    ...actual,
+    default: { ...actual.default, Pool: MockPool },
+    Pool: MockPool,
+  };
+});
+
 import { registerTestRoutes, E2E_RESET_LOCK_ID } from '../../routes/__test__.js';
 
 describe('registerTestRoutes — gating', () => {
@@ -207,6 +228,306 @@ describe('POST /api/__test__/reset — auth', () => {
     expect(res.statusCode).toBeGreaterThanOrEqual(500);
     // Lock acquired, seed failed, but unlock was still called.
     expect(calls.some((s) => /pg_advisory_unlock/.test(s))).toBe(true);
+    await app.close();
+  });
+});
+
+describe('POST /api/__test__/reset — worker-scoped path', () => {
+  type WorkerId = '0' | '1' | '2' | '3';
+  const WORKER_USER_IDS: Record<WorkerId, string> = {
+    '0': 'a0000000-0000-0000-0000-000000000101',
+    '1': 'a0000000-0000-0000-0000-000000000102',
+    '2': 'a0000000-0000-0000-0000-000000000103',
+    '3': 'a0000000-0000-0000-0000-000000000104',
+  };
+
+  async function buildAppWithTestRoutes(opts: {
+    pgQuery: (sql: string) => Promise<unknown>;
+    pgTransaction: <T>(
+      fn: (client: { query: (sql: string, params?: unknown[]) => Promise<unknown> }) => Promise<T>,
+    ) => Promise<T>;
+    secret?: string;
+    isCI?: boolean;
+  }) {
+    const app = Fastify();
+    await registerTestRoutes(app, {
+      env: { ENABLE_TEST_ROUTES: '1', NODE_ENV: 'test' },
+      secret: opts.secret ?? 'test',
+      isCI: opts.isCI ?? true,
+      host: '127.0.0.1',
+      pgQuery: opts.pgQuery,
+      pgTransaction: opts.pgTransaction,
+    });
+    return app;
+  }
+
+  for (const workerId of ['0', '1', '2', '3'] as const) {
+    it(`dispatches 5 user-scoped DELETEs for X-E2E-Worker-Id: '${workerId}'`, async () => {
+      const mockClient = {
+        query: vi.fn().mockResolvedValue({ rows: [] }),
+      };
+      const pgTransaction = vi.fn(
+        async (
+          fn: (client: {
+            query: (sql: string, params?: unknown[]) => Promise<unknown>;
+          }) => Promise<unknown>,
+        ) => fn(mockClient),
+      );
+      const pgQuery = vi.fn(async () => undefined);
+      const app = await buildAppWithTestRoutes({ pgQuery, pgTransaction });
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/__test__/reset',
+        headers: { 'X-E2E-Secret': 'test', 'X-E2E-Worker-Id': workerId },
+      });
+
+      expect(res.statusCode).toBe(204);
+      expect(pgTransaction).toHaveBeenCalledOnce();
+      expect(pgQuery).not.toHaveBeenCalled();
+      const userId = WORKER_USER_IDS[workerId];
+      expect(mockClient.query).toHaveBeenNthCalledWith(
+        1,
+        'DELETE FROM bookmarks              WHERE user_id   = $1',
+        [userId],
+      );
+      expect(mockClient.query).toHaveBeenNthCalledWith(
+        2,
+        'DELETE FROM votes                  WHERE user_id   = $1',
+        [userId],
+      );
+      expect(mockClient.query).toHaveBeenNthCalledWith(
+        3,
+        'DELETE FROM user_tag_subscriptions WHERE user_id   = $1',
+        [userId],
+      );
+      expect(mockClient.query).toHaveBeenNthCalledWith(
+        4,
+        'DELETE FROM comments               WHERE author_id = $1',
+        [userId],
+      );
+      expect(mockClient.query).toHaveBeenNthCalledWith(
+        5,
+        'DELETE FROM posts                  WHERE author_id = $1',
+        [userId],
+      );
+      expect(mockClient.query).toHaveBeenCalledTimes(5);
+      await app.close();
+    });
+  }
+
+  it("emits audit log with route='worker-scoped' on success", async () => {
+    const mockClient = { query: vi.fn().mockResolvedValue({ rows: [] }) };
+    const pgTransaction = vi.fn(
+      async (
+        fn: (client: {
+          query: (sql: string, params?: unknown[]) => Promise<unknown>;
+        }) => Promise<unknown>,
+      ) => fn(mockClient),
+    );
+    const app = await buildAppWithTestRoutes({
+      pgQuery: vi.fn(async () => undefined),
+      pgTransaction,
+    });
+    const logSpy = vi.spyOn(app.log, 'info');
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/__test__/reset',
+      headers: { 'X-E2E-Secret': 'test', 'X-E2E-Worker-Id': '2' },
+    });
+
+    expect(res.statusCode).toBe(204);
+    const auditCall = logSpy.mock.calls.find((args) =>
+      /worker-scoped reset completed/i.test(String(args[1] ?? '')),
+    );
+    expect(auditCall, 'expected a "worker-scoped reset completed" log line').toBeDefined();
+    if (!auditCall) throw new Error('unreachable');
+    const payload = auditCall[0] as {
+      route: unknown;
+      workerId: unknown;
+      userId: unknown;
+      ts: unknown;
+    };
+    expect(payload.route).toBe('worker-scoped');
+    expect(payload.workerId).toBe('2');
+    expect(payload.userId).toBe(WORKER_USER_IDS['2']);
+    expect(typeof payload.ts).toBe('number');
+    await app.close();
+  });
+
+  const INVALID_HEADERS = [
+    '4',
+    '-1',
+    'abc',
+    '',
+    '00',
+    ' 0 ',
+    '0\n',
+    '０',
+    '__proto__',
+    'constructor',
+    'toString',
+  ];
+  for (const value of INVALID_HEADERS) {
+    it(`rejects X-E2E-Worker-Id: ${JSON.stringify(value)} with 400 INVALID_WORKER_ID`, async () => {
+      const pgTransaction = vi.fn();
+      const pgQuery = vi.fn(async () => undefined);
+      const app = await buildAppWithTestRoutes({ pgQuery, pgTransaction });
+      const logSpy = vi.spyOn(app.log, 'warn');
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/__test__/reset',
+        headers: { 'X-E2E-Secret': 'test', 'X-E2E-Worker-Id': value },
+      });
+
+      expect(res.statusCode).toBe(400);
+      const body = res.json() as { error: string; code: string; received: string };
+      expect(body.code).toBe('INVALID_WORKER_ID');
+      expect(body.error).toBe('X-E2E-Worker-Id must be one of "0", "1", "2", "3"');
+      expect(body.received).toBe(value.slice(0, 16));
+      expect(pgTransaction).not.toHaveBeenCalled();
+      expect(pgQuery).not.toHaveBeenCalled();
+      // warn-level audit log on rejection
+      const rejectCall = logSpy.mock.calls.find((args) =>
+        /worker-scoped reset rejected/i.test(String(args[1] ?? '')),
+      );
+      expect(rejectCall, 'expected a "worker-scoped reset rejected" log line').toBeDefined();
+      if (!rejectCall) throw new Error('unreachable');
+      const payload = rejectCall[0] as { route: unknown; received: unknown };
+      expect(payload.route).toBe('worker-scoped-reject');
+      expect(payload.received).toBe(value.slice(0, 16));
+      await app.close();
+    });
+  }
+
+  it('falls through to legacy path when X-E2E-Worker-Id is an array (duplicate header)', async () => {
+    // Node's HTTP parser may surface duplicate header lines as an array on
+    // request.headers. light-my-request joins arrays into a comma-separated
+    // string, so we install a preHandler that forces the array shape to
+    // exercise the `typeof raw === 'string'` defensive guard directly.
+    const pgQuery = vi.fn(async () => undefined);
+    const pgTransaction = vi.fn();
+    const app = Fastify();
+    app.addHook('preHandler', async (request) => {
+      if (request.url === '/api/__test__/reset') {
+        (request.headers as Record<string, string | string[]>)['x-e2e-worker-id'] = ['0', '1'];
+      }
+    });
+    await registerTestRoutes(app, {
+      env: { ENABLE_TEST_ROUTES: '1', NODE_ENV: 'test' },
+      secret: 'test',
+      isCI: true,
+      host: '127.0.0.1',
+      pgQuery,
+      pgTransaction,
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/__test__/reset',
+      headers: { 'X-E2E-Secret': 'test' },
+    });
+
+    expect(res.statusCode).toBe(204);
+    expect(pgTransaction).not.toHaveBeenCalled();
+    // Legacy path: advisory lock + seed + unlock
+    expect(pgQuery).toHaveBeenCalledWith(expect.stringContaining('pg_advisory_lock'));
+    expect(pgQuery).toHaveBeenCalledWith(expect.stringContaining('pg_advisory_unlock'));
+    await app.close();
+  });
+
+  it('returns 403 (Origin guard runs first) even with valid X-E2E-Worker-Id and Origin header', async () => {
+    const pgTransaction = vi.fn();
+    const pgQuery = vi.fn(async () => undefined);
+    const app = await buildAppWithTestRoutes({ pgQuery, pgTransaction });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/__test__/reset',
+      headers: {
+        'X-E2E-Secret': 'test',
+        'X-E2E-Worker-Id': '0',
+        Origin: 'http://evil.example',
+      },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(pgTransaction).not.toHaveBeenCalled();
+    expect(pgQuery).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('returns 403 (secret guard runs first) even with valid X-E2E-Worker-Id and bad secret', async () => {
+    const pgTransaction = vi.fn();
+    const pgQuery = vi.fn(async () => undefined);
+    const app = await buildAppWithTestRoutes({ pgQuery, pgTransaction });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/__test__/reset',
+      headers: { 'X-E2E-Secret': 'wrong', 'X-E2E-Worker-Id': '0' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(pgTransaction).not.toHaveBeenCalled();
+    expect(pgQuery).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('runs ROLLBACK on the same client when a DELETE throws (real withTransaction)', async () => {
+    // Use the REAL withTransaction helper from db/connection.ts — `pg` is
+    // mocked at module-load time so getPool() returns a Pool whose connect()
+    // yields our spied client. Asserts BEGIN, the failing DELETE, and
+    // ROLLBACK all happen on the same client (no COMMIT).
+    const { withTransaction, closePool } = await import('../../db/connection.js');
+    // Reset between tests since the pool is a module-level singleton.
+    await closePool();
+    mockClientForRollback.query.mockReset();
+    mockClientForRollback.release.mockReset();
+    mockClientForRollback.query.mockImplementation(async (sql: string) => {
+      if (sql.startsWith('DELETE FROM user_tag_subscriptions')) {
+        throw new Error('boom');
+      }
+      return { rows: [] };
+    });
+
+    const app = await buildAppWithTestRoutes({
+      pgQuery: vi.fn(async () => undefined),
+      pgTransaction: withTransaction,
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/__test__/reset',
+      headers: { 'X-E2E-Secret': 'test', 'X-E2E-Worker-Id': '0' },
+    });
+
+    expect(res.statusCode).toBe(500);
+    expect(mockClientForRollback.query).toHaveBeenCalledWith('BEGIN');
+    expect(mockClientForRollback.query).toHaveBeenCalledWith('ROLLBACK');
+    expect(mockClientForRollback.query).not.toHaveBeenCalledWith('COMMIT');
+    expect(mockClientForRollback.release).toHaveBeenCalledTimes(1);
+    await app.close();
+    await closePool();
+  });
+
+  it('legacy path: no X-E2E-Worker-Id header → global TRUNCATE + advisory lock', async () => {
+    const pgQuery = vi.fn(async () => undefined);
+    const pgTransaction = vi.fn();
+    const app = await buildAppWithTestRoutes({ pgQuery, pgTransaction });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/__test__/reset',
+      headers: { 'X-E2E-Secret': 'test' },
+    });
+
+    expect(res.statusCode).toBe(204);
+    expect(pgTransaction).not.toHaveBeenCalled();
+    expect(pgQuery).toHaveBeenCalledWith(expect.stringContaining('pg_advisory_lock'));
+    expect(pgQuery).toHaveBeenCalledWith(expect.stringContaining('pg_advisory_unlock'));
     await app.close();
   });
 });
