@@ -2,8 +2,27 @@
 
 **Issue:** [#50 — E2E rollout 5/9](https://github.com/multiandrewlab/forge/issues/50)
 **Tracking issue:** [#43 — E2E Playwright rollout](https://github.com/multiandrewlab/forge/issues/43)
-**Status:** REV 2 (design-review-gate iteration 3 of 3) — APPROVED 2026-05-01 pending re-review
+**Status:** REV 3 — APPROVED 2026-05-01 (user override after iteration 3/3; Security PASS, remaining blockers all mechanical and absorbed inline)
 **Predecessor:** PR #74 (issue #49) merged 2026-05-01
+
+## REV 3 changes — design-review-gate iteration 3 findings (May 1, 2026, user-override-accepted)
+
+Iteration 3 returned 12 blockers (Architect 4, Designer 4, CTO 2, PM 2; Security PASS). User overrode with the 4-option escalation choosing option 1 (mark APPROVED + absorb mechanical fixes inline). All 12 fixed below; no further re-review.
+
+| #   | Finding                                                                                                                  | Reviewer  | Resolution                                                                                                                                                                                                                                             |
+| --- | ------------------------------------------------------------------------------------------------------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | `revisions.at(-1)` returns OLDEST: `findRevisionsByPostId` orders DESC                                                   | Architect | Pseudocode now uses `revisions[0]` (latest).                                                                                                                                                                                                           |
+| 2   | `preHandler: [app.authenticate, app.aiGate]` double-authenticates: `app.aiGate` already wraps `authenticate`             | Architect | Pseudocode now uses `preHandler: app.aiGate` only.                                                                                                                                                                                                     |
+| 3   | `useAiGenerate` pseudocode dropped: `stop()` idempotent re-call, `controller = null` cleanup, "Generation failed" string | Architect | Pseudocode preserves all three verbatim.                                                                                                                                                                                                               |
+| 4   | `usePlayground.run` doesn't currently `await res.json()` on error path                                                   | Architect | Architecture explicitly specifies: detect non-ok BEFORE entering SSE loop, `await res.json()`, branch on `code`.                                                                                                                                       |
+| 5   | Stop button visual differentiation regressed (existing red/blue toggle)                                                  | Designer  | PlaygroundHeader pseudocode now pins explicit class strings: Run = `bg-primary hover:bg-primary/80 text-white`, Stop = `bg-red-600 hover:bg-red-700 text-white`.                                                                                       |
+| 6   | `role="alert"` + `aria-live="polite"` undefined behavior                                                                 | Designer  | Dropped `aria-live="polite"`; using `role="alert"` alone (implicit assertive — appropriate for run-failures).                                                                                                                                          |
+| 7   | `outlined-secondary` is hand-wavy                                                                                        | Designer  | Fork button class string pinned to PostEditor's Cancel-button convention: `rounded border border-surface-500 px-4 py-1.5 text-sm font-medium text-gray-300 hover:bg-surface-600 hover:text-white`.                                                     |
+| 8   | `<details>` browser-default disclosure-triangle marker                                                                   | Designer  | `<summary>` styled with `cursor-pointer list-none text-sm text-gray-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary` + a custom chevron span (rotates on open via `[open]:rotate-90` Tailwind variant or v-bind class). |
+| 9   | Bruno fixture conflict: after Q-D.a seed update, the demo post has zero required vars                                    | CTO       | New seed row: prompt post `c0000000-...-000000000005` with one required (NULL-default) variable specifically as the required-var fixture. Demo post (`c0000000-...-000000000004`) stays fully-defaulted.                                               |
+| 10  | Follow-up issues for (b) variables-endpoint visibility and (c) max-content-length lack acceptance-criteria checkboxes    | CTO       | Two new checkboxes added to acceptance criteria.                                                                                                                                                                                                       |
+| 11  | `fetchPost` loading + error conflated with Run errors                                                                    | PM        | New `loadError: Ref<string \| null>` separate from `error`. PlaygroundPage renders `playground-load-error` for fetch failures (distinct testid + region); existing `playground-error` reserved for Run failures.                                       |
+| 12  | Screen-reader user-outcome bullets aren't directly verified                                                              | PM        | Bullets rephrased to say "verified via attribute presence (proxy)"; an axe-core scan on PlaygroundPage with required-vars-empty added to acceptance criteria as objective signal.                                                                      |
 
 ## REV 2 changes — design-review-gate iteration 2 findings (May 1, 2026)
 
@@ -151,7 +170,7 @@ import { extractRequiredVariables } from '@forge/shared';
 
 app.post(
   '/playground/run',
-  { preHandler: [app.authenticate, app.aiGate] },
+  { preHandler: app.aiGate }, // app.aiGate already wraps app.authenticate + rate limiter
   async (request, reply) => {
     const submitted = playgroundRunSchema.safeParse(request.body);
     if (!submitted.success) {
@@ -170,9 +189,10 @@ app.post(
     // (2) Authorization — short-circuit before leaking any post details
     if (!assertCanReadPost(post, request.user.id, reply)) return;
 
-    // (3) Fetch latest revision for content + variable shape
+    // (3) Fetch latest revision for content + variable shape.
+    //     findRevisionsByPostId orders revision_number DESC, so latest is revisions[0].
     const revisions = await findRevisionsByPostId(submitted.data.postId);
-    const latest = revisions.at(-1);
+    const latest = revisions[0];
     if (!latest) {
       return reply.status(404).send({ error: 'Post has no revisions', code: 'POST_NOT_FOUND' });
     }
@@ -205,7 +225,7 @@ Key properties:
 - **Visibility check (3) precedes any leak of post details (4-5).** A user who cannot read the post gets 403/404 from `assertCanReadPost`; the response body has NO `missing` field, no variable names, no `code` discriminator beyond what `assertCanReadPost` itself returns.
 - **Validate raw submitted payload, not merged-with-defaults.** If we validated the merged payload, a defaulted variable with an explicitly-cleared submitted value would mask as filled.
 - **Whitespace handling:** `.trim() === ''` treats whitespace-only inputs as missing.
-- **Rate-limit slot:** the 400 path returns BEFORE the SSE body. The langchain plugin's `onResponse` hook releases the slot when the reply finishes (any status). Confirmed by reading `packages/server/src/plugins/langchain/index.ts` during plan-implementation; if the hook only fires for 200, validation runs before `app.aiGate` instead.
+- **Rate-limit slot:** the langchain plugin's `onResponse` hook (`packages/server/src/plugins/langchain/index.ts:61-63`) fires for ALL response statuses including 400. The slot acquired by `app.aiGate` is released automatically. No manual `request.aiSlot?.release()` call needed in the validation 400 path. TDD case #12 verifies this empirically.
 
 **Client (`packages/client/src/composables/usePlayground.ts`):**
 
@@ -225,6 +245,7 @@ type UsePlaygroundReturn = {
   // new
   currentPost: Ref<{ id: string; title: string; contentType: ContentType; content: string } | null>;
   fetchPost: (postId: string) => Promise<void>;
+  loadError: Ref<string | null>; // Distinct from `error` (Run-time). Set if fetchPost fails.
   requiredVariables: ComputedRef<string[]>;
   canRun: ComputedRef<boolean>;
   missingVariables: Ref<string[]>;
@@ -233,20 +254,34 @@ type UsePlaygroundReturn = {
 
 Behavior:
 
-- `fetchPost(postId)`: new method. Calls `GET /api/posts/:id`, sets `currentPost.value` with `{ id, title, contentType, content }` (content from the latest revision included in the response, OR a follow-up `GET /api/posts/:id/revisions` if not bundled).
+- `fetchPost(postId)`: new method. Calls `GET /api/posts/:id`, sets `currentPost.value` with `{ id, title, contentType, content }`. The post route (`packages/server/src/routes/posts.ts:150`) already bundles the latest revision content via `toPostWithRevision` — no follow-up call needed. On rejection, sets `loadError.value` (NOT `error.value`); `currentPost.value` stays null.
 - `requiredVariables`: derived from `currentPost.value.content` + `variables.value` via `extractRequiredVariables`.
 - `canRun`: `requiredVariables.value.every((name) => (inputValues.value[name] ?? '').trim() !== '')`.
-- `run()` is updated:
-  - On 400 with `code: 'MISSING_REQUIRED_VARIABLES'`: `error.value = body.error`, `missingVariables.value = body.missing`.
-  - On any other 400 (including `code: 'VALIDATION_ERROR'`): `error.value = body.error`, `missingVariables.value = []`.
-  - On non-400 error: `error.value = 'Request failed'`, `missingVariables.value = []`.
-  - On success: `error.value = null`, `missingVariables.value = []`.
+- `run()` is updated. Critically, the current code (`usePlayground.ts:60-61`) only checks `res.ok` and never parses error bodies. The new code MUST replace that path:
+  ```ts
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    if (res.status === 400 && body.code === 'MISSING_REQUIRED_VARIABLES') {
+      error.value = body.error;
+      missingVariables.value = body.missing ?? [];
+    } else if (res.status === 400) {
+      error.value = body.error ?? 'Request failed';
+      missingVariables.value = [];
+    } else {
+      error.value = 'Request failed';
+      missingVariables.value = [];
+    }
+    return;
+  }
+  // ...existing SSE consumption loop
+  ```
+  On success: `error.value = null`, `missingVariables.value = []`.
 
 **Client (`packages/client/src/components/playground/PlaygroundHeader.vue`):**
 
-- Two separate buttons (replaces dynamic-testid pattern):
-  - `<button v-if="!isRunning" data-testid="playground-run-btn" :disabled="!canRun" aria-describedby="playground-run-hint" @click="$emit('run')">Run</button>`
-  - `<button v-else data-testid="playground-stop-btn" @click="$emit('stop')">Stop</button>`
+- Two separate buttons (replaces dynamic-testid pattern). Class strings preserve the existing red-vs-blue Run/Stop visual distinction:
+  - `<button v-if="!isRunning" data-testid="playground-run-btn" :disabled="!canRun" aria-describedby="playground-run-hint" class="bg-primary hover:bg-primary/80 text-white rounded px-4 py-1.5 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed" @click="$emit('run')">Run</button>`
+  - `<button v-else data-testid="playground-stop-btn" class="bg-red-600 hover:bg-red-700 text-white rounded px-4 py-1.5 text-sm font-medium" @click="$emit('stop')">Stop</button>`
 - Live region beneath the action row:
   - `<p id="playground-run-hint" role="status" class="text-xs text-red-400/70 mt-1" v-if="!canRun && !isRunning">Fill required variables to run</p>`
 - New props: `sourcePostId: string`, `contentType: ContentType` (imported from `@forge/shared`).
@@ -269,15 +304,20 @@ Behavior:
 
 **Client (`packages/client/src/pages/PlaygroundPage.vue`):**
 
-- New `<div v-if="error" data-testid="playground-error" role="alert" aria-live="polite" class="mb-4 p-3 bg-red-900/30 border border-red-500 rounded text-red-400 text-sm">{{ error }}</div>` region. Class string is the canonical error-banner used by 6 existing pages.
+- Two separate error regions (Run failures vs. page-load failures):
+  - `<div v-if="loadError" data-testid="playground-load-error" role="alert" class="mb-4 p-3 bg-red-900/30 border border-red-500 rounded text-red-400 text-sm">{{ loadError }}</div>` — set when `fetchPost(postId)` rejects (post deleted, network error, 403). Distinct from Run-time errors so users can tell whether they need to retry the page or fix their inputs.
+  - `<div v-if="error" data-testid="playground-error" role="alert" class="mb-4 p-3 bg-red-900/30 border border-red-500 rounded text-red-400 text-sm">{{ error }}</div>` — set when `run()` returns a non-2xx. Both use the canonical error-banner class string. `role="alert"` alone implies assertive — appropriate for both. (Dropped `aria-live="polite"` to avoid the role/live-region conflict.)
 - The prompt source content sits in a collapsed disclosure:
   ```vue
-  <details data-testid="playground-prompt-source" class="mb-4">
-    <summary class="cursor-pointer text-sm text-gray-400">Show prompt source</summary>
-    <pre data-testid="playground-prompt-content" class="mt-2 p-3 bg-gray-900 rounded text-sm overflow-auto max-h-60">{{ currentPost?.content }}</pre>
+  <details data-testid="playground-prompt-source" class="mb-4 group">
+    <summary class="cursor-pointer list-none text-sm text-gray-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary flex items-center gap-1">
+      <span class="inline-block transition-transform group-open:rotate-90">▶</span>
+      Show prompt source
+    </summary>
+    <pre data-testid="playground-prompt-content" class="mt-2 p-3 bg-gray-900 rounded text-sm overflow-auto max-h-60">{{ currentPost?.content ?? '' }}</pre>
   </details>
   ```
-  Default-collapsed; users can expand to see the raw template with `{{vars}}`.
+  Default-collapsed. `list-none` hides the browser-default disclosure-triangle marker (already not visible in webkit by default but defensive). Custom chevron (`▶`) rotates 90° on `[open]` via Tailwind's `group-open:rotate-90` variant. Focus-visible ring matches existing primary-color focus convention.
 - Calls `usePlayground.fetchPost(postId)` on mount alongside the existing `fetchVariables(postId)`.
 - Passes `:source-post-id="postId"` and `:content-type="currentPost?.contentType ?? 'prompt'"` into PlaygroundHeader.
 
@@ -305,7 +345,7 @@ Implemented via Feature 1's server validation. Surface in two places:
 
 **Client (`packages/client/src/components/playground/PlaygroundHeader.vue`):**
 
-- New fork button in a right-aligned slot with visual separation from Run/Stop. Concrete treatment: a `flex justify-between` parent with Run/Stop on the left and a `<button>` on the right styled as an outlined secondary button (vs Run's filled primary). Avoids accidental clicks while filling vars.
+- New fork button in a right-aligned slot with visual separation from Run/Stop. Concrete treatment: a `flex justify-between` parent with Run/Stop on the left and the fork button on the right styled per the existing Cancel-button convention from `PostEditor.vue:145`: `rounded border border-surface-500 px-4 py-1.5 text-sm font-medium text-gray-300 hover:bg-surface-600 hover:text-white`. Avoids accidental clicks while filling vars.
 - Testid `playground-fork-btn`.
 - Click handler:
 
@@ -346,24 +386,28 @@ Implemented via Feature 1's server validation. Surface in two places:
 
 **Client (`packages/client/src/composables/useAiGenerate.ts`):**
 
-Restructure to wrap the existing fetch + SSE logic in `try { ... } catch (err) { /* existing AbortError suppression */ } finally { /* hook cleanup */ }`. The current AbortError suppression at line 58-63 is preserved verbatim inside the catch.
+Restructure the existing fetch + SSE logic into `try { ... } catch (err) { /* AbortError suppression */ } finally { /* cleanup */ }`. **All existing semantics preserved verbatim**: the `stop()` idempotent re-call at the top, the `controller = null` cleanup, the `'Generation failed'` fallback string. Three NEW lines: hook installation, hook cleanup, and the `e2eHookEnabled` gate.
 
 ```ts
 async function start(req: AiGenerateRequest, onToken: (text: string) => void): Promise<void> {
-  const controller = new AbortController();
+  // PRESERVED from existing useAiGenerate.ts:26 — idempotent abort of any in-flight request
+  stop();
+
+  controller = new AbortController(); // PRESERVED — outer-scope ref per existing pattern
+
   const win = window as Window & {
     __E2E__?: boolean;
     __forgeE2eAiAbort?: () => void;
   };
-
   const e2eHookEnabled = import.meta.env.MODE !== 'production' && win.__E2E__;
 
+  // NEW: install E2E abort hook (gated)
   if (e2eHookEnabled) {
-    win.__forgeE2eAiAbort = () => controller.abort();
+    win.__forgeE2eAiAbort = () => controller?.abort();
   }
 
   try {
-    // existing fetch + SSE consumption
+    // PRESERVED: existing fetch + SSE consumption logic
     const resp = await fetch('/api/ai/generate', {
       method: 'POST',
       headers: {
@@ -374,20 +418,24 @@ async function start(req: AiGenerateRequest, onToken: (text: string) => void): P
     });
     // ... existing onToken loop
   } catch (err: unknown) {
-    // PRESERVED from existing useAiGenerate.ts:58-63
+    // PRESERVED verbatim from existing useAiGenerate.ts:58-63
     const isAbort = err instanceof Error && err.name === 'AbortError';
     if (!isAbort) {
-      error.value = err instanceof Error ? err.message : 'Request failed';
+      error.value = err instanceof Error ? err.message : 'Generation failed';
     }
   } finally {
+    // NEW: cleanup E2E abort hook (gated identically to install)
     if (e2eHookEnabled) {
       delete win.__forgeE2eAiAbort;
     }
+    // PRESERVED from existing useAiGenerate.ts:65-66
     isGenerating.value = false;
-    // ... any other existing finally-equivalent cleanup
+    controller = null;
   }
 }
 ```
+
+The `controller` ref is module-scoped per the existing code (`useAiGenerate.ts:24`). The implementer must read the current code and preserve the exact assignment shape; the snippet above is illustrative.
 
 **E2E (`e2e/fixtures/init-script.ts` — new):**
 
@@ -478,7 +526,7 @@ Mocking technique: `vi.stubEnv('MODE', '<value>')` with `vi.unstubAllEnvs()` in 
 
 ### Bruno (`bruno/playground/`)
 
-- **`run-prompt-missing-required.bru`** (NEW): authenticated as `testuser`, submits a prompt requiring vars (`c0000000-...-000000000004` is suitable after seed update — `props` is the only required var; submit empty `variables{}`). Asserts `res.status: eq 400` AND post-response script: `expect(res.body.code).to.equal('MISSING_REQUIRED_VARIABLES')` AND `expect(res.body.missing).to.be.an('array').that.includes('props')`.
+- **`run-prompt-missing-required.bru`** (NEW): authenticated as `testuser`, submits a prompt with at least one required (NULL-default) variable. Targets the new fixture post `c0000000-...-000000000005` seeded specifically for this purpose (see seed update below). Submits empty `variables{}`. Asserts `res.status: eq 400` AND post-response script: `expect(res.body.code).to.equal('MISSING_REQUIRED_VARIABLES')` AND `expect(res.body.missing).to.be.an('array').that.is.not.empty`.
 - **`run-prompt-invalid.bru`** (verify): re-run after seed update + new validation. Currently asserts only `status 400` + `expect(body).to.have.property('error')`. Likely still passes after the change. If implementation finds it now hits the new validation path, update its assertions to also check `code: 'MISSING_REQUIRED_VARIABLES'`.
 
 ## Test surface — 16 specs
@@ -542,6 +590,7 @@ export const playground = {
   runHint: (p: Page): Locator => p.locator('#playground-run-hint'),
 
   error: (p: Page): Locator => p.getByTestId('playground-error'),
+  loadError: (p: Page): Locator => p.getByTestId('playground-load-error'),
 
   output: (p: Page): Locator => p.getByTestId('prompt-output'),
   outputContent: (p: Page): Locator => p.getByTestId('prompt-output-content'),
@@ -590,7 +639,7 @@ packages/client/src/__tests__/components/playground/PlaygroundHeader.test.ts    
 **Modify:**
 
 ```
-scripts/seed.sql                                                  (line 151: props default 'name: string, age: number')
+scripts/seed.sql                                                  (line 151: props default 'name: string, age: number'; ALSO add new prompt post c0000000-...-000000000005 with one NULL-default variable as the required-var fixture for Bruno + E2E)
 packages/shared/src/types/prompt.ts                              (extractRequiredVariables helper)
 packages/server/src/routes/playground.ts                         (validation pipeline rewrite)
 packages/client/src/composables/usePlayground.ts                 (currentPost, canRun, error, requiredVariables, missingVariables, fetchPost)
@@ -677,7 +726,8 @@ User confirms the amendment text before `gh issue edit 50` is run.
 - [ ] PlaygroundHeader's `handleFork` redirects to `/playground/{newId}` for prompt sources and `/posts/{newId}/edit` otherwise; 4 unit-test cases passing
 - [ ] PromptVariableInput renders `*` + `aria-required="true"` + sr-only "required" on required vars
 - [ ] Run button has `aria-describedby="playground-run-hint"` + visible live region beneath the action row
-- [ ] PlaygroundPage error region uses canonical class string + `role="alert"` + `aria-live="polite"`
+- [ ] PlaygroundPage renders TWO error regions: `playground-load-error` (set when `fetchPost` fails) and `playground-error` (set when `run` fails). Both use canonical class string + `role="alert"` (no explicit `aria-live`; role implies assertive)
+- [ ] axe-core scan on PlaygroundPage with required-vars empty returns zero violations
 - [ ] `useAiGenerate.ts` exposes `window.__forgeE2eAiAbort` only when both `MODE !== 'production'` AND `window.__E2E__` are set; cleanup in `finally`; 8 unit-test cases passing
 - [ ] `e2e/fixtures/init-script.ts` + `auth.ts` fixture wiring sets `__E2E__` on every test page before navigation
 - [ ] `bruno/playground/run-prompt-missing-required.bru` asserts the new 400 shape
@@ -688,18 +738,22 @@ User confirms the amendment text before `gh issue edit 50` is run.
 - [ ] Bruno regression suite green (incl. new `.bru` and verified `run-prompt-invalid.bru`)
 - [ ] Tracking issue #43 updated
 - [ ] Issue #50 body amended per §"Issue body amendment plan" (immediately after design-review-gate)
-- [ ] Follow-up issue filed: retrofit Login/Register/PostNew with richer a11y pattern
+- [ ] Follow-up issue filed (linked in PR body before merge): retrofit Login/Register/PostNew with richer a11y pattern
+- [ ] Follow-up issue filed (linked in PR body before merge): tighten `GET /api/posts/:id/variables` visibility (sibling endpoint variable-name leak)
+- [ ] Follow-up issue filed (linked in PR body before merge): add max-content-length to `createRevisionSchema.content` (DoS hardening)
 - [ ] PR description documents the `__forgeE2eAiAbort` window hook as known technical debt
 - [ ] CLAUDE.md (or new `docs/conventions/error-envelopes.md`) updated with the project-wide error envelope convention
 - [ ] Closes #50
 
 ### User outcomes
 
-- [ ] A user opening a prompt with required vars sees the Run button gated AND understands why (visible `*` indicator + visible live-region hint beneath the button)
-- [ ] A user with a screen reader hears each required variable announced as required (via `aria-required="true"` + visually-hidden "required" text)
-- [ ] A user with a screen reader hears the disabled-Run reason (via `role="status"` live region read on focus)
-- [ ] A user with a screen reader hears server-rejection errors announced (via `role="alert"` + `aria-live="polite"` on `playground-error`)
-- [ ] A user clicking Fork on a prompt lands on `/playground/{newId}` with their copy ready to edit (not on a snippet edit page)
+User-outcome bullets are verified via attribute-presence proxies (E2E asserts `aria-required="true"` is set, `role="alert"` is set, etc.) plus the axe-core scan above. Direct AT-output verification (NVDA/JAWS/VoiceOver actual announcements) is out of scope; the proxy + axe-core combination is the project's verification standard.
+
+- [ ] A user opening a prompt with required vars sees the Run button gated AND understands why (verified: `*` indicator visible in spec #4 + live-region hint populated when disabled)
+- [ ] Screen-reader announcement of required vars (proxy: `aria-required="true"` set on inputs + visually-hidden "required" text rendered, both asserted in spec #4)
+- [ ] Screen-reader announcement of disabled-Run reason (proxy: `aria-describedby="playground-run-hint"` wired to a `<p>` describing the reason, both asserted in spec #4)
+- [ ] Screen-reader announcement of server-rejection errors (proxy: `role="alert"` on `playground-error`, asserted via attribute presence in `usePlayground.test.ts` rendering harness)
+- [ ] A user clicking Fork on a prompt lands on `/playground/{newId}` with their copy ready to edit (verified: spec #6 asserts URL after click)
 
 ### No-regression
 
