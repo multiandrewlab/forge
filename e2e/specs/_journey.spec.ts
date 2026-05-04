@@ -120,7 +120,7 @@ test.describe.serial('Phase 4 — social (search + vote + bookmark + comment)', 
     // the seeded fixture post does not rank highest for it.
     await actor.goto('/');
     await shell.searchTrigger(actor).click();
-    await search.searchInput(actor).fill('fixture');
+    await search.searchInput(actor).fill('Test Fixture Post');
     await search.searchResultItem(actor).click();
     await expect(actor).toHaveURL(new RegExp(`/posts/${SEEDED_POST_ID}`));
   });
