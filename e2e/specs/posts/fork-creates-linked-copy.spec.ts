@@ -1,7 +1,7 @@
 import { test, expect } from '../../fixtures/reset.js';
 import { posts } from '../../fixtures/selectors/posts.js';
 
-// Pinned seed post — actor-owned public snippet "Test Fixture Post (actor-owned)".
+// Pinned seed post — testuser-owned public snippet "Test Fixture Post (testuser-owned)".
 // alice (a separate seeded user) forks this; actor cannot fork their own post
 // (PostActions.vue disables Fork when viewer is the author), so alice is the
 // canonical forker for this read-only spec.

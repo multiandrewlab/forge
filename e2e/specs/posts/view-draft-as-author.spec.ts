@@ -1,14 +1,34 @@
 import { test, expect } from '../../fixtures/reset.js';
 import { posts } from '../../fixtures/selectors/posts.js';
 
-// Pinned seed UUID — actor-owned draft "Forge E2E Draft Sandbox (actor)".
-// Title intentionally omits "Fixture" so it doesn't shadow the
-// `c…0099` fixture in `_journey.spec.ts` search-by-fixture tests.
-const DRAFT_POST_ID = 'c0000000-0000-0000-0000-000000000098';
-
 test('post view: actor views own draft and sees title + draft-badge', async ({ actor }) => {
-  await actor.goto(`/posts/${DRAFT_POST_ID}`);
+  // Drafts are visible only to their author. Create one as the per-worker actor
+  // so the worker that runs this spec is guaranteed to be the owner. (Pre-#75
+  // this spec used the seeded testuser-owned draft, but that draft is now
+  // unreachable to the e2e_w* actor fixtures.)
+  const refresh = await actor.request.post('/api/auth/refresh');
+  expect(refresh.ok()).toBe(true);
+  const { accessToken } = (await refresh.json()) as { accessToken: string };
 
-  await expect(posts.postTitle(actor)).toHaveText('Forge E2E Draft Sandbox (actor)');
+  const draftTitle = `Draft view ${Date.now()}`;
+  const created = await actor.request.post('/api/posts', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    data: {
+      title: draftTitle,
+      contentType: 'snippet',
+      language: 'typescript',
+      content: 'x',
+      visibility: 'public',
+      isDraft: true,
+    },
+  });
+  expect(created.ok()).toBe(true);
+  const {
+    post: { id: createdPostId },
+  } = (await created.json()) as { post: { id: string } };
+
+  await actor.goto(`/posts/${createdPostId}`);
+
+  await expect(posts.postTitle(actor)).toHaveText(draftTitle);
   await expect(posts.draftBadge(actor)).toBeVisible();
 });

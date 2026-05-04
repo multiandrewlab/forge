@@ -115,7 +115,7 @@ test.describe.serial('Phase 3 — publish (AI autocomplete + upload + publish)',
 
 test.describe.serial('Phase 4 — social (search + vote + bookmark + comment)', () => {
   test('search finds the seeded snippet', async ({ actor }) => {
-    // Use the unique title "Test Fixture Post (actor-owned)" rather than
+    // Use the unique title "Test Fixture Post (testuser-owned)" rather than
     // the generic "typescript" tag — many seeded snippets carry that tag and
     // the seeded fixture post does not rank highest for it.
     await actor.goto('/');
@@ -158,7 +158,7 @@ test.describe.serial('Phase 4 — social (search + vote + bookmark + comment)', 
 
 test.describe.serial('Phase 5 — fork', () => {
   // Use alice (not actor) — PostActions.vue:117 disables the Fork button
-  // when the viewer is the author. The seeded post is actor-owned, so
+  // when the viewer is the author. The seeded post is testuser-owned, so
   // actor cannot fork it. alice is a separate seeded user with no special
   // relationship to the post.
   test('fork the seeded post and land on the new post-edit page with attribution', async ({

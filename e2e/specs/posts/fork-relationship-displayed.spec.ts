@@ -1,7 +1,7 @@
 import { test, expect } from '../../fixtures/reset.js';
 import { posts } from '../../fixtures/selectors/posts.js';
 
-// Pinned seed post — actor-owned public snippet. alice forks it, then we
+// Pinned seed post — testuser-owned public snippet. alice forks it, then we
 // navigate to a surface that displays the post-detail with its meta-header and
 // assert the `fork-attribution` element is rendered. This proves the fork
 // relationship is persistently displayed (not just a transient post-fork

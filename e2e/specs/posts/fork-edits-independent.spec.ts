@@ -1,12 +1,12 @@
 import { test, expect } from '../../fixtures/reset.js';
 import { posts } from '../../fixtures/selectors/posts.js';
 
-// Pinned seed post — actor-owned public snippet. alice forks it, edits the
+// Pinned seed post — testuser-owned public snippet. alice forks it, edits the
 // fork's title, then we GET the SOURCE post via /api/posts/:id and assert its
 // title is unchanged. This proves fork is a linked-but-independent copy: the
 // source row is untouched by edits to the fork.
 const SEEDED_POST_ID = 'c0000000-0000-0000-0000-000000000099';
-const SEEDED_TITLE = 'Test Fixture Post (actor-owned)';
+const SEEDED_TITLE = 'Test Fixture Post (testuser-owned)';
 
 test('fork: editing the fork does not mutate the source post', async ({ alice }) => {
   await alice.goto(`/posts/${SEEDED_POST_ID}`);

@@ -2,7 +2,7 @@ import { test, expect } from '../../fixtures/reset.js';
 import { posts } from '../../fixtures/selectors/posts.js';
 
 // Pinned seed UUID — actor is the author of the seeded "Test Fixture Post
-// (actor-owned)" snippet, so clicking the inline author-avatar from
+// (testuser-owned)" snippet, so clicking the inline author-avatar from
 // HomePage's right pane should navigate alice to /user/<actor-id>.
 const TESTUSER_ID = 'a0000000-0000-0000-0000-000000000099';
 
@@ -18,7 +18,9 @@ test('author-avatar: clicking the inline avatar navigates to user profile', asyn
   // renders the title as h1 once a post is auto-selected, so a plain
   // getByText is ambiguous. Targeting the h3 keeps the click on the post
   // list independent of auto-selection state.
-  await alice.getByRole('heading', { level: 3, name: 'Test Fixture Post (actor-owned)' }).click();
+  await alice
+    .getByRole('heading', { level: 3, name: 'Test Fixture Post (testuser-owned)' })
+    .click();
 
   await expect(posts.authorAvatar(alice)).toBeVisible({ timeout: 10000 });
   await posts.authorAvatar(alice).click();

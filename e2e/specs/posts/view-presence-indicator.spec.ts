@@ -1,8 +1,8 @@
 import { test, expect } from '../../fixtures/reset.js';
 import { posts } from '../../fixtures/selectors/posts.js';
 
-// Pinned seed UUID — actor-owned public snippet "Test Fixture Post
-// (actor-owned)". PresenceIndicator is mounted on PostViewPage.vue:134
+// Pinned seed UUID — testuser-owned public snippet "Test Fixture Post
+// (testuser-owned)". PresenceIndicator is mounted on PostViewPage.vue:134
 // and renders a `presence-avatar` testid for each viewer returned by the
 // `usePresence` composable.
 const PUBLIC_POST_ID = 'c0000000-0000-0000-0000-000000000099';

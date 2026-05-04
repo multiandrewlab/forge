@@ -2,7 +2,7 @@ import { test, expect } from '../../fixtures/reset.js';
 import { revisions } from '../../fixtures/selectors/revisions.js';
 
 test('revisions: history page lists all 3 seeded revisions newest-first', async ({ actor }) => {
-  // Seeded post c0000000-...-099 (actor-owned snippet) has 3 revisions per
+  // Seeded post c0000000-...-099 (testuser-owned snippet) has 3 revisions per
   // scripts/seed.sql:
   //   - rev 1: "Initial version"
   //   - rev 2: "Second revision — added export"
