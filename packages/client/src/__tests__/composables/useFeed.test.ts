@@ -270,6 +270,58 @@ describe('useFeed', () => {
       expect(store.posts[1].id).toBe('1');
     });
 
+    it('should NOT prepend post:new when filter is set (e.g., bookmarked)', () => {
+      const store = useFeedStore();
+      store.setPosts([mockPost]);
+      store.setFilter('bookmarked');
+
+      const newPost: PostWithAuthor = { ...mockPost, id: 'new-1' };
+      mockSubscribe.mockImplementation((_channel: string, handler: (event: unknown) => void) => {
+        handler({ type: 'post:new', channel: 'feed', data: newPost });
+        return vi.fn();
+      });
+
+      const { subscribeRealtime } = useFeed();
+      subscribeRealtime();
+
+      expect(store.posts).toHaveLength(1);
+      expect(store.posts[0].id).toBe('1');
+    });
+
+    it('should NOT prepend post:new when tag is set', () => {
+      const store = useFeedStore();
+      store.setPosts([mockPost]);
+      store.setTag('typescript');
+
+      const newPost: PostWithAuthor = { ...mockPost, id: 'new-1' };
+      mockSubscribe.mockImplementation((_channel: string, handler: (event: unknown) => void) => {
+        handler({ type: 'post:new', channel: 'feed', data: newPost });
+        return vi.fn();
+      });
+
+      const { subscribeRealtime } = useFeed();
+      subscribeRealtime();
+
+      expect(store.posts).toHaveLength(1);
+    });
+
+    it('should NOT prepend post:new when contentType is set', () => {
+      const store = useFeedStore();
+      store.setPosts([mockPost]);
+      store.setContentType('snippet');
+
+      const newPost: PostWithAuthor = { ...mockPost, id: 'new-1' };
+      mockSubscribe.mockImplementation((_channel: string, handler: (event: unknown) => void) => {
+        handler({ type: 'post:new', channel: 'feed', data: newPost });
+        return vi.fn();
+      });
+
+      const { subscribeRealtime } = useFeed();
+      subscribeRealtime();
+
+      expect(store.posts).toHaveLength(1);
+    });
+
     it('should handle post:updated by updating in place', () => {
       const store = useFeedStore();
       store.setPosts([mockPost]);
