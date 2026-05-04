@@ -30,8 +30,19 @@ test('revisions: clicking Save Revision creates a new revision with the current 
   await posts.newPostBody(actor).fill('manual revision body');
   // The Save Revision button POSTs the current body as a new revision with
   // an explicit "Manual revision" message. It bypasses the 2s body debounce
-  // and lands the snapshot immediately.
-  await posts.saveRevisionBtn(actor).click();
+  // and lands the snapshot immediately. Wait for the POST response before
+  // navigating to /history; otherwise the in-flight save races navigation
+  // and /history shows only rev 1 (visible as 1-vs-2 retry race when
+  // retries=0).
+  await Promise.all([
+    actor.waitForResponse(
+      (resp) =>
+        resp.url().includes(`/api/posts/${createdPostId}/revisions`) &&
+        resp.request().method() === 'POST' &&
+        resp.ok(),
+    ),
+    posts.saveRevisionBtn(actor).click(),
+  ]);
 
   await actor.goto(`/posts/${createdPostId}/history`);
   // Initial post-creation auto-creates revision 1; the manual button click
