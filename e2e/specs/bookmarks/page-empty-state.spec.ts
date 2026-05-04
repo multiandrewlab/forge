@@ -24,6 +24,9 @@ test('bookmarks: /bookmarks page shows empty-state when user has no bookmarks', 
   }
 
   await actor.goto('/bookmarks');
+  // Bookmarks page loads via async fetch; wait for the network to settle so the
+  // skeleton transitions to either empty-state or list before we assert.
+  await actor.waitForLoadState('networkidle');
   await expect(actor.getByTestId('empty-state')).toBeVisible();
   await expect(actor.getByTestId('empty-state-message')).toHaveText('No bookmarked posts yet');
 });
