@@ -39,10 +39,10 @@ type AuthFixtures = {
 
 export const test = base.extend<AuthFixtures>({
   actor: async ({ browser }, use, testInfo) => {
-    const idx = testInfo.workerIndex;
+    const idx = testInfo.parallelIndex;
     if (!Number.isInteger(idx) || idx < 0 || idx > 3) {
       throw new Error(
-        `[actor fixture] testInfo.workerIndex=${idx} is out of range [0,3]. ` +
+        `[actor fixture] testInfo.parallelIndex=${idx} is out of range [0,3]. ` +
           `If you need more parallelism, expand the e2e_w pool in scripts/seed.sql ` +
           `AND bump WORKER_USER_IDS in packages/server/src/routes/__test__.ts ` +
           `AND bump the workers: setting in e2e/playwright.config.ts.`,

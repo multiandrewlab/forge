@@ -8,7 +8,7 @@ test('login with wrong password shows the invalid-credentials error', async ({
   const ctx = await browser.newContext();
   const page = await ctx.newPage();
   await page.goto('/login');
-  await auth.loginEmail(page).fill(`e2e_w${testInfo.workerIndex}@example.com`);
+  await auth.loginEmail(page).fill(`e2e_w${testInfo.parallelIndex}@example.com`);
   await auth.loginPassword(page).fill('wrong-password');
   await auth.loginSubmit(page).click();
   // Server returns 401 with literal text 'Invalid email or password'

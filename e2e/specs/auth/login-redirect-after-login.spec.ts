@@ -14,7 +14,7 @@ test('login honours the ?redirect= query param after successful auth', async ({
   // Wait for the router guard to land us on the login page with the redirect
   // query param preserved — this is the load-bearing precondition.
   await expect(page).toHaveURL('/login?redirect=/posts/new');
-  await auth.loginEmail(page).fill(`e2e_w${testInfo.workerIndex}@example.com`);
+  await auth.loginEmail(page).fill(`e2e_w${testInfo.parallelIndex}@example.com`);
   await auth.loginPassword(page).fill('password123');
   await auth.loginSubmit(page).click();
   await expect(page).toHaveURL('/posts/new');

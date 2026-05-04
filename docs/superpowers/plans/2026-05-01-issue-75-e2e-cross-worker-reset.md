@@ -4,7 +4,7 @@
 
 **Goal:** Eliminate cross-worker reset contention in the Playwright e2e suite at `workers=4`, allowing `retries: 0` to ship green across 5 consecutive CI runs.
 
-**Architecture:** Per-worker user pool (`e2e_w0..3`) seeded in `scripts/seed.sql`. The `__test__/reset` endpoint gains a worker-scoped branch (header `X-E2E-Worker-Id`) that runs 5 user-scoped DELETEs in a single Postgres transaction (via the existing `withTransaction` helper). Spec fixtures rename `testuser` → `actor`, with `actor` resolving per-worker via `testInfo.workerIndex`. Legacy global-TRUNCATE path preserved for Bruno + manual reset.
+**Architecture:** Per-worker user pool (`e2e_w0..3`) seeded in `scripts/seed.sql`. The `__test__/reset` endpoint gains a worker-scoped branch (header `X-E2E-Worker-Id`) that runs 5 user-scoped DELETEs in a single Postgres transaction (via the existing `withTransaction` helper). Spec fixtures rename `testuser` → `actor`, with `actor` resolving per-worker via `testInfo.parallelIndex`. Legacy global-TRUNCATE path preserved for Bruno + manual reset.
 
 **Tech Stack:** TypeScript (strict, ESM), Fastify (server), Playwright (e2e), Postgres + node-postgres, Vitest (unit), Bruno (API regression).
 
@@ -26,7 +26,7 @@
 | `packages/server/src/__tests__/db/cascade-contract.test.ts` | Create | Static-analysis test pinning FK `ON DELETE` rules                        |
 | `scripts/seed.sql`                                          | Modify | Add 4 worker user rows (`e2e_w0..3`)                                     |
 | `e2e/fixtures/auth.ts`                                      | Modify | Add `actor` fixture; remove `testuser` from `SEED_USERS` and fixture map |
-| `e2e/fixtures/reset.ts`                                     | Modify | Send `X-E2E-Worker-Id` header from `testInfo.workerIndex`                |
+| `e2e/fixtures/reset.ts`                                     | Modify | Send `X-E2E-Worker-Id` header from `testInfo.parallelIndex`              |
 | `e2e/support/global-setup.ts`                               | Modify | Loop over 6 users (`e2e_w0..3`, alice, carol) via `Promise.all`          |
 | `e2e/playwright.config.ts`                                  | Modify | `workers: 4`, `retries: 0`, strip iteration-1 comment block              |
 | `e2e/specs/**/*.spec.ts` (97 files)                         | Modify | Mechanical `{ testuser }` → `{ actor }` migration                        |
@@ -570,10 +570,10 @@ type AuthFixtures = {
 
 export const test = base.extend<AuthFixtures>({
   actor: async ({ browser }, use, testInfo) => {
-    const idx = testInfo.workerIndex;
+    const idx = testInfo.parallelIndex;
     if (!Number.isInteger(idx) || idx < 0 || idx > 3) {
       throw new Error(
-        `[actor fixture] testInfo.workerIndex=${idx} is out of range [0,3]. ` +
+        `[actor fixture] testInfo.parallelIndex=${idx} is out of range [0,3]. ` +
           `If you need more parallelism, expand the e2e_w pool in scripts/seed.sql ` +
           `AND bump WORKER_USER_IDS in packages/server/src/routes/__test__.ts ` +
           `AND bump the workers: setting in e2e/playwright.config.ts.`,
@@ -608,10 +608,10 @@ export { expect } from '@playwright/test';
 
 #### Step 4.2: Update `e2e/fixtures/reset.ts`
 
-- [ ] **Step 4.2.1: Send `X-E2E-Worker-Id` header from `testInfo.workerIndex`:**
+- [ ] **Step 4.2.1: Send `X-E2E-Worker-Id` header from `testInfo.parallelIndex`:**
 
 ```ts
-const workerId = String(testInfo.workerIndex);
+const workerId = String(testInfo.parallelIndex);
 const res = await ctx.post(`${API_BASE}/api/__test__/reset`, {
   headers: {
     'X-E2E-Secret': secret,
@@ -652,7 +652,7 @@ git add e2e/fixtures/auth.ts e2e/fixtures/reset.ts e2e/support/global-setup.ts
 git commit -m "feat(e2e): #75 add actor fixture + worker-scoped reset header
 
 Replaces the shared 'testuser' Page fixture with a worker-aware 'actor'
-fixture that resolves to e2e_w\${testInfo.workerIndex}. The reset
+fixture that resolves to e2e_w\${testInfo.parallelIndex}. The reset
 fixture sends X-E2E-Worker-Id so the server's worker-scoped path runs.
 globalSetup parallelized via Promise.all across 6 users.
 
@@ -778,24 +778,24 @@ Expected hit count: 6. If the grep returns more, treat each new hit as a hand-to
 
 ```ts
 // test('...', async ({ page }, testInfo) => { ... })
-const workerEmail = `e2e_w${testInfo.workerIndex}@example.com`;
+const workerEmail = `e2e_w${testInfo.parallelIndex}@example.com`;
 await auth.loginEmail(page).fill(workerEmail);
 ```
 
-- [ ] **Step 7.3: Fix `e2e/specs/auth/login-success.spec.ts:10`** — replace `actor@example.com` with `e2e_w${testInfo.workerIndex}@example.com`. Add `testInfo` to the test signature if missing.
+- [ ] **Step 7.3: Fix `e2e/specs/auth/login-success.spec.ts:10`** — replace `actor@example.com` with `e2e_w${testInfo.parallelIndex}@example.com`. Add `testInfo` to the test signature if missing.
 
 - [ ] **Step 7.4: Fix `e2e/specs/auth/login-wrong-password.spec.ts:9`** — same pattern. The test asserts wrong-password rejection; using the worker's user email keeps the assertion intact (a worker-owned user must exist to be rejected for wrong password).
 
 - [ ] **Step 7.5: Fix `e2e/specs/auth/login-redirect-after-login.spec.ts:15`** — same pattern.
 
 - [ ] **Step 7.6: Fix `e2e/specs/auth/register-duplicate-email.spec.ts`** (TWO sites in one file):
-  - **Line 22**: replace `actor@example.com` with `e2e_w${testInfo.workerIndex}@example.com`. Semantic: the test asserts "registering an email that already exists fails." Each worker's seeded user IS already in `users` post-seed, so re-registering the worker email is a duplicate — preserves the test's intent.
+  - **Line 22**: replace `actor@example.com` with `e2e_w${testInfo.parallelIndex}@example.com`. Semantic: the test asserts "registering an email that already exists fails." Each worker's seeded user IS already in `users` post-seed, so re-registering the worker email is a duplicate — preserves the test's intent.
   - **Line 11 (comment)**: update the comment from `// testuser@example.com is pinned in scripts/seed.sql and therefore exists` → `// e2e_w${N}@example.com is pinned in scripts/seed.sql per the per-worker pool and therefore exists`.
 
 - [ ] **Step 7.7: Fix `e2e/specs/bookmarks/persists-across-sessions.spec.ts:48`:**
 
 ```ts
-const workerUser = `e2e_w${testInfo.workerIndex}` as const;
+const workerUser = `e2e_w${testInfo.parallelIndex}` as const;
 const ctx = await browser.newContext({ storageState: storageStatePath(workerUser) });
 ```
 
@@ -841,7 +841,7 @@ git commit -m "fix(e2e): #75 restore six specs that hardcode the worker user ide
 The mechanical sed in the previous commit converted testuser@example.com
 literals into actor@example.com — wrong, since 'actor' is a fixture
 name not an email. Hand-touch each: derive the email from
-testInfo.workerIndex so each worker logs in as its own seeded user.
+testInfo.parallelIndex so each worker logs in as its own seeded user.
 register-duplicate-email retains its 'duplicate-email rejection'
 semantic — the worker's user IS already in the seed, so re-registering
 the worker email is a duplicate."
@@ -1141,7 +1141,7 @@ To raise `workers:`:
 3. Bump `workers:` in `e2e/playwright.config.ts`.
 4. Bump the validation range in the `actor` fixture (`e2e/fixtures/auth.ts`).
 
-The `actor` fixture throws with an explicit error message if `testInfo.workerIndex` exceeds the configured pool size.
+The `actor` fixture throws with an explicit error message if `testInfo.parallelIndex` exceeds the configured pool size.
 ```
 
 - [ ] **Step 12.2: Update the "Bruno API Tests > Seeded fixtures" table.** Add e2e_w0..3 entries and clarify testuser is Bruno-only:

@@ -20,7 +20,7 @@ test(
     const page = await ctx.newPage();
 
     await page.goto('/register');
-    await auth.registerEmail(page).fill(`e2e_w${testInfo.workerIndex}@example.com`);
+    await auth.registerEmail(page).fill(`e2e_w${testInfo.parallelIndex}@example.com`);
     await auth.registerName(page).fill('Duplicate Email User');
     await auth.registerPassword(page).fill('password123');
     await auth.registerConfirmPassword(page).fill('password123');

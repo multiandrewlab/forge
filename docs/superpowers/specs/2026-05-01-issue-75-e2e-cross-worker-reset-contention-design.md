@@ -301,7 +301,7 @@ export const SEED_USERS = {
 } as const;
 
 type AuthFixtures = {
-  actor: Page; // worker-aware: returns Page logged in as e2e_w${testInfo.workerIndex}
+  actor: Page; // worker-aware: returns Page logged in as e2e_w${testInfo.parallelIndex}
   alice: Page; // unchanged
   carol: Page; // unchanged
 };
@@ -309,14 +309,14 @@ type AuthFixtures = {
 
 `testuser` is removed from `AuthFixtures` AND from `SEED_USERS` (the e2e fixture surface). The seeded `testuser` row remains in `scripts/seed.sql` for Bruno regression tests — Bruno reads its own credentials from `bruno/environments/local.bru`, not from `e2e/fixtures/auth.ts`. Removing testuser from `SEED_USERS` prevents a future contributor from importing it and re-introducing the contention by mistake.
 
-The `actor` fixture is implemented per-test using Playwright's `testInfo.workerIndex`:
+The `actor` fixture is implemented per-test using Playwright's `testInfo.parallelIndex`:
 
 ```ts
 actor: async ({ browser }, use, testInfo) => {
-  const idx = testInfo.workerIndex;
+  const idx = testInfo.parallelIndex;
   if (!Number.isInteger(idx) || idx < 0 || idx > 3) {
     throw new Error(
-      `[actor fixture] testInfo.workerIndex=${idx} is out of range [0,3]. ` +
+      `[actor fixture] testInfo.parallelIndex=${idx} is out of range [0,3]. ` +
       `If you need more parallelism, expand the e2e_w pool in scripts/seed.sql ` +
       `and bump WORKER_USER_IDS in __test__.ts.`,
     );
@@ -340,10 +340,10 @@ The fixture name `actor` reflects intent — "the test's primary user, not a spe
 
 ### E2E reset fixture: `e2e/fixtures/reset.ts`
 
-The auto-fixture sends `X-E2E-Worker-Id` derived from `testInfo.workerIndex` (Playwright sets this 0..N-1):
+The auto-fixture sends `X-E2E-Worker-Id` derived from `testInfo.parallelIndex` (Playwright sets this 0..N-1):
 
 ```ts
-const workerId = String(testInfo.workerIndex);
+const workerId = String(testInfo.parallelIndex);
 const res = await ctx.post(`${API_BASE}/api/__test__/reset`, {
   headers: {
     'X-E2E-Secret': secret,
@@ -384,9 +384,9 @@ Parallelizing keeps globalSetup wall-clock time roughly constant vs today's 3-us
 
 **Hand-touch specs (hardcoded `testuser` strings):**
 
-- `e2e/specs/_journey.spec.ts:57` — hardcodes `testuser@example.com` in a fresh-login test. Replace with `e2e_w${testInfo.workerIndex}@example.com`.
-- `e2e/specs/auth/login-success.spec.ts:10` — hardcodes `testuser@example.com` as a login credential in a non-fixture context. Replace with `e2e_w${testInfo.workerIndex}@example.com`.
-- `e2e/specs/bookmarks/persists-across-sessions.spec.ts:48` — hardcodes `storageStatePath('testuser')`. Replace with `storageStatePath(\`e2e_w${testInfo.workerIndex}\`)`(cast as`AuthUser` if needed).
+- `e2e/specs/_journey.spec.ts:57` — hardcodes `testuser@example.com` in a fresh-login test. Replace with `e2e_w${testInfo.parallelIndex}@example.com`.
+- `e2e/specs/auth/login-success.spec.ts:10` — hardcodes `testuser@example.com` as a login credential in a non-fixture context. Replace with `e2e_w${testInfo.parallelIndex}@example.com`.
+- `e2e/specs/bookmarks/persists-across-sessions.spec.ts:48` — hardcodes `storageStatePath('testuser')`. Replace with `storageStatePath(\`e2e_w${testInfo.parallelIndex}\`)`(cast as`AuthUser` if needed).
 - A grep across all 115 specs (`grep -rn "['\"]testuser" e2e/specs`) is required during implementation to catch any other hardcoded literals before the PR opens. The implementation work unit lists this grep as a verification step.
 
 **Comment + test-name migration — scope bounded:** The fixture rename leaves comments and `test('...')` titles that reference "testuser" by name. To keep this PR's diff focused on functional changes, the rewrite is **bounded to the cases where the original text became semantically wrong**, not all surviving references:
@@ -438,7 +438,7 @@ Worker N starts test
   │
   ▼
 fixture: actor (worker-aware Page)
-  │   - read testInfo.workerIndex = N
+  │   - read testInfo.parallelIndex = N
   │   - load storageState from e2e_wN.json
   │   - testInfo.annotations.push({ type: 'actor', description: 'e2e_wN' })
   │

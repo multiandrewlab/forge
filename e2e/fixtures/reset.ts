@@ -35,7 +35,7 @@ export const test = authTest.extend<ResetFixtures>({
         }
         const ctx = await plainRequest.newContext();
         try {
-          const workerId = String(testInfo.workerIndex);
+          const workerId = String(testInfo.parallelIndex);
           const res = await ctx.post(`${API_BASE}/api/__test__/reset`, {
             headers: {
               'X-E2E-Secret': secret,

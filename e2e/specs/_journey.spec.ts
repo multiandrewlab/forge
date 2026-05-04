@@ -54,7 +54,7 @@ test.describe.serial('Phase 1 — auth: register, login, logout, relogin', () =>
     const ctx = await browser.newContext(); // anonymous
     const page = await ctx.newPage();
     await page.goto('/login');
-    await auth.loginEmail(page).fill(`e2e_w${testInfo.workerIndex}@example.com`);
+    await auth.loginEmail(page).fill(`e2e_w${testInfo.parallelIndex}@example.com`);
     await auth.loginPassword(page).fill('password123');
     await auth.loginSubmit(page).click();
     await expect(page).toHaveURL('/');

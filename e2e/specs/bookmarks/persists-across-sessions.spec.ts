@@ -45,7 +45,7 @@ test('bookmarks: persist across sessions (close context, reopen)', async ({
   // fresh page load on /posts/:id can't reflect persisted state in the
   // bookmark icon. The /bookmarks page round-trips through the server, so
   // it's the faithful UI surface for "bookmark survived the context close".
-  const workerUser = `e2e_w${testInfo.workerIndex}` as AuthUser;
+  const workerUser = `e2e_w${testInfo.parallelIndex}` as AuthUser;
   const ctx = await browser.newContext({ storageState: storageStatePath(workerUser) });
   const page = await ctx.newPage();
   await page.goto('/bookmarks');
