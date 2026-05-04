@@ -1,6 +1,6 @@
 # TEMPORARY: pre-merge verification for issue #75. Removed when tracking
 # issue #43's green-run counter reaches 14 consecutive green main runs at
-# workers=4, retries=0. Removal tracked in <FOLLOW_UP_ISSUE> (filed at
+# workers=4, retries=0. Removal tracked in #80 (filed at
 # this PR's creation time).
 #
 # Calls .github/workflows/e2e-playwright.yml 5 times sequentially via
