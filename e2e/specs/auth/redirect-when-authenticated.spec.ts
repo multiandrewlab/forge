@@ -6,12 +6,12 @@ import { test, expect } from '../../fixtures/reset.js';
 // case (/login) and the AccountLinkPage case the originating issue
 // specifically called out (/auth/link).
 
-test('navigating to /login while authenticated redirects to /', async ({ testuser }) => {
-  await testuser.goto('/login');
-  await expect(testuser).toHaveURL('/');
+test('navigating to /login while authenticated redirects to /', async ({ actor }) => {
+  await actor.goto('/login');
+  await expect(actor).toHaveURL('/');
 });
 
-test('navigating to /auth/link while authenticated redirects to /', async ({ testuser }) => {
-  await testuser.goto('/auth/link');
-  await expect(testuser).toHaveURL('/');
+test('navigating to /auth/link while authenticated redirects to /', async ({ actor }) => {
+  await actor.goto('/auth/link');
+  await expect(actor).toHaveURL('/');
 });

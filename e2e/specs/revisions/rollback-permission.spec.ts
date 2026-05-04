@@ -2,7 +2,7 @@ import { test, expect } from '../../fixtures/reset.js';
 import { revisions } from '../../fixtures/selectors/revisions.js';
 
 test('rollback: alice cannot restore a revision on testuser-owned post', async ({ alice }) => {
-  // Seeded post c0000000-...-099 is owned by testuser and has 3 revisions
+  // Seeded post c0000000-...-099 is owned by actor and has 3 revisions
   // (scripts/seed.sql:79-81). Alice can browse the history page (revisions are
   // publicly readable per posts.ts:558) but cannot trigger a restore: the
   // server-side endpoint requires authenticated ownership (posts.ts:594), and

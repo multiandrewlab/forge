@@ -24,7 +24,7 @@ import { langchainPlugin } from './plugins/langchain/index.js';
 import { findStaleStagedFiles, deleteStagedFilesByIds } from './db/queries/post-files.js';
 import { registerTestRoutes } from './routes/__test__.js';
 import { isE2EFlagSet } from './lib/env-guards.js';
-import { query } from './db/connection.js';
+import { query, withTransaction } from './db/connection.js';
 
 export async function buildApp() {
   const app = Fastify({
@@ -110,6 +110,7 @@ export async function buildApp() {
       pgQuery: async (sql) => {
         await query(sql);
       },
+      pgTransaction: withTransaction,
     });
   }
 

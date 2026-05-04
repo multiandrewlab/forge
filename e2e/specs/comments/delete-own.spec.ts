@@ -1,13 +1,13 @@
 import { test, expect } from '../../fixtures/reset.js';
 import { comments } from '../../fixtures/selectors/comments.js';
 
-test('comments: delete own — testuser deletes their comment via UI', async ({ testuser }) => {
-  const refresh = await testuser.request.post('/api/auth/refresh');
+test('comments: delete own — actor deletes their comment via UI', async ({ actor }) => {
+  const refresh = await actor.request.post('/api/auth/refresh');
   expect(refresh.ok()).toBe(true);
   const { accessToken } = (await refresh.json()) as { accessToken: string };
   const auth = { Authorization: `Bearer ${accessToken}` };
 
-  const post = await testuser.request.post('/api/posts', {
+  const post = await actor.request.post('/api/posts', {
     headers: auth,
     data: {
       title: 'Delete-own seed',
@@ -22,7 +22,7 @@ test('comments: delete own — testuser deletes their comment via UI', async ({ 
   const {
     post: { id: postId },
   } = (await post.json()) as { post: { id: string } };
-  const comment = await testuser.request.post(`/api/posts/${postId}/comments`, {
+  const comment = await actor.request.post(`/api/posts/${postId}/comments`, {
     headers: auth,
     data: { body: 'doomed' },
   });
@@ -31,8 +31,8 @@ test('comments: delete own — testuser deletes their comment via UI', async ({ 
     comment: { id: commentId },
   } = (await comment.json()) as { comment: { id: string } };
 
-  await testuser.goto(`/posts/${postId}`);
-  await expect(comments.bodyOf(testuser, commentId)).toHaveText('doomed');
-  await comments.deleteBtnOf(testuser, commentId).click();
-  await expect(comments.item(testuser, commentId)).toHaveCount(0);
+  await actor.goto(`/posts/${postId}`);
+  await expect(comments.bodyOf(actor, commentId)).toHaveText('doomed');
+  await comments.deleteBtnOf(actor, commentId).click();
+  await expect(comments.item(actor, commentId)).toHaveCount(0);
 });

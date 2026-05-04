@@ -1,15 +1,13 @@
 import { test, expect } from '../../fixtures/reset.js';
 import { withMockScript } from '../../fixtures/mock-llm.js';
 
-test('playground: API call with empty required vars returns structured 400', async ({
-  testuser,
-}) => {
-  await withMockScript(testuser, 'default');
+test('playground: API call with empty required vars returns structured 400', async ({ actor }) => {
+  await withMockScript(actor, 'default');
 
-  const refresh = await testuser.request.post('/api/auth/refresh');
+  const refresh = await actor.request.post('/api/auth/refresh');
   const { accessToken } = await refresh.json();
 
-  const res = await testuser.request.post('/api/playground/run', {
+  const res = await actor.request.post('/api/playground/run', {
     headers: { Authorization: `Bearer ${accessToken}`, 'X-Mock-Script': 'default' },
     data: {
       postId: 'c0000000-0000-0000-0000-000000000050', // required-var fixture

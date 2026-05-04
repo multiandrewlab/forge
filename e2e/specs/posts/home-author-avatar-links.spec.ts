@@ -1,9 +1,9 @@
 import { test, expect } from '../../fixtures/reset.js';
 import { posts } from '../../fixtures/selectors/posts.js';
 
-// Pinned seed UUID — testuser is the author of the seeded "Test Fixture Post
+// Pinned seed UUID — actor is the author of the seeded "Test Fixture Post
 // (testuser-owned)" snippet, so clicking the inline author-avatar from
-// HomePage's right pane should navigate alice to /user/<testuser-id>.
+// HomePage's right pane should navigate alice to /user/<actor-id>.
 const TESTUSER_ID = 'a0000000-0000-0000-0000-000000000099';
 
 // The author-avatar element lives inside PostMetaHeader.vue, which is rendered

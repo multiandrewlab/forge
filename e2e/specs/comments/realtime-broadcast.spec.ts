@@ -1,14 +1,14 @@
 import { test, expect } from '../../fixtures/reset.js';
 import { comments } from '../../fixtures/selectors/comments.js';
 
-test("comments: testuser sees alice's new comment via websocket broadcast", async ({
-  testuser,
+test("comments: actor sees alice's new comment via websocket broadcast", async ({
+  actor,
   alice,
 }) => {
   const cheatsheetId = 'c0000000-0000-0000-0000-000000000001';
 
   // Both load the post-view page
-  await testuser.goto(`/posts/${cheatsheetId}`);
+  await actor.goto(`/posts/${cheatsheetId}`);
   await alice.goto(`/posts/${cheatsheetId}`);
 
   // Alice mints a token and posts a comment
@@ -24,6 +24,6 @@ test("comments: testuser sees alice's new comment via websocket broadcast", asyn
   // rather than waiting 10s for a websocket update that will never arrive.
   expect(created.ok()).toBe(true);
 
-  // testuser's page should pick up the broadcast within 10s
-  await expect(comments.section(testuser)).toContainText(broadcastBody, { timeout: 10_000 });
+  // actor's page should pick up the broadcast within 10s
+  await expect(comments.section(actor)).toContainText(broadcastBody, { timeout: 10_000 });
 });

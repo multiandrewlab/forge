@@ -29,7 +29,6 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
   const secret = readE2ESecret();
   process.env.E2E_SECRET = secret;
   await startupProbe(API_BASE, secret);
-  for (const user of ['testuser', 'alice', 'carol'] as const) {
-    await loginAndSave(user);
-  }
+  const users: AuthUser[] = ['e2e_w0', 'e2e_w1', 'e2e_w2', 'e2e_w3', 'alice', 'carol'];
+  await Promise.all(users.map(loginAndSave));
 }

@@ -8,10 +8,13 @@ import { attachE2EInitScript } from './init-script.js';
 // Derive it from import.meta.url for ESM compatibility.
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-export type AuthUser = 'testuser' | 'alice' | 'carol';
+export type AuthUser = 'e2e_w0' | 'e2e_w1' | 'e2e_w2' | 'e2e_w3' | 'alice' | 'carol';
 
 export const SEED_USERS = {
-  testuser: { email: 'testuser@example.com', password: 'password123' },
+  e2e_w0: { email: 'e2e_w0@example.com', password: 'password123' },
+  e2e_w1: { email: 'e2e_w1@example.com', password: 'password123' },
+  e2e_w2: { email: 'e2e_w2@example.com', password: 'password123' },
+  e2e_w3: { email: 'e2e_w3@example.com', password: 'password123' },
   alice: { email: 'alice@example.com', password: 'password123' },
   carol: { email: 'carol@example.com', password: 'password123' },
 } as const;
@@ -29,14 +32,25 @@ export function storageStatePath(user: AuthUser): string {
 }
 
 type AuthFixtures = {
-  testuser: Page;
+  actor: Page;
   alice: Page;
   carol: Page;
 };
 
 export const test = base.extend<AuthFixtures>({
-  testuser: async ({ browser }, use) => {
-    const ctx = await browser.newContext({ storageState: storageStatePath('testuser') });
+  actor: async ({ browser }, use, testInfo) => {
+    const idx = testInfo.parallelIndex;
+    if (!Number.isInteger(idx) || idx < 0 || idx > 3) {
+      throw new Error(
+        `[actor fixture] testInfo.parallelIndex=${idx} is out of range [0,3]. ` +
+          `If you need more parallelism, expand the e2e_w pool in scripts/seed.sql ` +
+          `AND bump WORKER_USER_IDS in packages/server/src/routes/__test__.ts ` +
+          `AND bump the workers: setting in e2e/playwright.config.ts.`,
+      );
+    }
+    const user = `e2e_w${idx}` as 'e2e_w0' | 'e2e_w1' | 'e2e_w2' | 'e2e_w3';
+    testInfo.annotations.push({ type: 'actor', description: user });
+    const ctx = await browser.newContext({ storageState: storageStatePath(user) });
     const page = await ctx.newPage();
     await attachE2EInitScript(page);
     await use(page);

@@ -1,0 +1,29 @@
+# TEMPORARY: pre-merge verification for issue #75. Removed when tracking
+# issue #43's green-run counter reaches 14 consecutive green main runs at
+# workers=4, retries=0. Removal tracked in #80 (filed at
+# this PR's creation time).
+#
+# Calls .github/workflows/e2e-playwright.yml 5 times sequentially via
+# `needs:` chaining. Each iteration is a fresh job (clean env per run);
+# any failure aborts the chain immediately.
+
+name: e2e-burst (#75 verification)
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  iteration-1:
+    uses: ./.github/workflows/e2e-playwright.yml
+  iteration-2:
+    needs: iteration-1
+    uses: ./.github/workflows/e2e-playwright.yml
+  iteration-3:
+    needs: iteration-2
+    uses: ./.github/workflows/e2e-playwright.yml
+  iteration-4:
+    needs: iteration-3
+    uses: ./.github/workflows/e2e-playwright.yml
+  iteration-5:
+    needs: iteration-4
+    uses: ./.github/workflows/e2e-playwright.yml

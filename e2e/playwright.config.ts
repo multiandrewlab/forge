@@ -8,15 +8,9 @@ export default defineConfig({
   // Within a worker, specs run sequentially. Cross-worker isolation is held by
   // the Postgres advisory lock inside /api/__test__/reset (see foundation #44).
   fullyParallel: false,
-  workers: process.env.CI ? 4 : undefined,
+  workers: 4,
   forbidOnly: !!process.env.CI,
-  // Issue #67 partially addressed: E2E_MODE rate-limit branches added on
-  // /refresh + /files. But reset-window contention at workers=4 still
-  // produces "page closed" / "URL did not change after delete" flakes on
-  // delete-cascade, delete-confirms, edit-cancel-reverts. Keeping the
-  // retries: 1 band-aid in CI until the deeper contention is fixed
-  // (deferred to a follow-up issue beyond #67's rate-limit scope).
-  retries: process.env.CI ? 1 : 0,
+  retries: 0,
   reporter: [['html', { open: 'never' }], ['list'], ['github']],
   globalSetup: './support/global-setup.ts',
   globalTeardown: './support/global-teardown.ts',

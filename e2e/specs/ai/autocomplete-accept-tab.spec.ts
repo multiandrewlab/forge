@@ -11,24 +11,24 @@ async function openEditorOnNewPost(page: Page): Promise<void> {
   await page.locator('.cm-content').first().click();
 }
 
-test('ai: Tab key inserts the suggested text', async ({ testuser }) => {
-  await withMockScript(testuser, 'autocomplete-typescript-react');
-  await openEditorOnNewPost(testuser);
-  await testuser.keyboard.type('export function ');
-  await expect(ai.autocompleteSuggestion(testuser)).toBeVisible();
+test('ai: Tab key inserts the suggested text', async ({ actor }) => {
+  await withMockScript(actor, 'autocomplete-typescript-react');
+  await openEditorOnNewPost(actor);
+  await actor.keyboard.type('export function ');
+  await expect(ai.autocompleteSuggestion(actor)).toBeVisible();
   // Capture the suggestion text the user is about to accept.
-  const ghostText = (await ai.autocompleteSuggestion(testuser).textContent()) ?? '';
+  const ghostText = (await ai.autocompleteSuggestion(actor).textContent()) ?? '';
   expect(ghostText.trim().length).toBeGreaterThan(0);
 
-  await testuser.keyboard.press('Tab');
+  await actor.keyboard.press('Tab');
   // After Tab, the ghost is cleared (either via accept or via doc-change-clears-ghost
   // logic in ghost-text.ts). The suggestion DOM is removed.
-  await expect(ai.autocompleteSuggestion(testuser)).toHaveCount(0);
+  await expect(ai.autocompleteSuggestion(actor)).toHaveCount(0);
 
   // Verify the editor's actual document text contains the original typed prefix
   // plus the first chars of the accepted suggestion. Using `.cm-line` excludes the
   // ghost widget DOM (which lives outside .cm-line in the inline-widget decoration).
-  const lineText = (await testuser.locator('.cm-line').first().textContent()) ?? '';
+  const lineText = (await actor.locator('.cm-line').first().textContent()) ?? '';
   // Pre-typed text must survive acceptance — guards against regressions where Tab
   // replaces the original typed prefix with the suggestion alone.
   expect(lineText).toContain('export function ');

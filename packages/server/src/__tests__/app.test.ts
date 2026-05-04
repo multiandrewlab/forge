@@ -281,6 +281,10 @@ describe('app — test routes', () => {
 
     vi.doMock('../db/connection.js', () => ({
       query: vi.fn().mockResolvedValue({ rows: [] }),
+      // app.ts imports withTransaction for the worker-scoped reset path; the
+      // legacy pgQuery test below does not exercise the worker-scoped branch
+      // but the import must still resolve, so a no-op mock is sufficient.
+      withTransaction: vi.fn(),
     }));
 
     const { buildApp: buildAppFresh } = await import('../app.js');

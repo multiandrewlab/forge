@@ -112,12 +112,19 @@ export function useFeed() {
 
     return subscribe('feed', (event: ServerMessage) => {
       switch (event.type) {
-        case 'post:new':
-          // Prepend new post to the feed list.
-          // The store has `setPosts` and `appendPosts` but no `prependPost`,
-          // so we construct the new array directly via setPosts.
+        case 'post:new': {
+          // Prepend new post to the feed list, but only on the default
+          // (unfiltered) feed. For 'bookmarked', 'mine', 'subscribed', or
+          // tag/contentType-filtered views, server-side membership cannot
+          // be safely inferred from the post payload alone, so skip the
+          // optimistic prepend — a stranger's public post must not appear
+          // on the current user's /bookmarks page.
+          if (store.filter || store.tag || store.contentType) {
+            break;
+          }
           store.setPosts([event.data as PostWithAuthor, ...store.posts]);
           break;
+        }
         case 'post:updated': {
           // Update the post in-place if it exists in the current feed list.
           const updated = event.data as PostWithAuthor;
