@@ -10,7 +10,7 @@ const FIX = join(__dirname, '..', '..', 'fixtures', 'files', 'sample.json');
 // Tombstone for the missing download-as-attachment user flow. The DoD for
 // #51 lists "download" as a distinct scenario, but no UI affordance exists
 // in the codebase as of issue #51 implementation. See follow-up issue
-// #<FILED_IN_TASK_13_STEP_8> for the implementation tracking.
+// #83 for the implementation tracking.
 test.fixme('download: a user-visible download affordance triggers a file download', async ({
   actor,
 }, testInfo) => {
