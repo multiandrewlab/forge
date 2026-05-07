@@ -1,6 +1,6 @@
 <!-- packages/client/src/layouts/AppLayout.vue -->
 <template>
-  <div class="flex h-screen flex-col bg-surface text-gray-200">
+  <div data-testid="app-layout" class="flex h-screen flex-col bg-surface text-gray-200">
     <TheTopBar :sidebar-collapsed="sidebarCollapsed" @toggle-sidebar="handleToggleSidebar" />
     <div class="flex flex-1 overflow-hidden">
       <TheSidebar
@@ -13,6 +13,7 @@
       </main>
     </div>
     <TheSearchModal />
+    <ErrorToast />
   </div>
 </template>
 
@@ -27,6 +28,7 @@ import { useFeed } from '../composables/useFeed.js';
 import TheSidebar from '../components/shell/TheSidebar.vue';
 import TheTopBar from '../components/shell/TheTopBar.vue';
 import TheSearchModal from '../components/shell/TheSearchModal.vue';
+import ErrorToast from '../components/feedback/ErrorToast.vue';
 
 const uiStore = useUiStore();
 const { sidebarCollapsed } = storeToRefs(uiStore);
