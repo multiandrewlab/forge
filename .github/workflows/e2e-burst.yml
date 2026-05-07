@@ -12,6 +12,16 @@ name: e2e-burst (#75 verification)
 on:
   workflow_dispatch: {}
 
+# The reusable e2e-playwright.yml declares job-level permissions
+# (issues:write + pull-requests:write for its PR-comment step on PR runs).
+# On workflow_dispatch that comment step is a no-op, but GitHub Actions still
+# validates the called workflow's permissions against the caller's grants —
+# without an explicit caller permissions block, the call fails at startup.
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
 jobs:
   iteration-1:
     uses: ./.github/workflows/e2e-playwright.yml
