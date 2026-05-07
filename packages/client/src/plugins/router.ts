@@ -81,6 +81,12 @@ const router = createRouter({
           name: 'user-profile',
           component: () => import('@/pages/UserProfilePage.vue'),
         },
+        {
+          path: ':pathMatch(.*)*',
+          name: 'not-found',
+          component: () => import('@/pages/NotFoundPage.vue'),
+          meta: { requiresAuth: false },
+        },
       ],
     },
     // Login — wrapped in AuthLayout
