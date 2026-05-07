@@ -9,7 +9,9 @@
         @close-overlay="overlayOpen = false"
       />
       <main class="flex-1 overflow-hidden">
-        <RouterView />
+        <ErrorBoundary>
+          <RouterView />
+        </ErrorBoundary>
       </main>
     </div>
     <TheSearchModal />
@@ -29,6 +31,7 @@ import TheSidebar from '../components/shell/TheSidebar.vue';
 import TheTopBar from '../components/shell/TheTopBar.vue';
 import TheSearchModal from '../components/shell/TheSearchModal.vue';
 import ErrorToast from '../components/feedback/ErrorToast.vue';
+import ErrorBoundary from '../components/feedback/ErrorBoundary.vue';
 
 const uiStore = useUiStore();
 const { sidebarCollapsed } = storeToRefs(uiStore);
