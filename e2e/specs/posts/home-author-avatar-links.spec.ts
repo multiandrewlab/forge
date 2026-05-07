@@ -14,12 +14,20 @@ const TESTUSER_ID = 'a0000000-0000-0000-0000-000000000099';
 test('author-avatar: clicking the inline avatar navigates to user profile', async ({ alice }) => {
   await alice.goto('/');
 
-  // Click the list-item heading (h3) — the right-pane PostMetaHeader also
-  // renders the title as h1 once a post is auto-selected, so a plain
-  // getByText is ambiguous. Targeting the h3 keeps the click on the post
-  // list independent of auto-selection state.
+  // Click the testuser-owned tile specifically. Alice can fork the seeded
+  // testuser post (see `e2e/specs/posts/fork-creates-linked-copy.spec.ts`),
+  // and Alice's data is not in the worker-scoped reset's purview (only
+  // e2e_w0..3 users are reset between tests). At higher worker counts, those
+  // Alice forks accumulate as drafts whose title is verbatim "Test Fixture
+  // Post (testuser-owned)" — a strict-mode lookup by title alone resolves
+  // to multiple h3s. Scope to the post-list-item whose author link points
+  // at testuser, then click that tile's heading.
   await alice
-    .getByRole('heading', { level: 3, name: 'Test Fixture Post (testuser-owned)' })
+    .locator('[data-testid="post-list-item"]', {
+      has: alice.locator(`a[href="/user/${TESTUSER_ID}"]`),
+    })
+    .first()
+    .getByRole('heading', { level: 3 })
     .click();
 
   await expect(posts.authorAvatar(alice)).toBeVisible({ timeout: 10000 });
