@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { setActivePinia, createPinia } from 'pinia';
 import { useAuthStore } from '../../stores/auth.js';
+import { _resetForTesting } from '../../composables/useKeyboard.js';
 import type { Pinia } from 'pinia';
 import type { User } from '@forge/shared';
 
@@ -27,6 +28,16 @@ vi.mock('../../components/shell/TheSearchModal.vue', () => ({
   default: {
     name: 'TheSearchModal',
     template: '<div data-testid="search-modal"></div>',
+  },
+}));
+
+vi.mock('../../components/shell/KeyboardShortcutsHelp.vue', () => ({
+  default: {
+    name: 'KeyboardShortcutsHelp',
+    props: ['open'],
+    emits: ['close'],
+    template:
+      '<div data-testid="keyboard-shortcuts-help-mock" :data-open="open" @click="$emit(\'close\')"></div>',
   },
 }));
 
@@ -75,11 +86,16 @@ vi.mock('../../composables/useFeed.js', () => ({
 }));
 
 // --- Mock vue-router ---
+const mockRouterPush = vi.fn();
+
 vi.mock('vue-router', () => ({
   RouterView: {
     name: 'RouterView',
     template: '<div data-testid="router-view"></div>',
   },
+  useRouter: (): { push: typeof mockRouterPush } => ({
+    push: mockRouterPush,
+  }),
 }));
 
 import AppLayout from '../../layouts/AppLayout.vue';
@@ -108,9 +124,19 @@ describe('AppLayout', () => {
     mockSubscribeRealtime.mockClear();
     mockFeedCleanup.mockClear();
     mockWsSubscribe.mockClear();
+    mockRouterPush.mockClear();
+    _resetForTesting();
 
     // Provide a stable window.innerWidth for sidebar toggle logic
-    vi.stubGlobal('window', { innerWidth: 1024 });
+    Object.defineProperty(window, 'innerWidth', {
+      value: 1024,
+      writable: true,
+      configurable: true,
+    });
+  });
+
+  afterEach(() => {
+    _resetForTesting();
   });
 
   function mountLayout() {
@@ -227,7 +253,11 @@ describe('AppLayout', () => {
 
   describe('sidebar toggle', () => {
     it('should toggle sidebar on desktop (width >= 768)', async () => {
-      vi.stubGlobal('window', { innerWidth: 1024 });
+      Object.defineProperty(window, 'innerWidth', {
+        value: 1024,
+        writable: true,
+        configurable: true,
+      });
 
       const wrapper = mountLayout();
       const topbar = wrapper.findComponent({ name: 'TheTopBar' });
@@ -240,7 +270,11 @@ describe('AppLayout', () => {
     });
 
     it('should toggle overlay on mobile (width < 768)', async () => {
-      vi.stubGlobal('window', { innerWidth: 500 });
+      Object.defineProperty(window, 'innerWidth', {
+        value: 500,
+        writable: true,
+        configurable: true,
+      });
 
       const wrapper = mountLayout();
       const topbar = wrapper.findComponent({ name: 'TheTopBar' });
@@ -254,7 +288,11 @@ describe('AppLayout', () => {
     });
 
     it('should close overlay when sidebar emits close-overlay', async () => {
-      vi.stubGlobal('window', { innerWidth: 500 });
+      Object.defineProperty(window, 'innerWidth', {
+        value: 500,
+        writable: true,
+        configurable: true,
+      });
 
       const wrapper = mountLayout();
 
@@ -278,5 +316,50 @@ describe('AppLayout', () => {
   it('should render TheSearchModal', () => {
     const wrapper = mountLayout();
     expect(wrapper.find('[data-testid="search-modal"]').exists()).toBe(true);
+  });
+
+  describe('keyboard shortcuts', () => {
+    it('mounts KeyboardShortcutsHelp closed by default', () => {
+      const wrapper = mountLayout();
+      const help = wrapper.find('[data-testid="keyboard-shortcuts-help-mock"]');
+      expect(help.exists()).toBe(true);
+      expect(help.attributes('data-open')).toBe('false');
+    });
+
+    it('pressing "n" navigates to /posts/new', () => {
+      mountLayout();
+
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'n' }));
+
+      expect(mockRouterPush).toHaveBeenCalledWith('/posts/new');
+    });
+
+    it('pressing "?" opens the keyboard shortcuts help', async () => {
+      const wrapper = mountLayout();
+
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: '?' }));
+      await flushPromises();
+
+      const help = wrapper.find('[data-testid="keyboard-shortcuts-help-mock"]');
+      expect(help.attributes('data-open')).toBe('true');
+    });
+
+    it('emitting close from KeyboardShortcutsHelp closes the help', async () => {
+      const wrapper = mountLayout();
+
+      // Open the help first
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: '?' }));
+      await flushPromises();
+
+      let help = wrapper.find('[data-testid="keyboard-shortcuts-help-mock"]');
+      expect(help.attributes('data-open')).toBe('true');
+
+      // Click the mock fires the close emit
+      await help.trigger('click');
+      await flushPromises();
+
+      help = wrapper.find('[data-testid="keyboard-shortcuts-help-mock"]');
+      expect(help.attributes('data-open')).toBe('false');
+    });
   });
 });

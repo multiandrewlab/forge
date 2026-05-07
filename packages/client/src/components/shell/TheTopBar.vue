@@ -65,4 +65,5 @@ const searchStore = useSearchStore();
 const { register } = useKeyboard();
 
 register('mod+k', () => searchStore.open());
+register('/', () => searchStore.open());
 </script>
