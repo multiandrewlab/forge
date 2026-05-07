@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
 import { createRouter, createMemoryHistory } from 'vue-router';
 import { setActivePinia, createPinia } from 'pinia';
@@ -901,6 +901,78 @@ describe('PostViewPage', () => {
 
       // Even with no revision, postForActions must still resolve (uses ?? fallbacks).
       expect(wrapper.find('[data-testid="post-actions"]').exists()).toBe(true);
+    });
+  });
+
+  // E2E hook (issue #52, Task 14): a synchronous render-time throw at the top
+  // of <script setup> lets the ErrorBoundary spec exercise Vue's
+  // onErrorCaptured path without depending on a real upstream failure mode.
+  // The branch is gated on `window.__E2E__ === true` AND the URL query param
+  // `errorBoundaryTest=1` — neither condition is true in normal traffic, so
+  // real users never trip it.
+  describe('e2e error-boundary hook', () => {
+    type E2EWindow = Window & { __E2E__?: boolean };
+    const originalHref = window.location.href;
+
+    function setHref(href: string): void {
+      // jsdom only allows location mutation via assignment to `window.location`
+      // (read-only `href`); replace the descriptor so we can stub the URL.
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        writable: true,
+        value: new URL(href),
+      });
+    }
+
+    function restoreHref(): void {
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        writable: true,
+        value: new URL(originalHref),
+      });
+    }
+
+    afterEach(() => {
+      delete (window as E2EWindow).__E2E__;
+      restoreHref();
+    });
+
+    it('throws synchronously when __E2E__=true AND ?errorBoundaryTest=1', async () => {
+      (window as E2EWindow).__E2E__ = true;
+      setHref('http://localhost/posts/post-1?errorBoundaryTest=1');
+
+      // The throw happens at component setup; mount() rethrows it. Use a
+      // try/catch rather than rejects.toThrow because mount is sync but the
+      // setup throw bubbles out as a synchronous error here.
+      let captured: unknown = null;
+      try {
+        await mountPage();
+      } catch (err) {
+        captured = err;
+      }
+      expect(captured).toBeInstanceOf(Error);
+      expect((captured as Error).message).toBe('e2e: forced render error');
+    });
+
+    it('does NOT throw when __E2E__=true but query param is missing', async () => {
+      (window as E2EWindow).__E2E__ = true;
+      setHref('http://localhost/posts/post-1');
+      mockFetchPost.mockResolvedValue(undefined);
+
+      const wrapper = await mountPage();
+      await flushPromises();
+      // Mount succeeds — boundary code path not taken.
+      expect(wrapper.exists()).toBe(true);
+    });
+
+    it('does NOT throw when query param is present but __E2E__ is unset', async () => {
+      // __E2E__ left undefined (afterEach cleanup keeps it deleted)
+      setHref('http://localhost/posts/post-1?errorBoundaryTest=1');
+      mockFetchPost.mockResolvedValue(undefined);
+
+      const wrapper = await mountPage();
+      await flushPromises();
+      expect(wrapper.exists()).toBe(true);
     });
   });
 });

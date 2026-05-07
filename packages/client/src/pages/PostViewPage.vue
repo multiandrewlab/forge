@@ -1,6 +1,25 @@
 <script setup lang="ts">
+/* global window, URL */
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+
+// E2E hook: forces a synchronous render-time throw so the ErrorBoundary spec
+// (issue #52, Task 14) can exercise Vue's onErrorCaptured path without
+// depending on a real upstream failure mode (the post-fetch composable
+// swallows JSON-parse errors and surfaces them via `error`, which doesn't
+// trip the boundary). Gated on the E2E sentinel — `window.__E2E__` is set
+// only by Playwright's init-script (`e2e/fixtures/init-script.ts`), so real
+// users never hit this branch even when the query-string is forged. The
+// runtime check (vs. `import.meta.env.MODE`) is intentional: a build-time
+// constant gets dead-code-eliminated from the production bundle, defeating
+// preview-server E2E runs.
+if (
+  typeof window !== 'undefined' &&
+  (window as { __E2E__?: boolean }).__E2E__ === true &&
+  new URL(window.location.href).searchParams.get('errorBoundaryTest') === '1'
+) {
+  throw new Error('e2e: forced render error');
+}
 import CodeViewer from '@/components/post/CodeViewer.vue';
 import PresenceIndicator from '@/components/post/PresenceIndicator.vue';
 import PostActions from '@/components/post/PostActions.vue';
