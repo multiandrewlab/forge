@@ -23,6 +23,15 @@ export default tseslint.config(
     },
   },
   {
+    // Allow well-known single-word component names that match industry conventions
+    // (Vuetify, PrimeVue, Naive UI, MUI all expose `Breadcrumbs` under that exact
+    // name). Renaming to a 2-word local identifier would hide a familiar pattern.
+    files: ['**/components/feedback/Breadcrumbs.vue'],
+    rules: {
+      'vue/multi-word-component-names': 'off',
+    },
+  },
+  {
     ignores: [
       '**/dist/**',
       '**/coverage/**',

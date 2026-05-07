@@ -5,6 +5,7 @@ import CodeViewer from '@/components/post/CodeViewer.vue';
 import PresenceIndicator from '@/components/post/PresenceIndicator.vue';
 import PostActions from '@/components/post/PostActions.vue';
 import CommentSection from '@/components/post/CommentSection.vue';
+import Breadcrumbs from '@/components/feedback/Breadcrumbs.vue';
 import { usePosts } from '@/composables/usePosts';
 import { useComments } from '@/composables/useComments';
 import { useVotes } from '@/composables/useVotes';
@@ -149,6 +150,12 @@ async function handleFork(): Promise<void> {
       <div v-if="loading" class="text-gray-400 text-center py-12">Loading...</div>
 
       <template v-else-if="currentPost">
+        <Breadcrumbs
+          :items="[
+            { label: 'Home', to: '/' },
+            { label: currentPost.title, to: null },
+          ]"
+        />
         <div class="flex items-start justify-between mb-4">
           <div>
             <div class="flex items-center gap-3">
