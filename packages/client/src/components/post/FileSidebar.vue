@@ -24,7 +24,7 @@
           v-if="editable"
           :data-testid="`file-remove-btn-${file.filename}`"
           class="rounded px-1.5 py-1 text-xs text-gray-500 hover:bg-red-900/30 hover:text-red-400"
-          aria-label="Remove file"
+          :aria-label="`Remove file ${file.filename}`"
           @click="$emit('remove', file.id)"
         >
           ×
