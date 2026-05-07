@@ -22,4 +22,8 @@ export const files = {
   fileUploadInputSidebar: (page: Page): Locator => page.getByTestId('file-upload-input-sidebar'),
   fileSidebarItem: (page: Page, filename: string): Locator =>
     page.getByTestId(`file-sidebar-item-${filename}`),
+  // Remove + server-error UI (Task 4)
+  fileRemoveBtn: (page: Page, filename: string): Locator =>
+    page.getByTestId(`file-remove-btn-${filename}`),
+  fileUploadError: (page: Page): Locator => page.getByTestId('file-upload-error'),
 };

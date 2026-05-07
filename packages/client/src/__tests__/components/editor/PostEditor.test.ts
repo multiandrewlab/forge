@@ -81,8 +81,19 @@ vi.mock('@/components/post/FileSidebar.vue', () => ({
   default: {
     name: 'FileSidebar',
     props: ['files', 'activeFileId', 'editable'],
-    emits: ['select'],
-    template: '<div data-testid="file-sidebar-stub"><slot name="upload" /></div>',
+    emits: ['select', 'remove'],
+    template: `
+      <div data-testid="file-sidebar-stub">
+        <button
+          v-for="file in files"
+          :key="file.id"
+          v-show="editable"
+          :data-testid="'file-remove-btn-' + file.filename"
+          @click="$emit('remove', file.id)"
+        >×</button>
+        <slot name="upload" />
+      </div>
+    `,
   },
 }));
 
@@ -760,5 +771,126 @@ describe('PostEditor', () => {
       expect(uploadSpy).not.toHaveBeenCalled();
       expect(w.find('[data-testid="file-upload-preview"]').exists()).toBe(true);
     });
+  });
+});
+
+describe('PostEditor server-error UI', () => {
+  const baseProps = {
+    modelValue: '',
+    title: 'T',
+    language: 'typescript',
+    visibility: 'public' as const,
+    contentType: 'snippet' as const,
+    tags: [] as string[],
+    saveStatus: 'idle' as const,
+    lastSavedAt: null,
+    postId: 'p1',
+  };
+
+  beforeEach(() => setActivePinia(createPinia()));
+
+  async function uploadAndExpect(message: string, regex: RegExp): Promise<void> {
+    const filesStore = useFilesStore();
+    vi.spyOn(filesStore, 'uploadFile').mockRejectedValue(new Error(message));
+    const wrapper = mount(PostEditor, { props: baseProps });
+    const input = wrapper.find<HTMLInputElement>('[data-testid="file-upload-input"]');
+    Object.defineProperty(input.element, 'files', {
+      value: [new File(['x'], 'a.txt', { type: 'text/plain' })],
+      configurable: true,
+    });
+    await input.trigger('change');
+    await flushPromises();
+    expect(wrapper.find('[data-testid="file-upload-error"]').text()).toMatch(regex);
+  }
+
+  it('renders the 415 friendly message', () =>
+    uploadAndExpect('Upload failed: 415', /unsupported file type/i));
+  it('renders the 413 friendly message', () =>
+    uploadAndExpect('Upload failed: 413', /file too large/i));
+  it('renders the generic fallback for non-415/413 errors', () =>
+    uploadAndExpect('boom', /upload failed/i));
+
+  it('handles non-Error rejection values', async () => {
+    const filesStore = useFilesStore();
+    vi.spyOn(filesStore, 'uploadFile').mockRejectedValue('string-rejection');
+    const wrapper = mount(PostEditor, { props: baseProps });
+    const input = wrapper.find<HTMLInputElement>('[data-testid="file-upload-input"]');
+    Object.defineProperty(input.element, 'files', {
+      value: [new File(['x'], 'a.txt', { type: 'text/plain' })],
+      configurable: true,
+    });
+    await input.trigger('change');
+    await flushPromises();
+    expect(wrapper.find('[data-testid="file-upload-error"]').text()).toMatch(/upload failed/i);
+  });
+
+  it('renders friendly error when drag-drop upload rejects', async () => {
+    const filesStore = useFilesStore();
+    vi.spyOn(filesStore, 'uploadFile').mockRejectedValue(new Error('Upload failed: 415'));
+    const wrapper = mount(PostEditor, { props: baseProps });
+    const dropZone = wrapper.find('[data-testid="editor-drop-zone"]');
+    const mockFile = new File(['x'], 'drop.txt', { type: 'text/plain' });
+    await dropZone.trigger('drop', { dataTransfer: { files: [mockFile] } });
+    await flushPromises();
+    expect(wrapper.find('[data-testid="file-upload-error"]').text()).toMatch(
+      /unsupported file type/i,
+    );
+  });
+
+  it('renders friendly error when FileUpload-emit upload rejects', async () => {
+    const filesStore = useFilesStore();
+    filesStore.stagedFiles = [{ id: 'seed', filename: 'seed.txt', fileSize: 1 }] as never;
+    vi.spyOn(filesStore, 'uploadFile').mockRejectedValue(new Error('Upload failed: 413'));
+    const wrapper = mount(PostEditor, { props: baseProps });
+    const fileUpload = wrapper.findComponent({ name: 'FileUpload' });
+    fileUpload.vm.$emit('upload', new File(['x'], 'big.txt', { type: 'text/plain' }));
+    await flushPromises();
+    expect(wrapper.find('[data-testid="file-upload-error"]').text()).toMatch(/file too large/i);
+  });
+});
+
+describe('PostEditor handleFileRemove', () => {
+  const baseProps = {
+    modelValue: '',
+    title: 'T',
+    language: 'typescript',
+    visibility: 'public' as const,
+    contentType: 'snippet' as const,
+    tags: [] as string[],
+    saveStatus: 'idle' as const,
+    lastSavedAt: null,
+    postId: 'p1',
+  };
+
+  beforeEach(() => setActivePinia(createPinia()));
+
+  it('calls filesStore.deleteStagedFile with postId and fileId', async () => {
+    const filesStore = useFilesStore();
+    const spy = vi.spyOn(filesStore, 'deleteStagedFile').mockResolvedValue(undefined);
+    filesStore.stagedFiles = [{ id: 'f1', filename: 'a.json', fileSize: 10 }] as never;
+    const wrapper = mount(PostEditor, { props: baseProps });
+    await wrapper.find('[data-testid="file-remove-btn-a.json"]').trigger('click');
+    expect(spy).toHaveBeenCalledWith('p1', 'f1');
+  });
+
+  it('surfaces a friendly error when delete rejects', async () => {
+    const filesStore = useFilesStore();
+    vi.spyOn(filesStore, 'deleteStagedFile').mockRejectedValue(new Error('Network'));
+    filesStore.stagedFiles = [{ id: 'f1', filename: 'a.json', fileSize: 10 }] as never;
+    const wrapper = mount(PostEditor, { props: baseProps });
+    await wrapper.find('[data-testid="file-remove-btn-a.json"]').trigger('click');
+    await flushPromises();
+    expect(wrapper.find('[data-testid="file-upload-error"]').text()).toMatch(
+      /upload failed|network/i,
+    );
+  });
+
+  it('is a no-op when postId is undefined', async () => {
+    const filesStore = useFilesStore();
+    const spy = vi.spyOn(filesStore, 'deleteStagedFile');
+    filesStore.stagedFiles = [{ id: 'f1', filename: 'a.json', fileSize: 10 }] as never;
+    const wrapper = mount(PostEditor, { props: { ...baseProps, postId: undefined } });
+    await wrapper.find('[data-testid="file-remove-btn-a.json"]').trigger('click');
+    expect(spy).not.toHaveBeenCalled();
   });
 });

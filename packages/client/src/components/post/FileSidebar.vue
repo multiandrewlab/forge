@@ -4,23 +4,32 @@
       Files ({{ files.length }})
     </div>
     <div class="flex-1 space-y-1 overflow-y-auto">
-      <button
-        v-for="file in files"
-        :key="file.id"
-        :data-testid="`file-sidebar-item-${file.filename}`"
-        class="flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-sm transition-colors"
-        :class="
-          file.id === activeFileId
-            ? 'border-l-2 border-purple-500 bg-purple-500/20 text-purple-300'
-            : 'text-gray-400 hover:bg-gray-800'
-        "
-        @click="$emit('select', file.id)"
-      >
-        <span class="truncate">{{ file.filename }}</span>
-        <span class="ml-2 flex-shrink-0 text-xs text-gray-600">{{
-          formatSize(file.fileSize)
-        }}</span>
-      </button>
+      <div v-for="file in files" :key="file.id" class="flex w-full items-center gap-1">
+        <button
+          :data-testid="`file-sidebar-item-${file.filename}`"
+          class="flex flex-1 items-center justify-between rounded px-2 py-1.5 text-left text-sm transition-colors"
+          :class="
+            file.id === activeFileId
+              ? 'border-l-2 border-purple-500 bg-purple-500/20 text-purple-300'
+              : 'text-gray-400 hover:bg-gray-800'
+          "
+          @click="$emit('select', file.id)"
+        >
+          <span class="truncate">{{ file.filename }}</span>
+          <span class="ml-2 flex-shrink-0 text-xs text-gray-600">{{
+            formatSize(file.fileSize)
+          }}</span>
+        </button>
+        <button
+          v-if="editable"
+          :data-testid="`file-remove-btn-${file.filename}`"
+          class="rounded px-1.5 py-1 text-xs text-gray-500 hover:bg-red-900/30 hover:text-red-400"
+          aria-label="Remove file"
+          @click="$emit('remove', file.id)"
+        >
+          ×
+        </button>
+      </div>
     </div>
     <div v-if="editable" class="mt-2 border-t border-gray-800 pt-2">
       <slot name="upload" />
@@ -39,6 +48,7 @@ defineProps<{
 
 defineEmits<{
   select: [fileId: string];
+  remove: [fileId: string];
 }>();
 
 function formatSize(bytes: number | null): string {
