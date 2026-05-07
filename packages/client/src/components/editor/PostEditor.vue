@@ -187,6 +187,7 @@ const markdownPreviewHtml = computed<string>(() => {
       <input
         data-testid="file-upload-input"
         type="file"
+        multiple
         class="sr-only"
         @change="handleLocalFileChange"
       />

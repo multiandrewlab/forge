@@ -7,6 +7,7 @@
       <button
         v-for="file in files"
         :key="file.id"
+        :data-testid="`file-sidebar-item-${file.filename}`"
         class="flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-sm transition-colors"
         :class="
           file.id === activeFileId
@@ -21,10 +22,7 @@
         }}</span>
       </button>
     </div>
-    <div
-      v-if="editable"
-      class="mt-2 border-t border-gray-800 pt-2"
-    >
+    <div v-if="editable" class="mt-2 border-t border-gray-800 pt-2">
       <slot name="upload" />
     </div>
   </div>
