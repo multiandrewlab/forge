@@ -428,14 +428,8 @@ describe('apiFetch', () => {
       expect(toastStore.toasts).toHaveLength(0);
     });
 
-    it('pushes a toast when the refresh-failed path returns the original 5xx', async () => {
-      // This exercises the refresh-failed return path: original is 401 (not 5xx),
-      // refresh fails, so the original 401 is returned — no toast expected.
-      // To exercise maybePushServerError on the refresh-failed return path with
-      // a 5xx, we need the original response to BE 5xx. But the refresh path is
-      // only entered on 401, so the refresh-failed path can only return a 401.
-      // The maybePushServerError call there is defensive; we test the retry
-      // path returning 5xx instead.
+    it('pushes a toast when the post-refresh retry returns 5xx', async () => {
+      // Original 401 → refresh succeeds → retry returns 500 → toast on retry response.
       const store = useAuthStore();
       store.setAuth('expired-token', createMockUser());
 

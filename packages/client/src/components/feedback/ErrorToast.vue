@@ -14,6 +14,7 @@
     >
       <span class="flex-1">{{ t.message }}</span>
       <button
+        type="button"
         data-testid="error-toast-dismiss"
         :aria-label="`Dismiss: ${t.message}`"
         class="text-red-200 hover:text-white"
