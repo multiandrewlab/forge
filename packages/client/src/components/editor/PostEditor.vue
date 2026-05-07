@@ -107,6 +107,7 @@ function handleLocalFileChange(event: Event): void {
 
 async function handleFileRemove(fileId: string): Promise<void> {
   if (!props.postId) return;
+  fileUploadError.value = null;
   try {
     await filesStore.deleteStagedFile(props.postId, fileId);
   } catch (err) {
@@ -220,7 +221,13 @@ const markdownPreviewHtml = computed<string>(() => {
         class="sr-only"
         @change="handleLocalFileChange"
       />
-      <p v-if="fileUploadError" data-testid="file-upload-error" class="mt-1 text-xs text-red-400">
+      <p
+        v-if="fileUploadError"
+        data-testid="file-upload-error"
+        role="alert"
+        aria-live="polite"
+        class="mt-1 text-xs text-red-400"
+      >
         {{ fileUploadError }}
       </p>
       <div v-if="localStagedFiles.length > 0" class="mt-2 flex flex-wrap gap-2">

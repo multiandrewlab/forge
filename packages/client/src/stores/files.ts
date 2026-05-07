@@ -36,11 +36,14 @@ export const useFilesStore = defineStore('files', () => {
       const formData = new FormData();
       formData.append('file', file);
 
-      xhr.upload.addEventListener('progress', (e: { lengthComputable: boolean; loaded: number; total: number }) => {
-        if (e.lengthComputable) {
-          uploadProgress.value[file.name] = Math.round((e.loaded / e.total) * 100);
-        }
-      });
+      xhr.upload.addEventListener(
+        'progress',
+        (e: { lengthComputable: boolean; loaded: number; total: number }) => {
+          if (e.lengthComputable) {
+            uploadProgress.value[file.name] = Math.round((e.loaded / e.total) * 100);
+          }
+        },
+      );
 
       xhr.addEventListener('load', () => {
         uploadProgress.value = Object.fromEntries(
@@ -80,7 +83,7 @@ export const useFilesStore = defineStore('files', () => {
     });
 
     if (!response.ok) {
-      return;
+      throw new Error(`Delete failed: ${response.status}`);
     }
 
     stagedFiles.value = stagedFiles.value.filter((f) => f.id !== fileId);

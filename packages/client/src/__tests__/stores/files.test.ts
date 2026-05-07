@@ -60,9 +60,9 @@ function createMockXHR(): MockXHR {
 
 /** Extract a named event handler from mockXHR.addEventListener calls. Throws if not found. */
 function getXHRHandler(xhr: MockXHR, event: string): (...args: unknown[]) => void {
-  const entry = xhr.addEventListener.mock.calls.find(
-    (call: unknown[]) => call[0] === event,
-  ) as [string, (...args: unknown[]) => void] | undefined;
+  const entry = xhr.addEventListener.mock.calls.find((call: unknown[]) => call[0] === event) as
+    | [string, (...args: unknown[]) => void]
+    | undefined;
   if (!entry) {
     throw new Error(`No handler registered for XHR event "${event}"`);
   }
@@ -228,10 +228,7 @@ describe('useFilesStore', () => {
       const result = await promise;
 
       expect(mockXHR.open).toHaveBeenCalledWith('POST', '/api/posts/post-1/files');
-      expect(mockXHR.setRequestHeader).toHaveBeenCalledWith(
-        'Authorization',
-        'Bearer test-token',
-      );
+      expect(mockXHR.setRequestHeader).toHaveBeenCalledWith('Authorization', 'Bearer test-token');
       expect(mockXHR.send).toHaveBeenCalled();
       expect(result).toEqual(jsonRoundTrip(uploadedFile));
     });
@@ -475,10 +472,7 @@ describe('useFilesStore', () => {
 
     it('should not clear activeFileId when deleting a different file', async () => {
       const store = useFilesStore();
-      store.stagedFiles.push(
-        createMockPostFile({ id: 'f1' }),
-        createMockPostFile({ id: 'f2' }),
-      );
+      store.stagedFiles.push(createMockPostFile({ id: 'f1' }), createMockPostFile({ id: 'f2' }));
       store.setActiveFile('f1');
       mockApiFetch.mockResolvedValue({ ok: true });
 
@@ -487,13 +481,12 @@ describe('useFilesStore', () => {
       expect(store.activeFileId).toBe('f1');
     });
 
-    it('should not remove file from stagedFiles when DELETE fails', async () => {
+    it('should throw and not remove file from stagedFiles when DELETE fails', async () => {
       const store = useFilesStore();
       store.stagedFiles.push(createMockPostFile({ id: 'f1' }));
       mockApiFetch.mockResolvedValue({ ok: false, status: 500 });
 
-      await store.deleteStagedFile('post-1', 'f1');
-
+      await expect(store.deleteStagedFile('post-1', 'f1')).rejects.toThrow(/Delete failed: 500/);
       expect(store.stagedFiles).toHaveLength(1);
     });
   });

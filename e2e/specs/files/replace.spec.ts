@@ -28,7 +28,9 @@ test('replace: deleting then re-uploading a file with the same name serves the n
   await posts.newPostBody(actor).fill('seed');
   await posts.newPostSaveDraft(actor).click();
   await expect(actor).toHaveURL(/\/posts\/[a-f0-9-]+/);
-  const postId = actor.url().match(/\/posts\/([a-f0-9-]+)/)?.[1] ?? '';
+  const postIdMatch = actor.url().match(/\/posts\/([a-f0-9-]+)/);
+  expect(postIdMatch).not.toBeNull();
+  const postId = (postIdMatch as RegExpMatchArray)[1];
 
   // 2. SPA-navigate to /edit via the Edit link.
   await actor.getByRole('link', { name: /edit/i }).click();
