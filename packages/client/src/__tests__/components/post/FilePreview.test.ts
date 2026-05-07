@@ -3,14 +3,12 @@ import { mount, flushPromises } from '@vue/test-utils';
 import type { PostFile } from '@forge/shared';
 
 // vi.hoisted runs before vi.mock hoisting
-const { mockApiFetch, mockCodeToHtml, mockMarkedParse, mockDOMPurifySanitize } = vi.hoisted(
-  () => ({
-    mockApiFetch: vi.fn(),
-    mockCodeToHtml: vi.fn(),
-    mockMarkedParse: vi.fn(),
-    mockDOMPurifySanitize: vi.fn(),
-  }),
-);
+const { mockApiFetch, mockCodeToHtml, mockMarkedParse, mockDOMPurifySanitize } = vi.hoisted(() => ({
+  mockApiFetch: vi.fn(),
+  mockCodeToHtml: vi.fn(),
+  mockMarkedParse: vi.fn(),
+  mockDOMPurifySanitize: vi.fn(),
+}));
 
 vi.mock('@/lib/api', () => ({
   apiFetch: (...args: unknown[]) => mockApiFetch(...args),
@@ -138,7 +136,9 @@ describe('FilePreview', () => {
       async ({ ext, lang }) => {
         const file = makeFile({ filename: `code.${ext}` });
         mockApiFetch.mockResolvedValue(mockFetchResponse(`// ${ext} code`));
-        mockCodeToHtml.mockResolvedValue(`<pre><code class="lang-${lang}">highlighted</code></pre>`);
+        mockCodeToHtml.mockResolvedValue(
+          `<pre><code class="lang-${lang}">highlighted</code></pre>`,
+        );
 
         const wrapper = mount(FilePreview, {
           props: { file, postId: 'p1' },
@@ -397,5 +397,70 @@ describe('FilePreview', () => {
 
     wrapper.unmount();
     expect(revokeSpy).toHaveBeenCalledWith(mockUrl);
+  });
+
+  describe('testid surfaces', () => {
+    it('renders the code variant with file-preview-code testid for .json', async () => {
+      const file = makeFile({
+        filename: 'a.json',
+        mimeType: 'application/json',
+        fileSize: 17,
+      });
+      mockApiFetch.mockResolvedValue(mockFetchResponse('{"hello":"world"}'));
+      mockCodeToHtml.mockResolvedValue('<pre><code>{"hello":"world"}</code></pre>');
+
+      const wrapper = mount(FilePreview, {
+        props: { file, postId: 'p1' },
+      });
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid="file-preview-code"]').exists()).toBe(true);
+    });
+
+    it('renders the image variant with file-preview-image testid', async () => {
+      const file = makeFile({ filename: 'photo.png', mimeType: 'image/png' });
+      const blobData = new Blob(['fake-image'], { type: 'image/png' });
+      mockApiFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        blob: () => Promise.resolve(blobData),
+        headers: new Headers({ 'content-type': 'image/png' }),
+      } as Response);
+      globalThis.URL.createObjectURL = vi.fn().mockReturnValue('blob:fake');
+      globalThis.URL.revokeObjectURL = vi.fn();
+
+      const wrapper = mount(FilePreview, {
+        props: { file, postId: 'p1' },
+      });
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid="file-preview-image"]').exists()).toBe(true);
+    });
+
+    it('renders the markdown variant with file-preview-markdown testid', async () => {
+      const file = makeFile({ filename: 'README.md' });
+      mockApiFetch.mockResolvedValue(mockFetchResponse('# Hello'));
+      mockMarkedParse.mockReturnValue('<h1>Hello</h1>');
+      mockDOMPurifySanitize.mockReturnValue('<h1>Hello</h1>');
+
+      const wrapper = mount(FilePreview, {
+        props: { file, postId: 'p1' },
+      });
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid="file-preview-markdown"]').exists()).toBe(true);
+    });
+
+    it('renders the plain-text fallback variant with file-preview-text testid', async () => {
+      const file = makeFile({ filename: 'data.txt', mimeType: 'text/plain' });
+      mockApiFetch.mockResolvedValue(mockFetchResponse('plain text content'));
+
+      const wrapper = mount(FilePreview, {
+        props: { file, postId: 'p1' },
+      });
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid="file-preview-text"]').exists()).toBe(true);
+    });
   });
 });

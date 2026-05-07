@@ -16,8 +16,15 @@
       <span class="text-lg font-bold">+</span>
       <span class="text-xs">Drop or browse</span>
     </button>
-    <input ref="fileInputRef" type="file" multiple class="hidden" @change="handleFileSelect" />
-    <p v-if="errorMessage" class="mt-1 text-xs text-red-400">
+    <input
+      ref="fileInputRef"
+      data-testid="file-upload-input-sidebar"
+      type="file"
+      multiple
+      class="hidden"
+      @change="handleFileSelect"
+    />
+    <p v-if="errorMessage" data-testid="file-upload-client-error" class="mt-1 text-xs text-red-400">
       {{ errorMessage }}
     </p>
   </div>

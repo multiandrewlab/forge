@@ -49,6 +49,7 @@ const emit = defineEmits<{
 
 const filesStore = useFilesStore();
 const isDragging = ref(false);
+const fileUploadError = ref<string | null>(null);
 // Local list of files attached pre-creation (no postId yet). Mirrors the
 // staged-files concept but lives in the component so the new-post page can
 // preview attachments before the post exists. We retain the raw File so the
@@ -57,31 +58,60 @@ const isDragging = ref(false);
 const localStagedFiles = ref<File[]>([]);
 const showFileSidebar = computed(() => filesStore.stagedFiles.length > 0);
 
+function friendlyUploadError(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (/415/.test(msg))
+    return 'Unsupported file type. JSON, YAML, Markdown, plain text, code, and images (PNG/JPEG/GIF/WebP) are allowed.';
+  if (/413/.test(msg)) return 'File too large. Maximum size is 10 MB.';
+  return 'Upload failed. Please try again.';
+}
+
 function handleDrop(e: DragEvent): void {
   isDragging.value = false;
   const files = e.dataTransfer?.files;
   if (!files || files.length === 0 || !props.postId) return;
+  fileUploadError.value = null;
   for (const file of Array.from(files)) {
-    void filesStore.uploadFile(props.postId, file);
+    void filesStore.uploadFile(props.postId, file).catch((err) => {
+      fileUploadError.value = friendlyUploadError(err);
+    });
   }
 }
 
 async function handleFileUpload(file: File): Promise<void> {
   if (!props.postId) return;
-  await filesStore.uploadFile(props.postId, file);
+  fileUploadError.value = null;
+  try {
+    await filesStore.uploadFile(props.postId, file);
+  } catch (err) {
+    fileUploadError.value = friendlyUploadError(err);
+  }
 }
 
 function handleLocalFileChange(event: Event): void {
   const input = event.target as HTMLInputElement;
   const files = input.files;
   if (!files || files.length === 0) return;
+  fileUploadError.value = null;
   for (const file of Array.from(files)) {
     if (props.postId) {
-      void filesStore.uploadFile(props.postId, file);
+      void filesStore.uploadFile(props.postId, file).catch((err) => {
+        fileUploadError.value = friendlyUploadError(err);
+      });
     } else {
       localStagedFiles.value.push(file);
       emit('local-file-staged', file);
     }
+  }
+}
+
+async function handleFileRemove(fileId: string): Promise<void> {
+  if (!props.postId) return;
+  fileUploadError.value = null;
+  try {
+    await filesStore.deleteStagedFile(props.postId, fileId);
+  } catch (err) {
+    fileUploadError.value = friendlyUploadError(err);
   }
 }
 
@@ -187,9 +217,19 @@ const markdownPreviewHtml = computed<string>(() => {
       <input
         data-testid="file-upload-input"
         type="file"
+        multiple
         class="sr-only"
         @change="handleLocalFileChange"
       />
+      <p
+        v-if="fileUploadError"
+        data-testid="file-upload-error"
+        role="alert"
+        aria-live="polite"
+        class="mt-1 text-xs text-red-400"
+      >
+        {{ fileUploadError }}
+      </p>
       <div v-if="localStagedFiles.length > 0" class="mt-2 flex flex-wrap gap-2">
         <div
           v-for="(file, idx) in localStagedFiles"
@@ -216,6 +256,7 @@ const markdownPreviewHtml = computed<string>(() => {
         :active-file-id="filesStore.activeFileId"
         :editable="true"
         @select="filesStore.setActiveFile"
+        @remove="handleFileRemove"
       >
         <template #upload>
           <FileUpload @upload="handleFileUpload" />

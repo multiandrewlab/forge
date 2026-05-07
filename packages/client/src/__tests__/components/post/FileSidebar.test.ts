@@ -144,3 +144,27 @@ describe('FileSidebar', () => {
     expect(wrapper.findAll('button')).toHaveLength(0);
   });
 });
+
+describe('FileSidebar remove button', () => {
+  const baseFile = makeFile({ id: 'f1', filename: 'a.json', fileSize: 100 });
+
+  it('renders remove button only when editable=true', () => {
+    const ed = mount(FileSidebar, {
+      props: { files: [baseFile], activeFileId: null, editable: true },
+    });
+    expect(ed.find('[data-testid="file-remove-btn-a.json"]').exists()).toBe(true);
+
+    const ro = mount(FileSidebar, {
+      props: { files: [baseFile], activeFileId: null, editable: false },
+    });
+    expect(ro.find('[data-testid="file-remove-btn-a.json"]').exists()).toBe(false);
+  });
+
+  it('emits remove with file id when clicked', async () => {
+    const w = mount(FileSidebar, {
+      props: { files: [baseFile], activeFileId: null, editable: true },
+    });
+    await w.find('[data-testid="file-remove-btn-a.json"]').trigger('click');
+    expect(w.emitted('remove')).toEqual([['f1']]);
+  });
+});

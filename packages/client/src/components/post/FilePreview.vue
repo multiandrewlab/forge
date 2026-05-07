@@ -11,22 +11,37 @@
     </div>
 
     <!-- Image preview -->
-    <div v-else-if="isImage" class="flex items-center justify-center p-4">
+    <div
+      v-else-if="isImage"
+      data-testid="file-preview-image"
+      class="flex items-center justify-center p-4"
+    >
       <img :src="imageUrl" :alt="file.filename" class="max-w-full rounded" />
     </div>
 
     <!-- Syntax-highlighted code (including JSON, YAML) -->
-    <div v-else-if="highlightedHtml" class="rounded text-sm" v-html="highlightedHtml" />
+    <div
+      v-else-if="highlightedHtml"
+      data-testid="file-preview-code"
+      class="rounded text-sm"
+      v-html="highlightedHtml"
+    />
 
     <!-- Markdown rendered -->
     <div
       v-else-if="renderedMarkdown"
+      data-testid="file-preview-markdown"
       class="prose prose-invert max-w-none p-4"
       v-html="renderedMarkdown"
     />
 
     <!-- Plain text fallback -->
-    <pre v-else class="whitespace-pre-wrap p-4 font-mono text-sm text-gray-300">{{ content }}</pre>
+    <pre
+      v-else
+      data-testid="file-preview-text"
+      class="whitespace-pre-wrap p-4 font-mono text-sm text-gray-300"
+      >{{ content }}</pre
+    >
   </div>
 </template>
 
