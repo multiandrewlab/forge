@@ -151,6 +151,15 @@ When you modify a selector file, bump the "Last reviewed" date.
 
 Saved auth state (`*.auth.json`) is **gitignored** AND defaults to `os.tmpdir()/forge-e2e-storage/<user>.json` to make accidental commits impossible. To inspect storageState alongside traces, set `E2E_STORAGE_IN_REPO=1` — files then go under `e2e/.auth/` (still gitignored). The repo's Husky pre-commit hook blocks staging `*.auth.json` and `forge-e2e-secret` as a backstop.
 
+Per-worker storage-state files (`e2e/.auth/<user>.json`) contain the seeded
+`refresh_token` cookie for the worker's user. Treat them as secrets:
+
+- The fixture writes them with `mode: 0o600` so other local users can't read them.
+- Never commit `e2e/.auth/`; it is in `.gitignore` (line 35).
+- In CI, storage state is generated fresh per run and lives only in the runner's
+  tmpdir (not in artifacts).
+- Local developers: clear `e2e/.auth/` if you switch your seeded password.
+
 ## Reset semantics
 
 By default, `beforeEach` calls `/api/__test__/reset` which re-runs `scripts/seed.sql` under a Postgres advisory lock. To opt out (for tests that expect a fresh non-seeded state, e.g. the "register fresh account" sub-test):
