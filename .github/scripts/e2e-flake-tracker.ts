@@ -87,3 +87,80 @@ export function intersectByIdentity(a: FailedSpec[], b: FailedSpec[]): FailedSpe
   const bSet = new Set(b.map((s) => `${s.file}\0${s.title}`));
   return a.filter((s) => bSet.has(`${s.file}\0${s.title}`));
 }
+
+export interface GitHubClient {
+  listOpenFlakyIssues(): Promise<ExistingIssue[]>;
+  createIssue(args: { title: string; body: string; labels: string[] }): Promise<void>;
+  commentOnIssue(issueNumber: number, body: string): Promise<void>;
+  postPrComment(prNumber: number, body: string): Promise<void>;
+}
+
+export type RunTrackerInputs =
+  | {
+      event: 'push';
+      currentFailures: FailedSpec[];
+      previousFailures: FailedSpec[];
+      knownClasses: Record<string, number>;
+      client: GitHubClient;
+    }
+  | {
+      event: 'pull_request';
+      prNumber: number;
+      currentFailures: FailedSpec[];
+      previousFailures: FailedSpec[];
+      knownClasses: Record<string, number>;
+      client: GitHubClient;
+    };
+
+export async function runTracker(inputs: RunTrackerInputs): Promise<void> {
+  if (inputs.currentFailures.length === 0) return;
+
+  if (inputs.event === 'pull_request') {
+    const existingIssues = await inputs.client.listOpenFlakyIssues();
+    const lines: string[] = [':warning: **E2E specs failed in this run.**', ''];
+    for (const spec of inputs.currentFailures) {
+      const expectedTitle = `flaky-e2e: ${spec.file} > ${spec.title}`;
+      const existing = existingIssues.find((i) => i.title === expectedTitle);
+      const linkPart = existing
+        ? `tracking issue: #${existing.number}`
+        : '(no tracking issue yet — auto-tracker files one if it fails again on `main`)';
+      lines.push(`- \`${spec.file}\` > \`${spec.title}\` — consider \`test.fixme()\` ${linkPart}`);
+    }
+    await inputs.client.postPrComment(inputs.prNumber, lines.join('\n'));
+    return;
+  }
+
+  // event === 'push' (main only — scoped by the workflow's `if:`)
+  const twiceFailed = intersectByIdentity(inputs.currentFailures, inputs.previousFailures);
+  if (twiceFailed.length === 0) return;
+
+  const existingIssues = await inputs.client.listOpenFlakyIssues();
+
+  for (const spec of twiceFailed) {
+    try {
+      const action = decideAction({
+        spec,
+        knownClasses: inputs.knownClasses,
+        existingIssues,
+      });
+      if (action.type === 'comment') {
+        await inputs.client.commentOnIssue(
+          action.issueNumber,
+          `Auto-flake: ${spec.file} > ${spec.title} failed on two consecutive main runs.`,
+        );
+      } else {
+        await inputs.client.createIssue({
+          title: action.title,
+          body:
+            `Auto-filed by \`.github/scripts/e2e-flake-tracker.ts\`.\n\n` +
+            `Spec: \`${spec.file}\`\nTitle: \`${spec.title}\`\n\n` +
+            `Failed on two consecutive main runs. De-flake via fix or \`test.fixme()\`; ` +
+            `close this issue once the spec is stable.`,
+          labels: ['flaky-e2e'],
+        });
+      }
+    } catch (err) {
+      console.error(`[flake-tracker] failed to handle ${spec.file} > ${spec.title}:`, err);
+    }
+  }
+}
