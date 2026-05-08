@@ -100,9 +100,66 @@ await expect(auth.loginError(page)).toContainText('Bad password'); // status ass
 
 The testid (`cancel-btn`, `welcome-heading`, `login-error-message`) is the source of truth for "this element". The visible text is the source of truth for "this copy". Tests must not conflate the two.
 
+## Selection vs. assertion
+
+The single most common bug pattern in this suite is conflating **what to find**
+with **what to verify**. A locator that uses an attribute that's only true at
+the moment of assertion is a selector that races itself.
+
+**Bad — selects on a property the assertion is about to check:**
+
+```ts
+// "Find the button that is enabled, then assert it is enabled" — tautology.
+// If the page hasn't finished rendering, the locator finds 0 nodes and the
+// assertion times out with a confusing 'expected 1, found 0'.
+await expect(page.locator('button[aria-pressed="true"]')).toBeVisible();
+```
+
+**Good — selects by stable identity, asserts the dynamic state:**
+
+```ts
+const subscribeButton = page.getByTestId('subscribe-btn');
+await expect(subscribeButton).toHaveAttribute('aria-pressed', 'true');
+```
+
+**Rule:** locators select by identity (testid, role+name, semantic structure).
+Assertions check state (text, attribute value, visibility, count). If your
+locator string mentions the thing your assertion checks, refactor.
+
+## Sharded selector files — header template
+
+Selectors live in `e2e/fixtures/selectors/<feature>.ts` (one file per feature
+folder). New selector files should start with this header (existing files
+will be backfilled opportunistically as each is touched):
+
+```ts
+// e2e/fixtures/selectors/<feature>.ts
+//
+// Selectors for the <feature> feature. Imported by:
+//   - e2e/specs/<feature>/*.spec.ts
+//
+// Convention: selectors return Locator | string.
+//   - Use Locator for selectors that need .first() / .nth(n) / chained .filter().
+//   - Use string for plain CSS / role-name selectors that callers pass to .locator().
+//
+// Owner: <team> (@<github-handle>)
+// Last reviewed: YYYY-MM-DD
+```
+
+When you modify a selector file, add or bump the "Last reviewed" date.
+
 ## Storage state security note
 
 Saved auth state (`*.auth.json`) is **gitignored** AND defaults to `os.tmpdir()/forge-e2e-storage/<user>.json` to make accidental commits impossible. To inspect storageState alongside traces, set `E2E_STORAGE_IN_REPO=1` — files then go under `e2e/.auth/` (still gitignored). The repo's Husky pre-commit hook blocks staging `*.auth.json` and `forge-e2e-secret` as a backstop.
+
+Per-worker storage-state files (`e2e/.auth/<user>.json`) contain the seeded
+`refresh_token` cookie for the worker's user. Treat them as secrets:
+
+- Global setup writes them with `mode: 0o600` so other local users can't read them.
+- Never commit `e2e/.auth/`; it is in `.gitignore` (line 35).
+- In CI, storage state is generated fresh per run and lives only in the runner's
+  tmpdir (not in artifacts).
+- Local developers: clear `e2e/.auth/` if you switch your seeded password.
 
 ## Reset semantics
 
@@ -122,9 +179,18 @@ When a spec could plausibly live in two feature folders, log the decision here s
 | ---------------------------------------------------------------------- | ------------ | ------ |
 | _(empty for v1 — journey smoke is in its own home `_journey.spec.ts`)_ |              |        |
 
-## Periodic audit
+## Periodic audit — `@no-reset` specs
 
-Once per quarter, run `cd e2e && npx playwright test --grep @no-reset` to list all opt-outs. Any without a clear reason in the test body should be re-evaluated.
+A small number of specs use `@no-reset` to opt out of the per-worker DB reset.
+Once a quarter, run:
+
+```bash
+npm run e2e -- --grep @no-reset
+```
+
+…and confirm each `@no-reset` spec still avoids mutating state. A spec that
+silently grew a write path while keeping the tag will pollute other workers'
+fixtures and cause cross-spec flakes. If you find one, drop the tag.
 
 ## Patterns (introduced by `e2e/specs/auth/`)
 
@@ -198,3 +264,33 @@ The two assertions corroborate ONE concept ("client-side validity blocks submiss
 - `npm run e2e -- --grep "Phase 4"` — run a sub-section.
 - `npm run e2e:ui` — Playwright UI mode.
 - `npm run e2e -- --workers=1` — serialize for debugging (the journey passes at workers=4 in CI).
+
+## Flake protocol
+
+When a spec flakes:
+
+1. **First flake on a PR**: the auto-flake-tracker (`.github/scripts/e2e-flake-tracker.ts`) posts a PR comment suggesting `test.fixme()` and links any existing tracking issue.
+2. **Two consecutive failures on `main`**: detected by querying the previous main run's `playwright-report` artifact via the GitHub API. The tracker either creates a `flaky-e2e`-labeled tracking issue (per-spec) or comments on an umbrella issue if the spec matches `.github/known-flake-classes.json` (e.g., closed #75 was the umbrella for cross-worker reset contention before its fix).
+3. **De-flake SLA**: once a `flaky-e2e` issue exists, the **on-call engineer** owns it. Target: fix or `test.fixme()` within 48 hours.
+4. **Un-fixme'ing**: when un-`test.fixme()`-ing a spec, **run it first**. If it still fails, do NOT assume the gating fix was incomplete — diagnose whether a secondary unrelated bug was masked (cf. closed #65).
+5. **Budget**: the workflow fails if `test.fixme(` count in `e2e/specs/` exceeds `E2E_FIXME_BUDGET` (default 7).
+
+Dashboard: open issues with the `flaky-e2e` label — [`is:open label:flaky-e2e`](https://github.com/multiandrewlab/forge/issues?q=is%3Aopen+label%3Aflaky-e2e).
+
+## Out of Scope
+
+The following are intentionally not exercised by this suite:
+
+- **WebKit (Safari) Playwright project** — permanently out of scope. Forge is
+  Chromium-first; we do not have Safari-specific code paths and the marginal
+  coverage does not justify the suite-runtime cost. If a Safari-specific bug is
+  reported in the wild, file a focused regression spec under `e2e/specs/shell/`
+  and tag it `@webkit`; only then revisit adding the project.
+- **Firefox Playwright project** — same rationale.
+- **Mobile beyond `@mobile`-tagged specs** — the `chromium-mobile` project runs
+  only `register a fresh account` from the journey on a Pixel 5 device. Add
+  `@mobile` tags sparingly when a mobile-specific surface needs coverage.
+- **Visual regression / screenshot diffing** — `screenshot: only-on-failure`
+  exists for debugging only.
+- **MinIO bucket pruning between specs** — file uploads accumulate during a
+  run; re-runs are idempotent against deterministic seed UUIDs.

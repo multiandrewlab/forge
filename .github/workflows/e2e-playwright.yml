@@ -83,6 +83,67 @@ jobs:
             exit 1
           fi
 
+      - name: Ensure flaky-e2e label exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh label create flaky-e2e \
+            --description "Auto-tracked flaky E2E spec" \
+            --color D93F0B || true
+
+      - name: Fixme-budget guard
+        # Counts test.fixme(...) calls in e2e/specs. Uses grep -Pzo so the regex
+        # matches across newlines (PCRE \s includes \n; -z treats input as one
+        # null-terminated record). Satisfies issue #53's failure-mode bullet
+        # about multi-line test.fixme( calls.
+        env:
+          E2E_FIXME_BUDGET: '7'
+        run: |
+          count=$(grep -Pzro 'test\.fixme\s*\(' e2e/specs/ | tr '\0' '\n' | grep -c 'test\.fixme' || true)
+          echo "current test.fixme count: $count"
+          echo "current budget: $E2E_FIXME_BUDGET"
+          if [ "$count" -gt "$E2E_FIXME_BUDGET" ]; then
+            echo "::error::test.fixme budget exceeded ($count > $E2E_FIXME_BUDGET). Drain the queue or raise E2E_FIXME_BUDGET in the workflow file."
+            exit 1
+          fi
+
+      - name: Fixme-budget regex regression test
+        # Asserts the multi-line regex AND the counting pipeline both work.
+        # Two fixtures: (a) one multi-line test.fixme(\n(...)) — exercises the
+        # regex's `\s*` cross-newline match (PCRE -P plus null-data -z); (b)
+        # three single-line test.fixme(...) calls — exercises the counting
+        # pipeline (catches `tr -d '\0'` regressions that would collapse all
+        # matches into one line).
+        run: |
+          # Fixture A — multi-line regex
+          fixture_a=$(mktemp /tmp/fixme-multiline.XXXXXX.ts)
+          cat > "$fixture_a" <<'EOF'
+          test.fixme
+            ('multi-line should match', async () => {});
+          EOF
+          got_a=$(grep -Pzro 'test\.fixme\s*\(' "$fixture_a" | tr '\0' '\n' | grep -c 'test\.fixme' || true)
+          rm -f "$fixture_a"
+          if [ "$got_a" != "1" ]; then
+            echo "::error::Multi-line regex regression: expected 1 match in multi-line fixture, got $got_a"
+            exit 1
+          fi
+
+          # Fixture B — multi-match counting pipeline
+          fixture_b=$(mktemp /tmp/fixme-multimatch.XXXXXX.ts)
+          cat > "$fixture_b" <<'EOF'
+          test.fixme('one', async () => {});
+          test.fixme('two', async () => {});
+          test.fixme('three', async () => {});
+          EOF
+          got_b=$(grep -Pzro 'test\.fixme\s*\(' "$fixture_b" | tr '\0' '\n' | grep -c 'test\.fixme' || true)
+          rm -f "$fixture_b"
+          if [ "$got_b" != "3" ]; then
+            echo "::error::Counting pipeline regression: expected 3 matches in 3-line fixture, got $got_b (likely 'tr -d \\0' instead of 'tr \\0 \\n')"
+            exit 1
+          fi
+
+          echo "Fixme-budget regex regression tests passed (multi-line: 1, multi-match: 3)"
+
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -200,6 +261,72 @@ jobs:
           name: playwright-report
           path: e2e/playwright-report/
           retention-days: 14
+
+      - name: Auto-flake tracker
+        # Skips on fork PRs (GITHUB_TOKEN is read-only on those, POSTs would 403).
+        # Skips on burst's workflow_dispatch event (which calls this workflow as
+        # reusable). Runs on same-repo PRs and main pushes.
+        if: |
+          always() &&
+          (
+            (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+            (
+              github.event_name == 'pull_request' &&
+              github.event.pull_request.head.repo.full_name == github.repository
+            )
+          )
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          RESULTS_JSON: e2e/playwright-report/results.json
+          KNOWN_CLASSES: .github/known-flake-classes.json
+        # || true ensures a tracker bug never fails the e2e workflow. The script
+        # ALSO sets process.exitCode=0 on its own catch block. Errors are
+        # surfaced as ::warning:: annotations (visible in the run summary).
+        run: npx tsx .github/scripts/e2e-flake-tracker.ts || true
+
+      - name: Sticky-update tracking issue #43 with current fixme count
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/github-script@v7
+        env:
+          MARKER: '<!-- e2e-fixme-count-sticky -->'
+        with:
+          script: |
+            const { execSync } = require('node:child_process');
+            const out = execSync(
+              "grep -Pzro 'test\\.fixme\\s*\\(' e2e/specs/ | tr '\\0' '\\n' | grep -c 'test\\.fixme' || true",
+              { encoding: 'utf8', shell: '/bin/bash' },
+            ).trim();
+            const marker = process.env.MARKER;
+            const body = `${marker}\n\`test.fixme\` count on \`main\` is **${out}** (budget: 7). Last updated by \`${context.workflow}\` run ${context.runId}.`;
+
+            const issueNumber = 43;
+            const existing = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              per_page: 100,
+            });
+            const sticky = existing.find((c) => c.body && c.body.includes(marker));
+
+            if (sticky) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: sticky.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                body,
+              });
+            }
 
       - name: Upload server + preview logs (debug)
         if: failure()

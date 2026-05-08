@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test, expect } from '../fixtures/reset.js';
@@ -17,14 +18,17 @@ const SEEDED_POST_ID = 'c0000000-0000-0000-0000-000000000099';
 // Derive it from import.meta.url for ESM compatibility.
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+// Per-worker email so chromium-desktop and chromium-mobile (both run this
+// @mobile-tagged test) don't collide on `users.email UNIQUE` when their
+// separate worker processes each register a fresh account.
 const FRESH_USER = {
-  email: 'journey+register@example.com',
+  email: `journey+register-${randomUUID()}@example.com`,
   name: 'Journey Tester',
   password: 'password123',
 };
 
 test.describe.serial('Phase 1 — auth: register, login, logout, relogin', () => {
-  test('register a fresh account', { tag: '@no-reset' }, async ({ browser }) => {
+  test('register a fresh account @mobile', { tag: '@no-reset' }, async ({ browser }) => {
     // Pre-condition: page is anonymous (we drive a raw context, not the
     // actor fixture). Tagged @no-reset so we don't wipe the user we just
     // created before the assertion runs in the next test in this describe block.
