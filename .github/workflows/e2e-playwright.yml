@@ -91,6 +91,41 @@ jobs:
             --description "Auto-tracked flaky E2E spec" \
             --color D93F0B || true
 
+      - name: Fixme-budget guard
+        # Counts test.fixme(...) calls in e2e/specs. Uses grep -Pzo so the regex
+        # matches across newlines (PCRE \s includes \n; -z treats input as one
+        # null-terminated record). Satisfies issue #53's failure-mode bullet
+        # about multi-line test.fixme( calls.
+        env:
+          E2E_FIXME_BUDGET: '7'
+        run: |
+          count=$(grep -Pzro 'test\.fixme\s*\(' e2e/specs/ | tr -d '\0' | grep -c 'test\.fixme' || true)
+          echo "current test.fixme count: $count"
+          echo "current budget: $E2E_FIXME_BUDGET"
+          if [ "$count" -gt "$E2E_FIXME_BUDGET" ]; then
+            echo "::error::test.fixme budget exceeded ($count > $E2E_FIXME_BUDGET). Drain the queue or raise E2E_FIXME_BUDGET in the workflow file."
+            exit 1
+          fi
+
+      - name: Fixme-budget regex regression test
+        # Asserts the multi-line regex actually catches a multi-line test.fixme(
+        # invocation. Guards against future workflow edits that downgrade the
+        # regex (e.g., dropping -P or -z) which would silently regress the
+        # multi-line failure-mode coverage.
+        run: |
+          fixture=$(mktemp /tmp/fixme-multiline.XXXXXX.ts)
+          cat > "$fixture" <<'EOF'
+          test.fixme
+            ('this is a multi-line fixme', async () => {});
+          EOF
+          got=$(grep -Pzro 'test\.fixme\s*\(' "$fixture" | tr -d '\0' | grep -c 'test\.fixme' || true)
+          rm -f "$fixture"
+          if [ "$got" != "1" ]; then
+            echo "::error::Multi-line test.fixme regex regression: expected 1 match in fixture, got $got"
+            exit 1
+          fi
+          echo "Multi-line regex test passed: 1 match in fixture"
+
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
