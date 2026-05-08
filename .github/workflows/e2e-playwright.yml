@@ -209,6 +209,32 @@ jobs:
           path: e2e/playwright-report/
           retention-days: 14
 
+      - name: Auto-flake tracker
+        # Skips on fork PRs (GITHUB_TOKEN is read-only on those, POSTs would 403).
+        # Skips on burst's workflow_dispatch event (which calls this workflow as
+        # reusable). Runs on same-repo PRs and main pushes.
+        if: |
+          always() &&
+          (
+            (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+            (
+              github.event_name == 'pull_request' &&
+              github.event.pull_request.head.repo.full_name == github.repository
+            )
+          )
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          RESULTS_JSON: e2e/playwright-report/results.json
+          KNOWN_CLASSES: .github/known-flake-classes.json
+        # || true ensures a tracker bug never fails the e2e workflow. The script
+        # ALSO sets process.exitCode=0 on its own catch block. Errors are
+        # surfaced as ::warning:: annotations (visible in the run summary).
+        run: npx tsx .github/scripts/e2e-flake-tracker.ts || true
+
       - name: Upload server + preview logs (debug)
         if: failure()
         uses: actions/upload-artifact@v4
