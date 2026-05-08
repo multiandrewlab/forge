@@ -1,0 +1,6 @@
+{
+  "name": "@forge/github-scripts",
+  "private": true,
+  "type": "module",
+  "$comment": "Marks .ts files in this directory as ESM under tsx so dynamic-import returns named exports rather than wrapping them in a default."
+}
