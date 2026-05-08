@@ -255,6 +255,18 @@ The two assertions corroborate ONE concept ("client-side validity blocks submiss
 - `npm run e2e:ui` — Playwright UI mode.
 - `npm run e2e -- --workers=1` — serialize for debugging (the journey passes at workers=4 in CI).
 
+## Flake protocol
+
+When a spec flakes:
+
+1. **First flake on a PR**: the auto-flake-tracker (`.github/scripts/e2e-flake-tracker.ts`) posts a PR comment suggesting `test.fixme()` and links any existing tracking issue.
+2. **Two consecutive failures on `main`**: detected by querying the previous main run's `playwright-report` artifact via the GitHub API. The tracker either creates a `flaky-e2e`-labeled tracking issue (per-spec) or comments on an umbrella issue if the spec matches `.github/known-flake-classes.json` (e.g., closed #75 was the umbrella for cross-worker reset contention before its fix).
+3. **De-flake SLA**: once a `flaky-e2e` issue exists, the **on-call engineer** owns it. Target: fix or `test.fixme()` within 48 hours.
+4. **Un-fixme'ing**: when un-`test.fixme()`-ing a spec, **run it first**. If it still fails, do NOT assume the gating fix was incomplete — diagnose whether a secondary unrelated bug was masked (cf. closed #65).
+5. **Budget**: the workflow fails if `test.fixme(` count in `e2e/specs/` exceeds `E2E_FIXME_BUDGET` (default 7).
+
+Dashboard: open issues with the `flaky-e2e` label — [`is:open label:flaky-e2e`](https://github.com/multiandrewlab/forge/issues?q=is%3Aopen+label%3Aflaky-e2e).
+
 ## Out of Scope
 
 The following are intentionally not exercised by this suite:
