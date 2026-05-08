@@ -1374,7 +1374,8 @@ git commit -m "docs(e2e): #53 selection-vs-assertion worked example"
 ## Sharded selector files — header template
 
 Selectors live in `e2e/fixtures/selectors/<feature>.ts` (one file per feature
-folder). Every file MUST start with this header:
+folder). New selector files should start with this header (existing files
+will be backfilled opportunistically as each is touched):
 
 ```ts
 // e2e/fixtures/selectors/<feature>.ts
@@ -1390,7 +1391,7 @@ folder). Every file MUST start with this header:
 // Last reviewed: YYYY-MM-DD
 ```
 
-When you modify a selector file, bump the "Last reviewed" date.
+When you modify a selector file, add or bump the "Last reviewed" date.
 ````
 
 - [ ] **Step 2: Commit**
@@ -1461,7 +1462,7 @@ git commit -m "docs(e2e): #53 flake protocol (SLA, ownership, dashboard)"
 Per-worker storage-state files (`e2e/.auth/<user>.json`) contain the seeded
 `refresh_token` cookie for the worker's user. Treat them as secrets:
 
-- The fixture writes them with `mode: 0o600` so other local users can't read them.
+- Global setup writes them with `mode: 0o600` so other local users can't read them.
 - Never commit `e2e/.auth/`; it is in `.gitignore` (line 35).
 - In CI, storage state is generated fresh per run and lives only in the runner's
   tmpdir (not in artifacts).

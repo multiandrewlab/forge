@@ -1,5 +1,5 @@
 import { request, type FullConfig } from '@playwright/test';
-import { mkdirSync } from 'node:fs';
+import { chmodSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { SEED_USERS, storageStatePath, type AuthUser } from '../fixtures/auth.js';
 import { readE2ESecret, startupProbe } from './server-lifecycle.js';
@@ -21,6 +21,10 @@ async function loginAndSave(user: AuthUser): Promise<void> {
   const path = storageStatePath(user);
   mkdirSync(dirname(path), { recursive: true });
   await ctx.storageState({ path });
+  // Storage state contains the worker's refresh-token cookie. mode 0o600 so
+  // other local users can't read it. CI runners are single-tenant so this
+  // is mostly a local-dev hygiene measure, but it costs nothing.
+  chmodSync(path, 0o600);
   await ctx.dispose();
 }
 
