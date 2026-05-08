@@ -8,6 +8,10 @@ import {
   decideAction,
   intersectByIdentity,
   runTracker,
+  createGitHubClient,
+  buildPreviousRunsUrl,
+  buildArtifactsUrl,
+  pickReportArtifact,
   type Action,
   type GitHubClient,
 } from '../e2e-flake-tracker.js';
@@ -305,5 +309,94 @@ describe('runTracker — pull_request event', () => {
       client,
     });
     expect(client.postPrComment).not.toHaveBeenCalled();
+  });
+});
+
+describe('createGitHubClient', () => {
+  it('listOpenFlakyIssues GETs the right URL', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [{ number: 1, title: 'flaky-e2e: a > b' }],
+      text: async () => '',
+    });
+    const client = createGitHubClient({ owner: 'o', repo: 'r', token: 't', fetchImpl: fetchMock });
+    expect(await client.listOpenFlakyIssues()).toEqual([{ number: 1, title: 'flaky-e2e: a > b' }]);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.github.com/repos/o/r/issues?labels=flaky-e2e&state=open&per_page=100',
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer t' }),
+      }),
+    );
+  });
+
+  it('createIssue POSTs to /issues', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: async () => ({}), text: async () => '' });
+    const client = createGitHubClient({ owner: 'o', repo: 'r', token: 't', fetchImpl: fetchMock });
+    await client.createIssue({ title: 't', body: 'b', labels: ['flaky-e2e'] });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.github.com/repos/o/r/issues',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('commentOnIssue POSTs to /issues/{n}/comments', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: async () => ({}), text: async () => '' });
+    const client = createGitHubClient({ owner: 'o', repo: 'r', token: 't', fetchImpl: fetchMock });
+    await client.commentOnIssue(75, 'hi');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.github.com/repos/o/r/issues/75/comments',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('postPrComment POSTs to /issues/{n}/comments (PR numbers share the issues namespace)', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: async () => ({}), text: async () => '' });
+    const client = createGitHubClient({ owner: 'o', repo: 'r', token: 't', fetchImpl: fetchMock });
+    await client.postPrComment(99, 'hi');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.github.com/repos/o/r/issues/99/comments',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('throws on non-2xx', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok: false, status: 403, text: async () => 'forbidden' });
+    const client = createGitHubClient({ owner: 'o', repo: 'r', token: 't', fetchImpl: fetchMock });
+    await expect(client.commentOnIssue(75, 'hi')).rejects.toThrow(/403/);
+  });
+});
+
+describe('previous-run URL builders', () => {
+  it('buildPreviousRunsUrl filters to main, completed, excluding pull-requests', () => {
+    expect(buildPreviousRunsUrl('o', 'r', 'e2e-playwright.yml')).toBe(
+      'https://api.github.com/repos/o/r/actions/workflows/e2e-playwright.yml/runs?branch=main&status=completed&exclude_pull_requests=true&per_page=10',
+    );
+  });
+
+  it('buildArtifactsUrl uses run id', () => {
+    expect(buildArtifactsUrl('o', 'r', 99)).toBe(
+      'https://api.github.com/repos/o/r/actions/runs/99/artifacts',
+    );
+  });
+
+  it('pickReportArtifact returns the playwright-report artifact', () => {
+    expect(
+      pickReportArtifact([
+        { id: 1, name: 'e2e-server-logs', archive_download_url: 'x' },
+        { id: 2, name: 'playwright-report', archive_download_url: 'y' },
+      ]),
+    ).toEqual({ id: 2, name: 'playwright-report', archive_download_url: 'y' });
+  });
+
+  it('pickReportArtifact returns null if absent', () => {
+    expect(pickReportArtifact([{ id: 1, name: 'other', archive_download_url: 'x' }])).toBeNull();
   });
 });
