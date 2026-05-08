@@ -1,0 +1,27 @@
+meta {
+  name: Get Private Post Variables as Non-Owner
+  type: http
+  seq: 107
+}
+
+get {
+  url: {{baseUrl}}/api/posts/c0000000-0000-0000-0000-000000000006/variables
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+assert {
+  res.status: eq 403
+  res.body.error: eq This post is private
+}
+
+docs {
+  Issue #77 — GET /api/posts/:id/variables previously returned the variable
+  list without enforcing visibility, letting any authenticated user enumerate
+  variable names of private posts. testuser is not the owner of carol's
+  private post c…0006, so the route must reject with 403.
+}

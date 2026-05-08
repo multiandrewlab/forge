@@ -38,6 +38,14 @@ export async function playgroundRoutes(app: FastifyInstance): Promise<void> {
     { preHandler: app.authenticate },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const { id } = request.params as { id: string };
+      // Authz: look up the post first, then enforce visibility — mirrors the
+      // sibling /playground/run pipeline so the variable list cannot be
+      // enumerated for a private post by a non-owner (#77).
+      const post = await findPostById(id);
+      if (!post) {
+        return reply.status(404).send({ error: 'Post not found', code: 'POST_NOT_FOUND' });
+      }
+      if (!assertCanReadPost(post, request.user.id, reply)) return;
       const rows = await getVariablesForPost(id);
       return reply.send({ variables: rows.map(toVariableResponse) });
     },

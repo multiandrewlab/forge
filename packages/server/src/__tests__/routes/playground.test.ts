@@ -54,6 +54,29 @@ describe('GET /api/posts/:id/variables', () => {
   let app: FastifyInstance;
   let authToken: string;
 
+  // Default post fixture for the GET variables route: a public testuser-owned
+  // post. Individual tests override `visibility` / `author_id` to exercise the
+  // assertCanReadPost guard.
+  const PUBLIC_POST_ROW = {
+    id: TEST_POST_ID,
+    author_id: TEST_USER_ID,
+    title: 'Variables Test Post',
+    content_type: 'prompt',
+    language: null,
+    visibility: 'public',
+    is_draft: false,
+    forked_from_id: null,
+    link_url: null,
+    link_preview: null,
+    vote_count: 0,
+    view_count: 0,
+    search_vector: null,
+    deleted_at: null,
+    created_at: new Date('2026-01-01'),
+    updated_at: new Date('2026-01-01'),
+  };
+  const OTHER_USER_ID = 'a0000000-0000-0000-0000-000000000003';
+
   beforeEach(async () => {
     app = await buildApp();
 
@@ -64,6 +87,8 @@ describe('GET /api/posts/:id/variables', () => {
       displayName: 'Test User',
     });
     mockGetVariablesForPost.mockReset();
+    mockFindPostById.mockReset();
+    mockFindPostById.mockResolvedValue(PUBLIC_POST_ROW);
   });
 
   afterEach(async () => {
@@ -76,6 +101,67 @@ describe('GET /api/posts/:id/variables', () => {
       url: `/api/posts/${TEST_POST_ID}/variables`,
     });
     expect(res.statusCode).toBe(401);
+  });
+
+  it('returns 404 when post does not exist', async () => {
+    mockFindPostById.mockResolvedValue(null);
+    mockGetVariablesForPost.mockResolvedValue([]);
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/posts/${TEST_POST_ID}/variables`,
+      headers: { authorization: `Bearer ${authToken}` },
+    });
+    expect(res.statusCode).toBe(404);
+    const body = JSON.parse(res.payload) as { code?: string };
+    expect(body.code).toBe('POST_NOT_FOUND');
+    // Variables query must not run after a 404 — no enumeration of a missing post.
+    expect(mockGetVariablesForPost).not.toHaveBeenCalled();
+  });
+
+  it('returns 403 when post is private and caller is not the owner', async () => {
+    mockFindPostById.mockResolvedValue({
+      ...PUBLIC_POST_ROW,
+      author_id: OTHER_USER_ID,
+      visibility: 'private',
+    });
+    // Reproduce prod behavior: variable names exist and would leak without the guard.
+    mockGetVariablesForPost.mockResolvedValue([
+      {
+        id: 'leaked-1',
+        post_id: TEST_POST_ID,
+        name: 'secret_var_name',
+        placeholder: null,
+        default_value: null,
+        sort_order: 0,
+      },
+    ]);
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/posts/${TEST_POST_ID}/variables`,
+      headers: { authorization: `Bearer ${authToken}` },
+    });
+    expect(res.statusCode).toBe(403);
+    const body = JSON.parse(res.payload) as { error?: string; variables?: unknown[] };
+    expect(body.error).toBe('This post is private');
+    // Variable names must NOT be enumerable for non-owners.
+    expect(body.variables).toBeUndefined();
+    expect(mockGetVariablesForPost).not.toHaveBeenCalled();
+  });
+
+  it('returns 200 when post is private and caller is the owner', async () => {
+    mockFindPostById.mockResolvedValue({
+      ...PUBLIC_POST_ROW,
+      visibility: 'private',
+    });
+    mockGetVariablesForPost.mockResolvedValue([]);
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/posts/${TEST_POST_ID}/variables`,
+      headers: { authorization: `Bearer ${authToken}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.payload) as { variables: unknown[] };
+    expect(body.variables).toEqual([]);
   });
 
   it('returns 200 with camelCase mapped variables', async () => {
