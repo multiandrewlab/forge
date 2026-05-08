@@ -99,7 +99,7 @@ jobs:
         env:
           E2E_FIXME_BUDGET: '7'
         run: |
-          count=$(grep -Pzro 'test\.fixme\s*\(' e2e/specs/ | tr -d '\0' | grep -c 'test\.fixme' || true)
+          count=$(grep -Pzro 'test\.fixme\s*\(' e2e/specs/ | tr '\0' '\n' | grep -c 'test\.fixme' || true)
           echo "current test.fixme count: $count"
           echo "current budget: $E2E_FIXME_BUDGET"
           if [ "$count" -gt "$E2E_FIXME_BUDGET" ]; then
@@ -108,23 +108,41 @@ jobs:
           fi
 
       - name: Fixme-budget regex regression test
-        # Asserts the multi-line regex actually catches a multi-line test.fixme(
-        # invocation. Guards against future workflow edits that downgrade the
-        # regex (e.g., dropping -P or -z) which would silently regress the
-        # multi-line failure-mode coverage.
+        # Asserts the multi-line regex AND the counting pipeline both work.
+        # Two fixtures: (a) one multi-line test.fixme(\n(...)) — exercises the
+        # regex's `\s*` cross-newline match (PCRE -P plus null-data -z); (b)
+        # three single-line test.fixme(...) calls — exercises the counting
+        # pipeline (catches `tr -d '\0'` regressions that would collapse all
+        # matches into one line).
         run: |
-          fixture=$(mktemp /tmp/fixme-multiline.XXXXXX.ts)
-          cat > "$fixture" <<'EOF'
+          # Fixture A — multi-line regex
+          fixture_a=$(mktemp /tmp/fixme-multiline.XXXXXX.ts)
+          cat > "$fixture_a" <<'EOF'
           test.fixme
-            ('this is a multi-line fixme', async () => {});
+            ('multi-line should match', async () => {});
           EOF
-          got=$(grep -Pzro 'test\.fixme\s*\(' "$fixture" | tr -d '\0' | grep -c 'test\.fixme' || true)
-          rm -f "$fixture"
-          if [ "$got" != "1" ]; then
-            echo "::error::Multi-line test.fixme regex regression: expected 1 match in fixture, got $got"
+          got_a=$(grep -Pzro 'test\.fixme\s*\(' "$fixture_a" | tr '\0' '\n' | grep -c 'test\.fixme' || true)
+          rm -f "$fixture_a"
+          if [ "$got_a" != "1" ]; then
+            echo "::error::Multi-line regex regression: expected 1 match in multi-line fixture, got $got_a"
             exit 1
           fi
-          echo "Multi-line regex test passed: 1 match in fixture"
+
+          # Fixture B — multi-match counting pipeline
+          fixture_b=$(mktemp /tmp/fixme-multimatch.XXXXXX.ts)
+          cat > "$fixture_b" <<'EOF'
+          test.fixme('one', async () => {});
+          test.fixme('two', async () => {});
+          test.fixme('three', async () => {});
+          EOF
+          got_b=$(grep -Pzro 'test\.fixme\s*\(' "$fixture_b" | tr '\0' '\n' | grep -c 'test\.fixme' || true)
+          rm -f "$fixture_b"
+          if [ "$got_b" != "3" ]; then
+            echo "::error::Counting pipeline regression: expected 3 matches in 3-line fixture, got $got_b (likely 'tr -d \\0' instead of 'tr \\0 \\n')"
+            exit 1
+          fi
+
+          echo "Fixme-budget regex regression tests passed (multi-line: 1, multi-match: 3)"
 
       - uses: actions/setup-node@v4
         with:
@@ -279,7 +297,7 @@ jobs:
           script: |
             const { execSync } = require('node:child_process');
             const out = execSync(
-              "grep -Pzro 'test\\.fixme\\s*\\(' e2e/specs/ | tr -d '\\0' | grep -c 'test\\.fixme' || true",
+              "grep -Pzro 'test\\.fixme\\s*\\(' e2e/specs/ | tr '\\0' '\\n' | grep -c 'test\\.fixme' || true",
               { encoding: 'utf8', shell: '/bin/bash' },
             ).trim();
             const marker = process.env.MARKER;
