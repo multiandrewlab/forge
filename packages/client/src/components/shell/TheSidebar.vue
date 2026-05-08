@@ -2,6 +2,7 @@
 <template>
   <!-- Desktop/tablet sidebar -->
   <aside
+    data-testid="sidebar-desktop"
     class="hidden shrink-0 flex-col border-r border-gray-700 bg-surface transition-all duration-200 md:flex"
     :class="collapsed ? 'w-14' : 'w-60'"
   >
@@ -98,6 +99,7 @@
       <div v-if="overlayOpen" class="fixed inset-0 z-40 md:hidden">
         <div class="absolute inset-0 bg-black/50" @click="$emit('closeOverlay')" />
         <aside
+          data-testid="mobile-nav-drawer"
           class="absolute inset-y-0 left-0 w-60 flex-col border-r border-gray-700 bg-surface flex"
         >
           <div class="flex flex-1 flex-col overflow-y-auto p-3">

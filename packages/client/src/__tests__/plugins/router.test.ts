@@ -277,6 +277,23 @@ describe('Router', () => {
 
       expect(router.currentRoute.value.name).toBe('post-edit');
     });
+
+    it('matches /:pathMatch(.*)* to NotFoundPage', () => {
+      const route = router.resolve('/this/does/not/exist');
+      expect(route.name).toBe('not-found');
+    });
+
+    it('should mark not-found route as not requiring auth', () => {
+      const route = router.resolve('/this/does/not/exist');
+      expect(route.meta.requiresAuth).toBe(false);
+    });
+
+    it('should lazy-load NotFoundPage component when navigating to an unknown path', async () => {
+      await router.push('/this/does/not/exist');
+      await router.isReady();
+
+      expect(router.currentRoute.value.name).toBe('not-found');
+    });
   });
 
   describe('navigation guards', () => {

@@ -1,7 +1,15 @@
 import { useAuthStore } from '@/stores/auth';
+import { useToastStore } from '@/stores/toast';
 import { useWebSocket } from '@/composables/useWebSocket';
 
 let refreshPromise: Promise<boolean> | null = null;
+
+function maybePushServerError(response: Response): void {
+  if (response.status >= 500) {
+    const toastStore = useToastStore();
+    toastStore.push({ kind: 'error', message: 'Something went wrong. Please try again.' });
+  }
+}
 
 async function attemptRefresh(): Promise<boolean> {
   const store = useAuthStore();
@@ -64,6 +72,7 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
 
   // Skip refresh logic if: not 401, no token, or this IS the refresh endpoint
   if (response.status !== 401 || !store.accessToken || url === '/api/auth/refresh') {
+    maybePushServerError(response);
     return response;
   }
 
@@ -71,6 +80,7 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
   const refreshed = await getOrCreateRefreshPromise();
 
   if (!refreshed) {
+    maybePushServerError(response);
     return response;
   }
 
@@ -78,8 +88,10 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
   const retryHeaders = new Headers(options.headers);
   retryHeaders.set('Authorization', `Bearer ${store.accessToken}`);
 
-  return fetch(url, {
+  const retryResponse = await fetch(url, {
     ...options,
     headers: retryHeaders,
   });
+  maybePushServerError(retryResponse);
+  return retryResponse;
 }

@@ -8,6 +8,7 @@
     <div
       role="dialog"
       aria-modal="true"
+      data-testid="search-dialog"
       class="mx-4 flex w-full max-w-xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl dark:bg-gray-900"
       @click.stop
       @keydown="onKeydown"

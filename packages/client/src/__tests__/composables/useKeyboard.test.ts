@@ -318,4 +318,91 @@ describe('useKeyboard', () => {
       unregister();
     });
   });
+
+  describe('editable-target guard', () => {
+    function dispatchOn(target: EventTarget, key: string, modifier?: 'meta' | 'ctrl'): void {
+      const init: KeyboardEventInit = { key, bubbles: true };
+      if (modifier === 'meta') init.metaKey = true;
+      if (modifier === 'ctrl') init.ctrlKey = true;
+      target.dispatchEvent(new KeyboardEvent('keydown', init));
+    }
+
+    it('skips bare-key handler when target is an <input>', () => {
+      const { register } = useKeyboard();
+      const handler = vi.fn();
+      register('n', handler);
+
+      const input = document.createElement('input');
+      document.body.appendChild(input);
+      try {
+        dispatchOn(input, 'n');
+        expect(handler).not.toHaveBeenCalled();
+      } finally {
+        input.remove();
+      }
+    });
+
+    it('skips bare-key handler when target is a <textarea>', () => {
+      const { register } = useKeyboard();
+      const handler = vi.fn();
+      register('?', handler);
+
+      const textarea = document.createElement('textarea');
+      document.body.appendChild(textarea);
+      try {
+        dispatchOn(textarea, '?');
+        expect(handler).not.toHaveBeenCalled();
+      } finally {
+        textarea.remove();
+      }
+    });
+
+    it('skips bare-key handler when target is contenteditable', () => {
+      const { register } = useKeyboard();
+      const handler = vi.fn();
+      register('/', handler);
+
+      const div = document.createElement('div');
+      // jsdom doesn't compute isContentEditable from the contentEditable property,
+      // so define it explicitly. Real browsers expose this getter natively.
+      Object.defineProperty(div, 'isContentEditable', { value: true, configurable: true });
+      document.body.appendChild(div);
+      try {
+        dispatchOn(div, '/');
+        expect(handler).not.toHaveBeenCalled();
+      } finally {
+        div.remove();
+      }
+    });
+
+    it('still fires bare-key handler when target is a non-editable element', () => {
+      const { register } = useKeyboard();
+      const handler = vi.fn();
+      register('n', handler);
+
+      const div = document.createElement('div');
+      document.body.appendChild(div);
+      try {
+        dispatchOn(div, 'n');
+        expect(handler).toHaveBeenCalledTimes(1);
+      } finally {
+        div.remove();
+      }
+    });
+
+    it('still fires modifier-key handler when target is an <input>', () => {
+      const { register } = useKeyboard();
+      const handler = vi.fn();
+      register('mod+k', handler);
+
+      const input = document.createElement('input');
+      document.body.appendChild(input);
+      try {
+        dispatchOn(input, 'k', 'ctrl');
+        expect(handler).toHaveBeenCalledTimes(1);
+      } finally {
+        input.remove();
+      }
+    });
+  });
 });

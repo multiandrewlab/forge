@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 import { setActivePinia, createPinia } from 'pinia';
 import { useAuthStore } from '@/stores/auth';
+import { useToastStore } from '@/stores/toast';
 import type { User } from '@forge/shared';
 import { AuthProvider } from '@forge/shared';
 
@@ -386,6 +387,67 @@ describe('apiFetch', () => {
       const [, options] = mockFetch.mock.calls[0] as [string, RequestInit];
       const headers = new Headers(options.headers);
       expect(headers.has('x-ws-client-id')).toBe(false);
+    });
+  });
+
+  describe('5xx behavior', () => {
+    it('pushes an error toast when the server returns 500', async () => {
+      mockFetch.mockResolvedValueOnce(new Response('boom', { status: 500 }));
+
+      await apiFetch('/api/whatever');
+
+      const toastStore = useToastStore();
+      expect(toastStore.toasts).toHaveLength(1);
+      expect(toastStore.toasts[0]?.kind).toBe('error');
+    });
+
+    it('pushes an error toast when the server returns 503', async () => {
+      mockFetch.mockResolvedValueOnce(new Response('unavailable', { status: 503 }));
+
+      await apiFetch('/api/whatever');
+
+      const toastStore = useToastStore();
+      expect(toastStore.toasts).toHaveLength(1);
+    });
+
+    it('does not push a toast on 200 responses', async () => {
+      mockFetch.mockResolvedValueOnce(new Response('{}', { status: 200 }));
+
+      await apiFetch('/api/whatever');
+
+      const toastStore = useToastStore();
+      expect(toastStore.toasts).toHaveLength(0);
+    });
+
+    it('does not push a toast on 4xx responses', async () => {
+      mockFetch.mockResolvedValueOnce(new Response('not found', { status: 404 }));
+
+      await apiFetch('/api/whatever');
+
+      const toastStore = useToastStore();
+      expect(toastStore.toasts).toHaveLength(0);
+    });
+
+    it('pushes a toast when the post-refresh retry returns 5xx', async () => {
+      // Original 401 → refresh succeeds → retry returns 500 → toast on retry response.
+      const store = useAuthStore();
+      store.setAuth('expired-token', createMockUser());
+
+      mockFetch
+        // First: 401 triggers refresh
+        .mockResolvedValueOnce(new Response('Unauthorized', { status: 401 }))
+        // Refresh succeeds
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ accessToken: 'new-token' }), { status: 200 }),
+        )
+        // Retry returns 500
+        .mockResolvedValueOnce(new Response('boom', { status: 500 }));
+
+      await apiFetch('/api/whatever');
+
+      const toastStore = useToastStore();
+      expect(toastStore.toasts).toHaveLength(1);
+      expect(toastStore.toasts[0]?.kind).toBe('error');
     });
   });
 });

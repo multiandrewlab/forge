@@ -1,7 +1,11 @@
 <!-- packages/client/src/components/shell/TheTopBar.vue -->
 <template>
-  <header class="flex h-14 shrink-0 items-center gap-4 border-b border-gray-700 bg-surface px-4">
+  <header
+    data-testid="top-bar"
+    class="flex h-14 shrink-0 items-center gap-4 border-b border-gray-700 bg-surface px-4"
+  >
     <button
+      data-testid="sidebar-toggle-btn"
       class="text-gray-400 hover:text-white lg:hidden"
       aria-label="Toggle sidebar"
       @click="$emit('toggleSidebar')"
@@ -15,9 +19,9 @@
         />
       </svg>
     </button>
-    <div class="flex items-center gap-2">
+    <RouterLink to="/" data-testid="logo-link" class="flex items-center gap-2">
       <span class="text-lg font-bold text-primary">Forge</span>
-    </div>
+    </RouterLink>
     <div class="relative mx-4 flex-1">
       <button
         data-testid="search-trigger"
@@ -31,7 +35,12 @@
         >
       </button>
     </div>
-    <button class="text-gray-400 hover:text-white" aria-label="Toggle dark mode" @click="toggle">
+    <button
+      data-testid="dark-mode-toggle"
+      class="text-gray-400 hover:text-white"
+      aria-label="Toggle dark mode"
+      @click="toggle"
+    >
       <svg v-if="darkMode" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
         <path
           stroke-linecap="round"
@@ -53,6 +62,7 @@
 </template>
 
 <script setup lang="ts">
+import { RouterLink } from 'vue-router';
 import { useDarkMode } from '../../composables/useDarkMode.js';
 import { useSearchStore } from '../../stores/search.js';
 import { useKeyboard } from '../../composables/useKeyboard.js';
@@ -65,4 +75,5 @@ const searchStore = useSearchStore();
 const { register } = useKeyboard();
 
 register('mod+k', () => searchStore.open());
+register('/', () => searchStore.open());
 </script>

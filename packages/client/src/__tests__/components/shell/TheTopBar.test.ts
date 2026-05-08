@@ -1,9 +1,20 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { setActivePinia, createPinia } from 'pinia';
+import { createRouter, createMemoryHistory, type Router } from 'vue-router';
 import { useSearchStore } from '../../../stores/search';
 import { _resetForTesting } from '../../../composables/useKeyboard';
 import TheTopBar from '../../../components/shell/TheTopBar.vue';
+
+function createTestRouter(): Router {
+  return createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      { path: '/', component: { template: '<div />' } },
+      { path: '/posts/:id', component: { template: '<div />' } },
+    ],
+  });
+}
 
 describe('TheTopBar', () => {
   let store: ReturnType<typeof useSearchStore>;
@@ -19,14 +30,24 @@ describe('TheTopBar', () => {
   });
 
   function mountTopBar() {
+    const router = createTestRouter();
     return mount(TheTopBar, {
       props: { sidebarCollapsed: false },
+      global: { plugins: [router] },
     });
   }
 
   it('renders the Forge brand name', () => {
     const wrapper = mountTopBar();
     expect(wrapper.text()).toContain('Forge');
+  });
+
+  it('renders the logo as a RouterLink to /', () => {
+    const wrapper = mountTopBar();
+    const logo = wrapper.find('[data-testid="logo-link"]');
+    expect(logo.exists()).toBe(true);
+    expect(logo.attributes('href')).toBe('/');
+    expect(logo.text()).toContain('Forge');
   });
 
   it('renders the sidebar toggle button', () => {

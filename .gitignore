@@ -36,3 +36,10 @@ e2e/.auth/
 e2e/test-results/
 e2e/playwright-report/
 forge-e2e-secret
+
+# Playwright artifacts at repo root (some shells write here)
+test-results/
+playwright-report/
+
+# Claude Code session artifacts
+.claude/scheduled_tasks.lock

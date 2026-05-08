@@ -1,6 +1,6 @@
 <!-- packages/client/src/layouts/AppLayout.vue -->
 <template>
-  <div class="flex h-screen flex-col bg-surface text-gray-200">
+  <div data-testid="app-layout" class="flex h-screen flex-col bg-surface text-gray-200">
     <TheTopBar :sidebar-collapsed="sidebarCollapsed" @toggle-sidebar="handleToggleSidebar" />
     <div class="flex flex-1 overflow-hidden">
       <TheSidebar
@@ -9,28 +9,47 @@
         @close-overlay="overlayOpen = false"
       />
       <main class="flex-1 overflow-hidden">
-        <RouterView />
+        <ErrorBoundary>
+          <RouterView />
+        </ErrorBoundary>
       </main>
     </div>
     <TheSearchModal />
+    <ErrorToast />
+    <KeyboardShortcutsHelp :open="helpOpen" @close="helpOpen = false" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, watch, onUnmounted } from 'vue';
-import { RouterView } from 'vue-router';
+import { RouterView, useRouter } from 'vue-router';
 import { storeToRefs } from 'pinia';
 import { useUiStore } from '../stores/ui.js';
 import { useAuthStore } from '../stores/auth.js';
 import { useWebSocket } from '../composables/useWebSocket.js';
 import { useFeed } from '../composables/useFeed.js';
+import { useKeyboard } from '../composables/useKeyboard.js';
 import TheSidebar from '../components/shell/TheSidebar.vue';
 import TheTopBar from '../components/shell/TheTopBar.vue';
 import TheSearchModal from '../components/shell/TheSearchModal.vue';
+import KeyboardShortcutsHelp from '../components/shell/KeyboardShortcutsHelp.vue';
+import ErrorToast from '../components/feedback/ErrorToast.vue';
+import ErrorBoundary from '../components/feedback/ErrorBoundary.vue';
 
 const uiStore = useUiStore();
 const { sidebarCollapsed } = storeToRefs(uiStore);
 const overlayOpen = ref(false);
+const helpOpen = ref(false);
+
+const router = useRouter();
+const { register } = useKeyboard();
+
+register('n', () => {
+  void router.push('/posts/new');
+});
+register('?', () => {
+  helpOpen.value = true;
+});
 
 declare const window: { innerWidth: number };
 
