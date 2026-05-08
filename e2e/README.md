@@ -126,6 +126,27 @@ await expect(subscribeButton).toHaveAttribute('aria-pressed', 'true');
 Assertions check state (text, attribute value, visibility, count). If your
 locator string mentions the thing your assertion checks, refactor.
 
+## Sharded selector files — header template
+
+Selectors live in `e2e/fixtures/selectors/<feature>.ts` (one file per feature
+folder). Every file MUST start with this header:
+
+```ts
+// e2e/fixtures/selectors/<feature>.ts
+//
+// Selectors for the <feature> feature. Imported by:
+//   - e2e/specs/<feature>/*.spec.ts
+//
+// Convention: selectors return Locator | string.
+//   - Use Locator for selectors that need .first() / .nth(n) / chained .filter().
+//   - Use string for plain CSS / role-name selectors that callers pass to .locator().
+//
+// Owner: <team> (@<github-handle>)
+// Last reviewed: YYYY-MM-DD
+```
+
+When you modify a selector file, bump the "Last reviewed" date.
+
 ## Storage state security note
 
 Saved auth state (`*.auth.json`) is **gitignored** AND defaults to `os.tmpdir()/forge-e2e-storage/<user>.json` to make accidental commits impossible. To inspect storageState alongside traces, set `E2E_STORAGE_IN_REPO=1` — files then go under `e2e/.auth/` (still gitignored). The repo's Husky pre-commit hook blocks staging `*.auth.json` and `forge-e2e-secret` as a backstop.
