@@ -198,3 +198,21 @@ The two assertions corroborate ONE concept ("client-side validity blocks submiss
 - `npm run e2e -- --grep "Phase 4"` — run a sub-section.
 - `npm run e2e:ui` — Playwright UI mode.
 - `npm run e2e -- --workers=1` — serialize for debugging (the journey passes at workers=4 in CI).
+
+## Out of Scope
+
+The following are intentionally not exercised by this suite:
+
+- **WebKit (Safari) Playwright project** — permanently out of scope. Forge is
+  Chromium-first; we do not have Safari-specific code paths and the marginal
+  coverage does not justify the suite-runtime cost. If a Safari-specific bug is
+  reported in the wild, file a focused regression spec under `e2e/specs/shell/`
+  and tag it `@webkit`; only then revisit adding the project.
+- **Firefox Playwright project** — same rationale.
+- **Mobile beyond `@mobile`-tagged specs** — the `chromium-mobile` project runs
+  only `register a fresh account` from the journey on a Pixel 5 device. Add
+  `@mobile` tags sparingly when a mobile-specific surface needs coverage.
+- **Visual regression / screenshot diffing** — `screenshot: only-on-failure`
+  exists for debugging only.
+- **MinIO bucket pruning between specs** — file uploads accumulate during a
+  run; re-runs are idempotent against deterministic seed UUIDs.
