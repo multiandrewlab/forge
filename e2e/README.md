@@ -100,6 +100,32 @@ await expect(auth.loginError(page)).toContainText('Bad password'); // status ass
 
 The testid (`cancel-btn`, `welcome-heading`, `login-error-message`) is the source of truth for "this element". The visible text is the source of truth for "this copy". Tests must not conflate the two.
 
+## Selection vs. assertion
+
+The single most common bug pattern in this suite is conflating **what to find**
+with **what to verify**. A locator that uses an attribute that's only true at
+the moment of assertion is a selector that races itself.
+
+**Bad — selects on a property the assertion is about to check:**
+
+```ts
+// "Find the button that is enabled, then assert it is enabled" — tautology.
+// If the page hasn't finished rendering, the locator finds 0 nodes and the
+// assertion times out with a confusing 'expected 1, found 0'.
+await expect(page.locator('button[aria-pressed="true"]')).toBeVisible();
+```
+
+**Good — selects by stable identity, asserts the dynamic state:**
+
+```ts
+const subscribeButton = page.getByTestId('subscribe-btn');
+await expect(subscribeButton).toHaveAttribute('aria-pressed', 'true');
+```
+
+**Rule:** locators select by identity (testid, role+name, semantic structure).
+Assertions check state (text, attribute value, visibility, count). If your
+locator string mentions the thing your assertion checks, refactor.
+
 ## Storage state security note
 
 Saved auth state (`*.auth.json`) is **gitignored** AND defaults to `os.tmpdir()/forge-e2e-storage/<user>.json` to make accidental commits impossible. To inspect storageState alongside traces, set `E2E_STORAGE_IN_REPO=1` — files then go under `e2e/.auth/` (still gitignored). The repo's Husky pre-commit hook blocks staging `*.auth.json` and `forge-e2e-secret` as a backstop.
