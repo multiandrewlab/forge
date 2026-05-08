@@ -49,9 +49,21 @@ function matchesShortcut(event: KeyboardEvent, parsed: ParsedShortcut): boolean 
 
 // ── Keydown handler ───────────────────────────────────────────────────
 
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (target instanceof HTMLInputElement) return true;
+  if (target instanceof HTMLTextAreaElement) return true;
+  if (target instanceof HTMLElement && target.isContentEditable) return true;
+  return false;
+}
+
 function onKeydown(event: KeyboardEvent): void {
+  const editable = isEditableTarget(event.target);
   for (const [shortcut, handlers] of registry) {
     const parsed = parseShortcut(shortcut);
+    // Bare-key shortcuts (n, /, ?) must NOT fire while the user is typing in
+    // an input, textarea, or contenteditable. Modifier shortcuts (mod+k) are
+    // explicit user intent and still fire.
+    if (editable && !parsed.mod) continue;
     if (matchesShortcut(event, parsed)) {
       event.preventDefault();
       for (const handler of handlers) {

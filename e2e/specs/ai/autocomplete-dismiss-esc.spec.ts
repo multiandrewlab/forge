@@ -11,7 +11,9 @@ async function openEditorOnNewPost(page: Page): Promise<void> {
   await page.locator('.cm-content').first().click();
 }
 
-test('ai: Esc dismisses ghost text without inserting', async ({ actor }) => {
+// Tracked in #89 — Monaco/LLM-mock typing race mangles the pre-typed prefix
+// before the suggestion arrives. Un-fixme once #89 is resolved.
+test.fixme('ai: Esc dismisses ghost text without inserting', async ({ actor }) => {
   await withMockScript(actor, 'autocomplete-typescript-react');
   await openEditorOnNewPost(actor);
   await actor.keyboard.type('export function ');

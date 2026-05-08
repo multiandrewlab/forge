@@ -23,7 +23,7 @@
         >
           {{ item.label }}
         </span>
-        <span v-if="idx < items.length - 1" class="text-gray-600">/</span>
+        <span v-if="idx < items.length - 1" aria-hidden="true" class="text-gray-600">/</span>
       </li>
     </ol>
   </nav>

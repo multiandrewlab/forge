@@ -26,7 +26,9 @@
       </div>
       <dl class="grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2 text-sm">
         <dt>
-          <kbd class="rounded border border-gray-600 bg-gray-800 px-1.5 py-0.5 text-xs">Cmd+K</kbd>
+          <kbd class="rounded border border-gray-600 bg-gray-800 px-1.5 py-0.5 text-xs"
+            >Cmd/Ctrl+K</kbd
+          >
         </dt>
         <dd>Open search</dd>
         <dt>

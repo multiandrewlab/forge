@@ -12,7 +12,7 @@ describe('KeyboardShortcutsHelp', () => {
     const wrapper = mount(KeyboardShortcutsHelp, { props: { open: true } });
     const dialog = wrapper.find('[data-testid="keyboard-shortcuts-help"]');
     expect(dialog.exists()).toBe(true);
-    expect(dialog.text()).toContain('Cmd+K');
+    expect(dialog.text()).toContain('Cmd/Ctrl+K');
     expect(dialog.text()).toContain('n');
     expect(dialog.text()).toContain('/');
     expect(dialog.text()).toContain('?');

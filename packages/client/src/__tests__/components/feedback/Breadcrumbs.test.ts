@@ -97,4 +97,22 @@ describe('Breadcrumbs', () => {
     expect(current.text()).toBe('Last with link');
     expect(current.attributes('aria-current')).toBe('page');
   });
+
+  it('renders the visual "/" separator with aria-hidden so it is not announced', () => {
+    const wrapper = mount(Breadcrumbs, {
+      props: {
+        items: [
+          { label: 'Home', to: '/' },
+          { label: 'Mid', to: '/mid' },
+          { label: 'Leaf', to: null },
+        ],
+      },
+      global: { plugins: [router] },
+    });
+    const separators = wrapper.findAll('span').filter((s) => s.text() === '/');
+    expect(separators.length).toBeGreaterThan(0);
+    for (const sep of separators) {
+      expect(sep.attributes('aria-hidden')).toBe('true');
+    }
+  });
 });
