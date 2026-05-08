@@ -83,6 +83,14 @@ jobs:
             exit 1
           fi
 
+      - name: Ensure flaky-e2e label exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh label create flaky-e2e \
+            --description "Auto-tracked flaky E2E spec" \
+            --color D93F0B || true
+
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
