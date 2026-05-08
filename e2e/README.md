@@ -169,9 +169,18 @@ When a spec could plausibly live in two feature folders, log the decision here s
 | ---------------------------------------------------------------------- | ------------ | ------ |
 | _(empty for v1 — journey smoke is in its own home `_journey.spec.ts`)_ |              |        |
 
-## Periodic audit
+## Periodic audit — `@no-reset` specs
 
-Once per quarter, run `cd e2e && npx playwright test --grep @no-reset` to list all opt-outs. Any without a clear reason in the test body should be re-evaluated.
+A small number of specs use `@no-reset` to opt out of the per-worker DB reset.
+Once a quarter, run:
+
+```bash
+npm run e2e -- --grep @no-reset
+```
+
+…and confirm each `@no-reset` spec still avoids mutating state. A spec that
+silently grew a write path while keeping the tag will pollute other workers'
+fixtures and cause cross-spec flakes. If you find one, drop the tag.
 
 ## Patterns (introduced by `e2e/specs/auth/`)
 
