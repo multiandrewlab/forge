@@ -28,6 +28,15 @@ export default defineConfig({
       name: 'chromium-desktop',
       use: { ...devices['Desktop Chrome'] },
     },
+    {
+      name: 'chromium-mobile',
+      use: { ...devices['Pixel 5'] },
+      // Mobile is opt-in: only specs whose title contains @mobile run here.
+      // Today: just _journey.spec.ts > 'register a fresh account'. Add tags
+      // sparingly to keep the mobile suite under the 10-min runtime budget
+      // tracked in #43.
+      grep: /@mobile\b/,
+    },
   ],
   webServer: [
     {

@@ -24,7 +24,7 @@ const FRESH_USER = {
 };
 
 test.describe.serial('Phase 1 — auth: register, login, logout, relogin', () => {
-  test('register a fresh account', { tag: '@no-reset' }, async ({ browser }) => {
+  test('register a fresh account @mobile', { tag: '@no-reset' }, async ({ browser }) => {
     // Pre-condition: page is anonymous (we drive a raw context, not the
     // actor fixture). Tagged @no-reset so we don't wipe the user we just
     // created before the assertion runs in the next test in this describe block.
