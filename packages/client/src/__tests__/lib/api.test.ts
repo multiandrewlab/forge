@@ -428,6 +428,61 @@ describe('apiFetch', () => {
       expect(toastStore.toasts).toHaveLength(0);
     });
 
+    it('pushes a 5xx toast when /api/auth/refresh itself returns 503 (#92)', async () => {
+      // Original 401 → refresh returns 503 (DB outage during refresh). The user
+      // should see the server-error toast for the refresh failure, not silence.
+      const store = useAuthStore();
+      store.setAuth('expired-token', createMockUser());
+
+      mockFetch
+        .mockResolvedValueOnce(new Response('Unauthorized', { status: 401 }))
+        .mockResolvedValueOnce(new Response('database is down', { status: 503 }));
+
+      const result = await apiFetch('/api/posts');
+
+      const toastStore = useToastStore();
+      expect(toastStore.toasts).toHaveLength(1);
+      expect(toastStore.toasts[0]?.kind).toBe('error');
+
+      // Auth state still cleared on refresh failure
+      expect(store.accessToken).toBeNull();
+      expect(store.user).toBeNull();
+
+      // Original 401 is still surfaced to the caller (caller's responsibility to
+      // handle 401 routing); only the toast pipeline learns about the 5xx.
+      expect(result.status).toBe(401);
+    });
+
+    it('does NOT push a 5xx toast when /api/auth/refresh returns 401 (#92)', async () => {
+      // Legitimate refresh-token expiry — caller's 401-handling routes user to login.
+      const store = useAuthStore();
+      store.setAuth('expired-token', createMockUser());
+
+      mockFetch
+        .mockResolvedValueOnce(new Response('Unauthorized', { status: 401 }))
+        .mockResolvedValueOnce(new Response('Refresh failed', { status: 401 }));
+
+      await apiFetch('/api/posts');
+
+      const toastStore = useToastStore();
+      expect(toastStore.toasts).toHaveLength(0);
+    });
+
+    it('does NOT push a 5xx toast when /api/auth/refresh throws a network error (#92)', async () => {
+      // No response object exists — nothing to surface; auth still cleared.
+      const store = useAuthStore();
+      store.setAuth('expired-token', createMockUser());
+
+      mockFetch
+        .mockResolvedValueOnce(new Response('Unauthorized', { status: 401 }))
+        .mockRejectedValueOnce(new Error('Network error'));
+
+      await apiFetch('/api/posts');
+
+      const toastStore = useToastStore();
+      expect(toastStore.toasts).toHaveLength(0);
+    });
+
     it('pushes a toast when the post-refresh retry returns 5xx', async () => {
       // Original 401 → refresh succeeds → retry returns 500 → toast on retry response.
       const store = useAuthStore();
