@@ -30,11 +30,5 @@ test('preview markdown: rendered markdown variant shows the marker heading', asy
     .getByTestId('post-list-item')
     .getByRole('heading', { name: title, exact: true })
     .click();
-  // Explicitly select our file in the sidebar. filesStore.fetchFiles guards
-  // `activeFileId` with `if (!activeFileId.value)` (packages/client/src/stores/files.ts:28),
-  // so under parallel workers — when home auto-selects a different post first
-  // and locks activeFileId to that post's file — switching posts via tile
-  // click won't update the active file. The sidebar click forces it.
-  await files.fileSidebarItem(actor, 'sample.md').click();
   await expect(files.filePreviewMarkdown(actor)).toContainText('e2e-md-fixture');
 });

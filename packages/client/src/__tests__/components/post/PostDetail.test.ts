@@ -863,6 +863,84 @@ describe('PostDetail', () => {
       expect(filesStore.activeFileId).toBeNull();
     });
 
+    it('resets activeFileId when switching between two file-bearing posts (#85)', async () => {
+      // Post A's files
+      setupUrlAwareMockWithFiles(mockPostWithRevision, mockFiles);
+
+      const wrapper = mount(PostDetail, { props: { post: mockPost } });
+      await flushPromises();
+
+      const filesStore = useFilesStore();
+      // Post A auto-selects its first file
+      expect(filesStore.activeFileId).toBe('file-1');
+
+      // Post B with a different revision and different files
+      const postB: PostWithAuthor = { ...mockPost, id: 'post-2' };
+      const postBWithRevision: PostWithRevision = {
+        ...mockPostWithRevision,
+        id: 'post-2',
+        revisions: [
+          {
+            id: 'rev-2',
+            postId: 'post-2',
+            content: 'console.log("b")',
+            message: null,
+            revisionNumber: 1,
+            createdAt: new Date('2025-01-02'),
+          },
+        ],
+      };
+      const postBFiles: PostFile[] = [
+        {
+          id: 'file-3',
+          postId: 'post-2',
+          revisionId: 'rev-2',
+          filename: 'main.ts',
+          mimeType: 'text/typescript',
+          fileSize: 64,
+          sortOrder: 0,
+          createdAt: new Date('2025-01-02'),
+        },
+      ];
+      setupUrlAwareMockWithFiles(postBWithRevision, postBFiles);
+
+      await wrapper.setProps({ post: postB });
+      await flushPromises();
+
+      // After switching, post B's first file must be active — NOT the stale
+      // activeFileId from post A. With the bug, activeFileId stays 'file-1'.
+      expect(filesStore.activeFileId).toBe('file-3');
+
+      // And <FilePreview> should render post B's file
+      const preview = wrapper.findComponent({ name: 'FilePreview' });
+      expect(preview.exists()).toBe(true);
+      expect(preview.props('file')).toEqual(postBFiles[0]);
+    });
+
+    it('preserves explicit user selection on same-id re-render (#85)', async () => {
+      // Locks in: the watcher's reset must only fire when the post id actually
+      // changes. If the parent passes a new PostWithAuthor object with the
+      // same id (e.g., a feed refresh re-emits the same post), an explicit
+      // file selection the user made via <FileSidebar> must persist.
+      setupUrlAwareMockWithFiles(mockPostWithRevision, mockFiles);
+
+      const wrapper = mount(PostDetail, { props: { post: mockPost } });
+      await flushPromises();
+
+      const filesStore = useFilesStore();
+      // User explicitly selects the second file
+      filesStore.setActiveFile('file-2');
+      await wrapper.vm.$nextTick();
+      expect(filesStore.activeFileId).toBe('file-2');
+
+      // Parent re-emits a fresh PostWithAuthor object with the same id
+      await wrapper.setProps({ post: { ...mockPost } });
+      await flushPromises();
+
+      // Selection must be preserved — the watcher uses post id, not identity
+      expect(filesStore.activeFileId).toBe('file-2');
+    });
+
     it('does not render CodeRunner in multi-file layout when contentType is not snippet', async () => {
       const docPost: PostWithAuthor = { ...mockPost, contentType: 'document' };
       const docPostWithRevision: PostWithRevision = {

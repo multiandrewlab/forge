@@ -147,6 +147,10 @@ watch(
       inlineCommentLine.value = null;
       return;
     }
+    // Clear the previous post's active file so fetchFiles can auto-select
+    // this post's first file. Without this, switching between two file-bearing
+    // posts leaves <FilePreview> rendering the previous post's file (#85).
+    filesStore.setActiveFile(null);
     try {
       const response = await apiFetch(`/api/posts/${id}`);
       if (response.ok) {
