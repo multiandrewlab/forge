@@ -82,21 +82,39 @@ describe('sanitizeFilename', () => {
 // ---------------------------------------------------------------------------
 
 describe('routeStorage', () => {
-  it('returns "inline" for size exactly at threshold', () => {
-    expect(routeStorage(INLINE_THRESHOLD)).toBe('inline');
+  it('returns "inline" for text MIME at threshold', () => {
+    expect(routeStorage(INLINE_THRESHOLD, 'text/plain')).toBe('inline');
   });
 
-  it('returns "inline" for size below threshold', () => {
-    expect(routeStorage(1)).toBe('inline');
-    expect(routeStorage(0)).toBe('inline');
+  it('returns "inline" for text MIME below threshold', () => {
+    expect(routeStorage(1, 'text/plain')).toBe('inline');
+    expect(routeStorage(0, 'text/plain')).toBe('inline');
   });
 
-  it('returns "object" for size above threshold', () => {
-    expect(routeStorage(INLINE_THRESHOLD + 1)).toBe('object');
+  it('returns "object" for text MIME above threshold', () => {
+    expect(routeStorage(INLINE_THRESHOLD + 1, 'text/plain')).toBe('object');
   });
 
-  it('returns "inline" for zero bytes', () => {
-    expect(routeStorage(0)).toBe('inline');
+  it('returns "object" for binary MIME regardless of size', () => {
+    expect(routeStorage(0, 'image/png')).toBe('object');
+    expect(routeStorage(1, 'image/png')).toBe('object');
+    expect(routeStorage(INLINE_THRESHOLD, 'image/png')).toBe('object');
+    expect(routeStorage(INLINE_THRESHOLD + 1, 'image/png')).toBe('object');
+  });
+
+  it('returns "object" for each binary MIME at small size', () => {
+    expect(routeStorage(1, 'image/jpeg')).toBe('object');
+    expect(routeStorage(1, 'image/gif')).toBe('object');
+    expect(routeStorage(1, 'image/webp')).toBe('object');
+  });
+
+  it('falls back to size-based routing when mime is undefined', () => {
+    expect(routeStorage(1, undefined)).toBe('inline');
+    expect(routeStorage(INLINE_THRESHOLD + 1, undefined)).toBe('object');
+  });
+
+  it('falls back to size-based routing when mime is null', () => {
+    expect(routeStorage(1, null)).toBe('inline');
   });
 });
 

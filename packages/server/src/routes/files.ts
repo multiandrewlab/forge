@@ -82,7 +82,7 @@ export async function fileRoutes(app: FastifyInstance): Promise<void> {
       const filename = sanitizeFilename(data.filename);
 
       // 8. Determine storage strategy
-      const storageMode = routeStorage(buffer.length);
+      const storageMode = routeStorage(buffer.length, data.mimetype);
       const sortOrder = await getNextSortOrder(id);
 
       // 9. Create DB row with revision_id = null (staging)

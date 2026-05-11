@@ -6,6 +6,7 @@ import {
   MAX_FILE_SIZE,
   INLINE_THRESHOLD,
   isAllowedMimeType,
+  isBinaryMimeType,
   stageFileSchema,
   removeFileSchema,
   fileMetadataSchema,
@@ -153,6 +154,71 @@ describe('isAllowedMimeType', () => {
 
   it('should reject undefined', () => {
     expect(isAllowedMimeType(undefined)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// isBinaryMimeType
+// ---------------------------------------------------------------------------
+describe('isBinaryMimeType', () => {
+  it('returns true for image/png', () => {
+    expect(isBinaryMimeType('image/png')).toBe(true);
+  });
+
+  it('returns true for image/jpeg', () => {
+    expect(isBinaryMimeType('image/jpeg')).toBe(true);
+  });
+
+  it('returns true for image/gif', () => {
+    expect(isBinaryMimeType('image/gif')).toBe(true);
+  });
+
+  it('returns true for image/webp', () => {
+    expect(isBinaryMimeType('image/webp')).toBe(true);
+  });
+
+  it('returns false for text/plain', () => {
+    expect(isBinaryMimeType('text/plain')).toBe(false);
+  });
+
+  it('returns false for text/markdown', () => {
+    expect(isBinaryMimeType('text/markdown')).toBe(false);
+  });
+
+  it('returns false for text/csv', () => {
+    expect(isBinaryMimeType('text/csv')).toBe(false);
+  });
+
+  it('returns false for application/json', () => {
+    expect(isBinaryMimeType('application/json')).toBe(false);
+  });
+
+  it('returns false for application/yaml', () => {
+    expect(isBinaryMimeType('application/yaml')).toBe(false);
+  });
+
+  it('returns false for text/x-python', () => {
+    expect(isBinaryMimeType('text/x-python')).toBe(false);
+  });
+
+  it('returns false for null', () => {
+    expect(isBinaryMimeType(null)).toBe(false);
+  });
+
+  it('returns false for undefined', () => {
+    expect(isBinaryMimeType(undefined)).toBe(false);
+  });
+
+  it('returns false for empty string', () => {
+    expect(isBinaryMimeType('')).toBe(false);
+  });
+
+  it('returns false for uppercase (defensive: documents case-sensitivity)', () => {
+    expect(isBinaryMimeType('IMAGE/PNG')).toBe(false);
+  });
+
+  it('returns false for mime with parameters (defensive: documents exact-match)', () => {
+    expect(isBinaryMimeType('image/png; charset=binary')).toBe(false);
   });
 });
 

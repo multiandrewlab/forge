@@ -37,6 +37,14 @@ export const ALLOWED_MIME_EXACT = [
   'image/webp',
 ] as const;
 
+/**
+ * Binary MIME subset of the allowlist. Files of these types must route to
+ * object storage regardless of size (inlining would UTF-8-encode binary bytes
+ * and Postgres rejects the INSERT). Keep in sync with the image entries in
+ * ALLOWED_MIME_EXACT.
+ */
+const BINARY_MIME_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'] as const;
+
 // ---------------------------------------------------------------------------
 // Size constants
 // ---------------------------------------------------------------------------
@@ -65,6 +73,17 @@ export function isAllowedMimeType(mime: string | null | undefined): boolean {
   }
 
   return (ALLOWED_MIME_EXACT as readonly string[]).includes(mime);
+}
+
+/**
+ * Returns true if the MIME type is binary (currently: image types in the
+ * allowlist). Used by storage routing to bypass the inline-content path.
+ * Case-sensitive exact match — assumes callers have already passed the
+ * allowlist guard upstream.
+ */
+export function isBinaryMimeType(mime: string | null | undefined): boolean {
+  if (!mime) return false;
+  return (BINARY_MIME_TYPES as readonly string[]).includes(mime);
 }
 
 // ---------------------------------------------------------------------------

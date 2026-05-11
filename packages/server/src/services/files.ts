@@ -1,6 +1,6 @@
 import path from 'node:path';
 import type { PostFile } from '@forge/shared';
-import { INLINE_THRESHOLD } from '@forge/shared';
+import { INLINE_THRESHOLD, isBinaryMimeType } from '@forge/shared';
 import type { PostFileRow } from '../db/queries/types.js';
 
 // ---------------------------------------------------------------------------
@@ -36,12 +36,17 @@ export function sanitizeFilename(raw: string): string {
 
 /**
  * Decide whether a file should be stored inline (in the database) or in
- * object storage based on its size in bytes.
+ * object storage based on its MIME type and size in bytes.
  *
- * Files at or below {@link INLINE_THRESHOLD} (64 KB) are inlined; larger
- * files go to object storage.
+ * Binary MIME types (e.g., image/png) always route to object storage,
+ * because inlining them as UTF-8 text corrupts their bytes. Text MIMEs
+ * inline at or below {@link INLINE_THRESHOLD} (64 KB) and object-store above it.
  */
-export function routeStorage(sizeBytes: number): 'inline' | 'object' {
+export function routeStorage(
+  sizeBytes: number,
+  mimeType: string | null | undefined,
+): 'inline' | 'object' {
+  if (isBinaryMimeType(mimeType)) return 'object';
   return sizeBytes <= INLINE_THRESHOLD ? 'inline' : 'object';
 }
 

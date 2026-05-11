@@ -28,6 +28,7 @@ export {
   MAX_FILE_SIZE,
   INLINE_THRESHOLD,
   isAllowedMimeType,
+  isBinaryMimeType,
   stageFileSchema,
   removeFileSchema,
   fileMetadataSchema,
