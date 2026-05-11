@@ -1,0 +1,57 @@
+meta {
+  name: Upload Small Binary File
+  type: http
+  seq: 15
+}
+
+post {
+  url: {{baseUrl}}/api/posts/{{postId}}/files
+  body: multipartForm
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:multipart-form {
+  file: @file(../e2e/fixtures/files/sample.png) @contentType(image/png)
+}
+
+script:post-response {
+  if (res && res.body && res.body.file) {
+    bru.setVar("createdFileId", res.body.file.id);
+  }
+}
+
+tests {
+  test("upload returns 201 (issue #86 regression)", () => {
+    expect(res.status).to.equal(201);
+  });
+  test("response contains file metadata", () => {
+    expect(res.body.file).to.have.property("id");
+    expect(res.body.file).to.have.property("filename", "sample.png");
+    expect(res.body.file).to.have.property("mimeType", "image/png");
+    expect(res.body.file).to.have.property("fileSize", 68);
+  });
+}
+
+assert {
+  res.status: eq 201
+}
+
+docs {
+  Regression test for issue #86: small binary uploads (image/png, image/jpeg,
+  image/gif, image/webp) at or below the 64KB INLINE_THRESHOLD must succeed
+  with HTTP 201. Pre-fix these returned HTTP 500 because routes/files.ts
+  inlined content via buffer.toString('utf-8'), producing invalid byte
+  sequences that Postgres rejected on the text `content` column.
+
+  The MIME-aware routeStorage helper (packages/shared/src/validators/file.ts)
+  now routes binary MIMEs to object storage regardless of size.
+
+  Uses Bruno's native multipart-form upload — the CLI reads the file via
+  fs.createReadStream and lets `form-data` serialize the multipart body,
+  bypassing the QuickJS Buffer-typing limitation that blocks the axios
+  pre-request workaround for binary content.
+}
