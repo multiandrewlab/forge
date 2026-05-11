@@ -228,6 +228,64 @@ describe('file routes', () => {
       expect(mockStorageUpload).toHaveBeenCalled();
     });
 
+    it('uploads small binary file to object storage (issue #86 regression)', async () => {
+      // A 100-byte image/png — well below INLINE_THRESHOLD. Before the fix,
+      // routeStorage returned 'inline' for size <= 64KB regardless of MIME,
+      // and buffer.toString('utf-8') produced invalid UTF-8 that Postgres
+      // rejected with HTTP 500. After the fix, binary MIMEs always route to
+      // object storage.
+      const smallBinaryContent = Buffer.alloc(100, 0x89);
+      const { body, boundary } = buildMultipartBody('small.png', smallBinaryContent, 'image/png');
+
+      // Mock file-type for image magic bytes validation
+      mockFileTypeFromBuffer.mockResolvedValueOnce({ mime: 'image/png' });
+
+      const smallObjectFileRow: PostFileRow = {
+        ...sampleObjectFileRow,
+        filename: 'small.png',
+        storage_key: `staging/${userId}/${fileId}/small.png`,
+        file_size: 100,
+      };
+
+      // findPostById
+      mockQuery.mockResolvedValueOnce({ rows: [samplePostRow], rowCount: 1 });
+      // getNextSortOrder
+      mockQuery.mockResolvedValueOnce({ rows: [{ next: 0 }], rowCount: 1 });
+      // createPostFile
+      mockQuery.mockResolvedValueOnce({ rows: [smallObjectFileRow], rowCount: 1 });
+      // UPDATE storage_key
+      mockQuery.mockResolvedValueOnce({ rows: [smallObjectFileRow], rowCount: 1 });
+
+      mockStorageUpload.mockResolvedValueOnce(undefined);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/posts/${postId}/files`,
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': `multipart/form-data; boundary=${boundary}`,
+        },
+        body,
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(mockStorageUpload).toHaveBeenCalled();
+
+      // The createPostFile INSERT (call index 2) should have content=null and
+      // storage_key=null — storage_key is set later via UPDATE.
+      const createCall = mockQuery.mock.calls[2];
+      // INSERT positional args: [postId, revisionId, filename, content, storageKey, mimeType, sortOrder, fileSize]
+      const insertArgs = createCall[1] as unknown[];
+      const contentArg = insertArgs[3];
+      const storageKeyArg = insertArgs[4];
+      const mimeArg = insertArgs[5];
+      const sizeArg = insertArgs[7];
+      expect(contentArg).toBeNull();
+      expect(storageKeyArg).toBeNull();
+      expect(mimeArg).toBe('image/png');
+      expect(sizeArg).toBe(100);
+    });
+
     it('deletes orphan DB row when object storage upload fails', async () => {
       // Create a buffer larger than 64KB to trigger object storage
       const largeContent = Buffer.alloc(65_537, 'x');

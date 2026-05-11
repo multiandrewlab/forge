@@ -38,6 +38,14 @@ jobs:
       LLM_PROVIDER: mock
       NODE_ENV: test
       PORT: 3001
+      # MinIO is required so the storage plugin registers; binary uploads
+      # (image/*) always route to object storage post-#86. Without these
+      # vars, app.storage is undefined and the upload route 500s.
+      MINIO_ENDPOINT: localhost
+      MINIO_PORT: '9000'
+      MINIO_ACCESS_KEY: forge_minio
+      MINIO_SECRET_KEY: forge_minio_secret
+      MINIO_BUCKET: forge-bruno
 
     steps:
       - uses: actions/checkout@v4
@@ -72,6 +80,29 @@ jobs:
 
       - name: Seed database
         run: psql "$DATABASE_URL" -f scripts/seed.sql
+
+      - name: Start MinIO
+        # GitHub Actions `services:` has no `command:` field; minio:latest has
+        # no default CMD. Mirror the pattern from .github/workflows/e2e-playwright.yml.
+        run: |
+          docker run -d --name minio \
+            -e MINIO_ROOT_USER=forge_minio \
+            -e MINIO_ROOT_PASSWORD=forge_minio_secret \
+            -p 9000:9000 \
+            minio/minio:latest server /data
+
+      - name: Wait for MinIO
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:9000/minio/health/live >/dev/null 2>&1; then
+              echo "MinIO ready after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "MinIO did not become ready in 60s"
+          docker logs minio | tail -50 || true
+          exit 1
 
       - name: Lint — verify all .bru files have assertion blocks
         run: |
