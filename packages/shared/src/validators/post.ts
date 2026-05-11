@@ -1,6 +1,17 @@
 import { z } from 'zod';
 import { ContentType, Visibility } from '../constants/index.js';
 
+// Bounds revision/post content to prevent CPU amplification on /api/playground/run,
+// where extractRequiredVariables and assemblePrompt run O(n) over content for every
+// caller with read access. See issue #78.
+export const MAX_REVISION_CONTENT_BYTES = 256 * 1024;
+
+const utf8ByteLength = (s: string): number => new TextEncoder().encode(s).length;
+
+const contentByteCap = z.string().refine((s) => utf8ByteLength(s) <= MAX_REVISION_CONTENT_BYTES, {
+  message: `content exceeds maximum size of ${MAX_REVISION_CONTENT_BYTES} bytes`,
+});
+
 export const createPostSchema = z
   .object({
     title: z.string().min(1).max(500),
@@ -13,7 +24,7 @@ export const createPostSchema = z
     language: z.string().nullable().optional(),
     visibility: z.enum([Visibility.Public, Visibility.Private]).default(Visibility.Public),
     isDraft: z.boolean().default(true),
-    content: z.string().min(1).optional(),
+    content: z.string().min(1).pipe(contentByteCap).optional(),
     linkUrl: z.string().url().optional(),
     tags: z.array(z.string()).max(10).optional(),
   })
@@ -55,7 +66,7 @@ export const updatePostSchema = z.object({
 export type UpdatePostInput = z.infer<typeof updatePostSchema>;
 
 export const createRevisionSchema = z.object({
-  content: z.string().min(1),
+  content: z.string().min(1).pipe(contentByteCap),
   message: z.string().max(500).optional(),
   stagedFileIds: z.array(z.string().uuid()).optional(),
   removeFileIds: z.array(z.string().uuid()).optional(),

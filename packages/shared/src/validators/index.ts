@@ -1,4 +1,9 @@
-export { createPostSchema, updatePostSchema, createRevisionSchema } from './post.js';
+export {
+  createPostSchema,
+  updatePostSchema,
+  createRevisionSchema,
+  MAX_REVISION_CONTENT_BYTES,
+} from './post.js';
 
 export type { CreatePostInput, UpdatePostInput, CreateRevisionInput } from './post.js';
 
