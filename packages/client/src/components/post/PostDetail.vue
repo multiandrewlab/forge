@@ -138,7 +138,7 @@ const activeFile = computed(
 
 watch(
   () => props.post?.id,
-  async (id) => {
+  async (id, _oldId, onCleanup) => {
     if (!id) {
       fullPost.value = null;
       files.value = [];
@@ -147,9 +147,14 @@ watch(
       inlineCommentLine.value = null;
       return;
     }
-    // Clear the previous post's active file so fetchFiles can auto-select
-    // this post's first file. Without this, switching between two file-bearing
-    // posts leaves <FilePreview> rendering the previous post's file (#85).
+    // Cancellation gates only the activeFileId / files.value writes (#85).
+    // Vue doesn't auto-cancel async watch callbacks, so without this a stale
+    // handler's late fetchFiles result clobbers the current post's selection
+    // at workers=4 when HomePage's auto-select races with a user click.
+    let cancelled = false;
+    onCleanup(() => {
+      cancelled = true;
+    });
     filesStore.setActiveFile(null);
     try {
       const response = await apiFetch(`/api/posts/${id}`);
@@ -168,12 +173,18 @@ watch(
         if (rev) {
           // Fetch files associated with this revision for multi-file layout
           await filesStore.fetchFiles(id, rev.id);
-          files.value = filesStore.filesByRevision[rev.id] ?? [];
-          if (files.value.length > 0) {
+          if (cancelled) return;
+          const fetched = filesStore.filesByRevision[rev.id] ?? [];
+          files.value = fetched;
+          // Explicit auto-select: overrides whatever a stale handler's late
+          // fetchFiles may have set into activeFileId. The store-level
+          // !activeFileId.value guard is too coarse to handle the race.
+          filesStore.setActiveFile(fetched[0]?.id ?? null);
+          if (fetched.length > 0) {
             // eslint-disable-next-line no-undef
             console.info('[analytics] post.view.multifile', {
               postId: fullPost.value?.id,
-              fileCount: files.value.length,
+              fileCount: fetched.length,
             });
           }
         }
