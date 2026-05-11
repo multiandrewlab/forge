@@ -42,13 +42,6 @@ test('preview image: image variant renders an <img> with decoded PNG bytes', asy
     .getByTestId('post-list-item')
     .getByRole('heading', { name: title, exact: true })
     .click();
-  // Explicitly select our file in the sidebar. filesStore.fetchFiles guards
-  // `activeFileId` with `if (!activeFileId.value)` (packages/client/src/stores/files.ts:28),
-  // so under parallel workers — when home auto-selects a different post first
-  // and locks activeFileId to that post's file — switching posts via tile
-  // click won't update the active file. The sidebar click forces it.
-  await files.fileSidebarItem(actor, 'sample.png').click();
-
   const img = files.filePreviewImage(actor).locator('img');
   await expect(img).toBeVisible();
   await expect(img).toHaveAttribute('alt', /sample\.png/);

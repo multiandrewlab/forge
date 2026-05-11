@@ -863,6 +863,203 @@ describe('PostDetail', () => {
       expect(filesStore.activeFileId).toBeNull();
     });
 
+    it('resets activeFileId when switching between two file-bearing posts (#85)', async () => {
+      // Post A's files
+      setupUrlAwareMockWithFiles(mockPostWithRevision, mockFiles);
+
+      const wrapper = mount(PostDetail, { props: { post: mockPost } });
+      await flushPromises();
+
+      const filesStore = useFilesStore();
+      // Post A auto-selects its first file
+      expect(filesStore.activeFileId).toBe('file-1');
+
+      // Post B with a different revision and different files
+      const postB: PostWithAuthor = { ...mockPost, id: 'post-2' };
+      const postBWithRevision: PostWithRevision = {
+        ...mockPostWithRevision,
+        id: 'post-2',
+        revisions: [
+          {
+            id: 'rev-2',
+            postId: 'post-2',
+            content: 'console.log("b")',
+            message: null,
+            revisionNumber: 1,
+            createdAt: new Date('2025-01-02'),
+          },
+        ],
+      };
+      const postBFiles: PostFile[] = [
+        {
+          id: 'file-3',
+          postId: 'post-2',
+          revisionId: 'rev-2',
+          filename: 'main.ts',
+          mimeType: 'text/typescript',
+          fileSize: 64,
+          sortOrder: 0,
+          createdAt: new Date('2025-01-02'),
+        },
+      ];
+      setupUrlAwareMockWithFiles(postBWithRevision, postBFiles);
+
+      await wrapper.setProps({ post: postB });
+      await flushPromises();
+
+      // After switching, post B's first file must be active — NOT the stale
+      // activeFileId from post A. With the bug, activeFileId stays 'file-1'.
+      expect(filesStore.activeFileId).toBe('file-3');
+
+      // And <FilePreview> should render post B's file
+      const preview = wrapper.findComponent({ name: 'FilePreview' });
+      expect(preview.exists()).toBe(true);
+      expect(preview.props('file')).toEqual(postBFiles[0]);
+    });
+
+    it('wins the race when post switches before previous fetchFiles resolves (#85)', async () => {
+      // Reproduces the workers=4 failure mode: HomePage's auto-select fires
+      // the watch with post A, the user click fires it again with post B
+      // BEFORE A's fetchFiles resolves. Both handlers race; the stale handler's
+      // fetchFiles can set activeFileId to A's file, and the store-level
+      // !activeFileId.value guard then blocks B's fetchFiles auto-select.
+      const postAFiles: PostFile[] = [
+        {
+          id: 'file-a',
+          postId: 'post-1',
+          revisionId: 'rev-1',
+          filename: 'a.ts',
+          mimeType: 'text/typescript',
+          fileSize: 32,
+          sortOrder: 0,
+          createdAt: new Date('2025-01-01'),
+        },
+      ];
+      const postBFiles: PostFile[] = [
+        {
+          id: 'file-b',
+          postId: 'post-2',
+          revisionId: 'rev-2',
+          filename: 'b.png',
+          mimeType: 'image/png',
+          fileSize: 64,
+          sortOrder: 0,
+          createdAt: new Date('2025-01-02'),
+        },
+      ];
+      const postBWithRevision: PostWithRevision = {
+        ...mockPostWithRevision,
+        id: 'post-2',
+        revisions: [
+          {
+            id: 'rev-2',
+            postId: 'post-2',
+            content: '',
+            message: null,
+            revisionNumber: 1,
+            createdAt: new Date('2025-01-02'),
+          },
+        ],
+      };
+
+      // Deferrable promises let us control resolution order to simulate the race.
+      let resolveFilesA!: (value: { files: PostFile[] }) => void;
+      const filesAPromise = new Promise<{ files: PostFile[] }>((res) => {
+        resolveFilesA = res;
+      });
+
+      mockApiFetch.mockImplementation((url: string) => {
+        if (url.includes('/comments')) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve({ comments: [] }),
+          } as Response);
+        }
+        if (url === '/api/posts/post-1/files?revisionId=rev-1') {
+          // A's files resolve LATE — controlled by resolveFilesA below.
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => filesAPromise,
+          } as Response);
+        }
+        if (url === '/api/posts/post-2/files?revisionId=rev-2') {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve({ files: postBFiles }),
+          } as Response);
+        }
+        if (url === '/api/posts/post-1') {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve(mockPostWithRevision),
+          } as Response);
+        }
+        if (url === '/api/posts/post-2') {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: () => Promise.resolve(postBWithRevision),
+          } as Response);
+        }
+        return Promise.resolve({
+          ok: false,
+          status: 404,
+          json: () => Promise.resolve({}),
+        } as Response);
+      });
+
+      // Mount with post A; do NOT flush — A's fetchFiles is awaiting filesAPromise.
+      const wrapper = mount(PostDetail, { props: { post: mockPost } });
+      await wrapper.vm.$nextTick();
+      await wrapper.vm.$nextTick();
+
+      // Switch to post B while A's fetchFiles is still in flight.
+      await wrapper.setProps({ post: { ...mockPost, id: 'post-2' } as PostWithAuthor });
+
+      // Now let A's fetchFiles resolve LATE — its internal auto-select would
+      // try to set activeFileId = 'file-a' if the !activeFileId.value guard
+      // sees null at that moment.
+      resolveFilesA({ files: postAFiles });
+      await flushPromises();
+
+      const filesStore = useFilesStore();
+      // The user's intent is post B — activeFileId MUST be B's first file,
+      // not stale A's. With the unfixed race, this is 'file-a'.
+      expect(filesStore.activeFileId).toBe('file-b');
+
+      const preview = wrapper.findComponent({ name: 'FilePreview' });
+      expect(preview.exists()).toBe(true);
+      expect(preview.props('file')).toEqual(postBFiles[0]);
+    });
+
+    it('preserves explicit user selection on same-id re-render (#85)', async () => {
+      // Locks in: the watcher's reset must only fire when the post id actually
+      // changes. If the parent passes a new PostWithAuthor object with the
+      // same id (e.g., a feed refresh re-emits the same post), an explicit
+      // file selection the user made via <FileSidebar> must persist.
+      setupUrlAwareMockWithFiles(mockPostWithRevision, mockFiles);
+
+      const wrapper = mount(PostDetail, { props: { post: mockPost } });
+      await flushPromises();
+
+      const filesStore = useFilesStore();
+      // User explicitly selects the second file
+      filesStore.setActiveFile('file-2');
+      await wrapper.vm.$nextTick();
+      expect(filesStore.activeFileId).toBe('file-2');
+
+      // Parent re-emits a fresh PostWithAuthor object with the same id
+      await wrapper.setProps({ post: { ...mockPost } });
+      await flushPromises();
+
+      // Selection must be preserved — the watcher uses post id, not identity
+      expect(filesStore.activeFileId).toBe('file-2');
+    });
+
     it('does not render CodeRunner in multi-file layout when contentType is not snippet', async () => {
       const docPost: PostWithAuthor = { ...mockPost, contentType: 'document' };
       const docPostWithRevision: PostWithRevision = {
