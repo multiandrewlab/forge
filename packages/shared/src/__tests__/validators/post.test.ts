@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { createPostSchema, updatePostSchema, createRevisionSchema } from '../../validators/post';
+import {
+  createPostSchema,
+  updatePostSchema,
+  createRevisionSchema,
+  MAX_REVISION_CONTENT_BYTES,
+} from '../../validators/post';
 import type { CreatePostInput, UpdatePostInput, CreateRevisionInput } from '../../validators/post';
 import type { PostRevision, PostWithRevision } from '../../types/index';
 
@@ -104,6 +109,32 @@ describe('createPostSchema', () => {
 
   it('should reject empty content', () => {
     const result = createPostSchema.safeParse({ ...validInput, content: '' });
+    expect(result.success).toBe(false);
+  });
+
+  // -- content byte cap (issue #78: same cap as createRevisionSchema) --
+  it('should accept content exactly at MAX_REVISION_CONTENT_BYTES', () => {
+    const result = createPostSchema.safeParse({
+      ...validInput,
+      content: 'a'.repeat(MAX_REVISION_CONTENT_BYTES),
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('should reject content one byte over MAX_REVISION_CONTENT_BYTES', () => {
+    const result = createPostSchema.safeParse({
+      ...validInput,
+      content: 'a'.repeat(MAX_REVISION_CONTENT_BYTES + 1),
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('should measure content bytes, not characters (multi-byte UTF-8 over cap rejected)', () => {
+    const charCount = Math.ceil(MAX_REVISION_CONTENT_BYTES / 3) + 1;
+    const result = createPostSchema.safeParse({
+      ...validInput,
+      content: '€'.repeat(charCount),
+    });
     expect(result.success).toBe(false);
   });
 
@@ -407,6 +438,39 @@ describe('createRevisionSchema', () => {
 
   it('should reject empty content', () => {
     const result = createRevisionSchema.safeParse({ content: '' });
+    expect(result.success).toBe(false);
+  });
+
+  // -- content byte cap (issue #78: prevent CPU amplification on /api/playground/run) --
+  it('exposes MAX_REVISION_CONTENT_BYTES = 256 KiB', () => {
+    expect(MAX_REVISION_CONTENT_BYTES).toBe(256 * 1024);
+  });
+
+  it('should accept content exactly at MAX_REVISION_CONTENT_BYTES', () => {
+    const result = createRevisionSchema.safeParse({
+      content: 'a'.repeat(MAX_REVISION_CONTENT_BYTES),
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('should accept content one byte under MAX_REVISION_CONTENT_BYTES', () => {
+    const result = createRevisionSchema.safeParse({
+      content: 'a'.repeat(MAX_REVISION_CONTENT_BYTES - 1),
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('should reject content one byte over MAX_REVISION_CONTENT_BYTES', () => {
+    const result = createRevisionSchema.safeParse({
+      content: 'a'.repeat(MAX_REVISION_CONTENT_BYTES + 1),
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('should measure bytes, not characters (multi-byte UTF-8 rejected when over byte cap)', () => {
+    // '€' is 3 bytes in UTF-8. Fewer chars than the byte cap, but more bytes.
+    const charCount = Math.ceil(MAX_REVISION_CONTENT_BYTES / 3) + 1;
+    const result = createRevisionSchema.safeParse({ content: '€'.repeat(charCount) });
     expect(result.success).toBe(false);
   });
 

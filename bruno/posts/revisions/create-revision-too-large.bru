@@ -1,0 +1,37 @@
+meta {
+  name: Create Revision Too Large
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/posts/{{postId}}/revisions
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "content": "placeholder — overwritten in pre-request",
+    "message": "regression for issue #78 byte cap"
+  }
+}
+
+script:pre-request {
+  // Issue #78: createRevisionSchema.content is bounded at MAX_REVISION_CONTENT_BYTES
+  // to prevent CPU amplification on /api/playground/run. Send one byte over the cap
+  // and expect a 400 — anything else means the cap regressed.
+  const MAX = 256 * 1024;
+  req.setBody({
+    content: 'a'.repeat(MAX + 1),
+    message: 'regression for issue #78 byte cap',
+  });
+}
+
+assert {
+  res.status: eq 400
+}
