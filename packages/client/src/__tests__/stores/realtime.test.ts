@@ -130,3 +130,42 @@ describe('useRealtimeStore', () => {
     });
   });
 });
+
+describe('realtime store — subscribedChannels', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+  });
+
+  it('starts with an empty subscribedChannels set', () => {
+    const store = useRealtimeStore();
+    expect(store.isChannelSubscribed('post:abc')).toBe(false);
+  });
+
+  it('markChannelSubscribed records the channel', () => {
+    const store = useRealtimeStore();
+    store.markChannelSubscribed('post:abc');
+    expect(store.isChannelSubscribed('post:abc')).toBe(true);
+  });
+
+  it('markChannelUnsubscribed removes the channel', () => {
+    const store = useRealtimeStore();
+    store.markChannelSubscribed('post:abc');
+    store.markChannelUnsubscribed('post:abc');
+    expect(store.isChannelSubscribed('post:abc')).toBe(false);
+  });
+
+  it('markChannelUnsubscribed on an unknown channel is a no-op', () => {
+    const store = useRealtimeStore();
+    expect(() => store.markChannelUnsubscribed('post:never')).not.toThrow();
+    expect(store.isChannelSubscribed('post:never')).toBe(false);
+  });
+
+  it('clearAllSubscriptions empties the set', () => {
+    const store = useRealtimeStore();
+    store.markChannelSubscribed('post:a');
+    store.markChannelSubscribed('post:b');
+    store.clearAllSubscriptions();
+    expect(store.isChannelSubscribed('post:a')).toBe(false);
+    expect(store.isChannelSubscribed('post:b')).toBe(false);
+  });
+});
