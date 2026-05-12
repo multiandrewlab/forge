@@ -58,7 +58,9 @@ export function useAiGenerate(): UseAiGenerateReturn {
         credentials: 'include',
       });
 
-      if (!res.ok || !res.body) {
+      if (!res.ok) {
+        error.value = await readErrorMessage(res);
+      } else if (!res.body) {
         error.value = 'Request failed';
       } else {
         for await (const evt of parseSseStream(res.body)) {
@@ -95,4 +97,19 @@ export function useAiGenerate(): UseAiGenerateReturn {
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null;
+}
+
+// Issue #88: surface the server's structured `{ error: '...' }` body on a
+// non-2xx response so users see the actual cause (e.g. the AI-gate 429
+// "AI request already in progress") instead of a generic "Request failed".
+async function readErrorMessage(res: Response): Promise<string> {
+  try {
+    const body: unknown = await res.json();
+    if (isRecord(body) && typeof body.error === 'string' && body.error.length > 0) {
+      return body.error;
+    }
+  } catch {
+    // body unparseable or missing — fall through to fallback
+  }
+  return 'Request failed';
 }
