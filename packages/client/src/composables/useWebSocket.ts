@@ -81,6 +81,13 @@ function handleAuthError(): void {
 }
 
 async function handleAuthExpired(): Promise<void> {
+  // The server has forgotten this socket's channel registrations because the
+  // connection has reverted to `awaiting-auth`. Clear our local mirror so
+  // consumers cannot incorrectly observe a subscribed=true state during the
+  // refresh window. After re-auth, resubscribeAll() will trigger fresh
+  // subscribe:ok ACKs that re-populate the store.
+  const store = useRealtimeStore();
+  store.clearAllSubscriptions();
   // currentTokenProvider is always set before openSocket is called,
   // so this is guaranteed non-null at this point.
   const tokenProvider = currentTokenProvider as () => Promise<string>;
@@ -124,6 +131,11 @@ function openSocket(): void {
       case 'auth:expired':
         void handleAuthExpired();
         break;
+      case 'subscribe:ok': {
+        const store = useRealtimeStore();
+        store.markChannelSubscribed(data.channel);
+        break;
+      }
       default:
         dispatchMessage(data);
         break;
@@ -132,6 +144,11 @@ function openSocket(): void {
 
   socket.onclose = () => {
     connected = false;
+    // The server's channel registrations are gone the moment the socket closes
+    // (intentional or not). Clear our mirror so data-channel-subscribed cannot
+    // falsely report true during the reconnect window. After reconnect,
+    // resubscribeAll() will trigger fresh subscribe:ok ACKs.
+    useRealtimeStore().clearAllSubscriptions();
     if (!intentionalClose) {
       scheduleReconnect();
     }
@@ -174,6 +191,10 @@ export function useWebSocket(): {
     handlers.clear();
     pendingQueue = [];
     setStatus('disconnected');
+    // Defensive: socket.onclose also clears, but `socket = null` above means
+    // the close handler may not fire in all paths (e.g., socket already
+    // closed). The store's clearAllSubscriptions is idempotent.
+    useRealtimeStore().clearAllSubscriptions();
   }
 
   function subscribe(channel: string, handler: (event: ServerMessage) => void): () => void {
@@ -203,6 +224,7 @@ export function useWebSocket(): {
         if (isSocketOpen()) {
           sendRaw({ type: 'unsubscribe', channel });
         }
+        useRealtimeStore().markChannelUnsubscribed(channel);
       }
     };
   }

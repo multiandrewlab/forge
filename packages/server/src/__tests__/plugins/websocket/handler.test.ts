@@ -686,6 +686,74 @@ describe('handleConnection', () => {
     expect(fakeSocket.close).toHaveBeenCalledWith(4002, 'auth-failed');
   });
 
+  // ── Subscribe ACK (#90) ────────────────────────────────────────────
+
+  it('sends subscribe:ok ACK frame after channel registration', () => {
+    handleConnection(
+      fakeApp as Parameters<typeof handleConnection>[0],
+      fakeSocket as unknown as Parameters<typeof handleConnection>[1],
+      fakeReq,
+      deps,
+    );
+
+    fakeSocket._handlers['message'](JSON.stringify({ type: 'auth', token: 'valid' }));
+    fakeSocket._handlers['message'](JSON.stringify({ type: 'subscribe', channel: 'post:abc' }));
+
+    expect(fakeSocket.send).toHaveBeenCalledWith(
+      JSON.stringify({ type: 'subscribe:ok', channel: 'post:abc' }),
+    );
+  });
+
+  it('registers the channel subscription strictly before sending subscribe:ok', () => {
+    const callOrder: string[] = [];
+
+    (deps.channels.subscribe as ReturnType<typeof vi.fn>).mockImplementation(() => {
+      callOrder.push('subscribe');
+    });
+    fakeSocket.send.mockImplementation((payload: string) => {
+      try {
+        const obj = JSON.parse(payload) as { type: string };
+        callOrder.push(`send:${obj.type}`);
+      } catch {
+        callOrder.push('send:<non-json>');
+      }
+    });
+
+    handleConnection(
+      fakeApp as Parameters<typeof handleConnection>[0],
+      fakeSocket as unknown as Parameters<typeof handleConnection>[1],
+      fakeReq,
+      deps,
+    );
+
+    fakeSocket._handlers['message'](JSON.stringify({ type: 'auth', token: 'valid' }));
+    // Discard the auth handshake send so we only assert on subscribe ordering
+    callOrder.length = 0;
+
+    fakeSocket._handlers['message'](JSON.stringify({ type: 'subscribe', channel: 'post:abc' }));
+
+    expect(callOrder).toEqual(['subscribe', 'send:subscribe:ok']);
+  });
+
+  it('does not send subscribe:ok when the subscribe frame fails schema validation', () => {
+    handleConnection(
+      fakeApp as Parameters<typeof handleConnection>[0],
+      fakeSocket as unknown as Parameters<typeof handleConnection>[1],
+      fakeReq,
+      deps,
+    );
+
+    fakeSocket._handlers['message'](JSON.stringify({ type: 'auth', token: 'valid' }));
+    // Clear so the auth:ok send doesn't pollute the post-handshake assertion
+    fakeSocket.send.mockClear();
+
+    // Empty channel fails the zod schema (channel must be a non-empty string)
+    fakeSocket._handlers['message'](JSON.stringify({ type: 'subscribe', channel: '' }));
+
+    expect(deps.channels.subscribe).not.toHaveBeenCalled();
+    expect(fakeSocket.send).not.toHaveBeenCalled();
+  });
+
   // ── Buffer message data ────────────────────────────────────────────
 
   it('handles Buffer message data (converts to string)', () => {

@@ -8,6 +8,7 @@ vi.mock('../../../lib/api.js', () => ({
 
 import { apiFetch } from '../../../lib/api.js';
 import { useCommentsStore } from '../../../stores/comments.js';
+import { useRealtimeStore } from '../../../stores/realtime.js';
 import CommentSection from '../../../components/post/CommentSection.vue';
 import type { Comment } from '@forge/shared';
 
@@ -208,5 +209,47 @@ describe('CommentSection', () => {
     // The edit/delete buttons should appear since the user owns the comment
     expect(wrapper.text()).toContain('Edit');
     expect(wrapper.text()).toContain('Delete');
+  });
+});
+
+describe('CommentSection — data-channel-subscribed surfacing', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+  });
+
+  it('renders data-channel-subscribed="false" when channel is not yet subscribed', () => {
+    const wrapper = mount(CommentSection, {
+      props: { postId: 'abc', currentUserId: 'u1' },
+      global: defaultGlobal,
+    });
+    const section = wrapper.get('[data-testid="comment-section"]');
+    expect(section.attributes('data-channel-subscribed')).toBe('false');
+  });
+
+  it('flips to data-channel-subscribed="true" when the store marks the channel subscribed', async () => {
+    const wrapper = mount(CommentSection, {
+      props: { postId: 'abc', currentUserId: 'u1' },
+      global: defaultGlobal,
+    });
+    const store = useRealtimeStore();
+    store.markChannelSubscribed('post:abc');
+    await wrapper.vm.$nextTick();
+    const section = wrapper.get('[data-testid="comment-section"]');
+    expect(section.attributes('data-channel-subscribed')).toBe('true');
+  });
+
+  it('flips back to "false" after markChannelUnsubscribed', async () => {
+    const wrapper = mount(CommentSection, {
+      props: { postId: 'abc', currentUserId: 'u1' },
+      global: defaultGlobal,
+    });
+    const store = useRealtimeStore();
+    store.markChannelSubscribed('post:abc');
+    await wrapper.vm.$nextTick();
+    store.markChannelUnsubscribed('post:abc');
+    await wrapper.vm.$nextTick();
+    expect(
+      wrapper.get('[data-testid="comment-section"]').attributes('data-channel-subscribed'),
+    ).toBe('false');
   });
 });

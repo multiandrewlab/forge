@@ -189,6 +189,7 @@ export function handleConnection(
           socket as unknown as Parameters<typeof deps.channels.subscribe>[1],
           userId,
         );
+        socket.send(JSON.stringify({ type: 'subscribe:ok', channel: result.data.channel }));
       }
       return;
     }

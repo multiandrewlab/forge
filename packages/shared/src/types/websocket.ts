@@ -128,6 +128,11 @@ export const authExpiredMessageSchema = z.object({
   type: z.literal('auth:expired'),
 });
 
+export const subscribeOkMessageSchema = z.object({
+  type: z.literal('subscribe:ok'),
+  channel: z.string().min(1),
+});
+
 export const commentNewMessageSchema = z.object({
   type: z.literal('comment:new'),
   channel: z.string().min(1),
@@ -180,6 +185,7 @@ export const serverMessageSchema = z.discriminatedUnion('type', [
   authOkMessageSchema,
   authErrorMessageSchema,
   authExpiredMessageSchema,
+  subscribeOkMessageSchema,
   commentNewMessageSchema,
   commentUpdatedMessageSchema,
   commentDeletedMessageSchema,
@@ -195,6 +201,7 @@ export const serverMessageSchema = z.discriminatedUnion('type', [
 export type AuthOkMessage = z.infer<typeof authOkMessageSchema>;
 export type AuthErrorMessage = z.infer<typeof authErrorMessageSchema>;
 export type AuthExpiredMessage = z.infer<typeof authExpiredMessageSchema>;
+export type SubscribeOkMessage = z.infer<typeof subscribeOkMessageSchema>;
 export type CommentNewMessage = z.infer<typeof commentNewMessageSchema>;
 export type CommentUpdatedMessage = z.infer<typeof commentUpdatedMessageSchema>;
 export type CommentDeletedMessage = z.infer<typeof commentDeletedMessageSchema>;

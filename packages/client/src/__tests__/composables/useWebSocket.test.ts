@@ -982,4 +982,81 @@ describe('useWebSocket', () => {
       expect(status.value).toBe('connected');
     });
   });
+
+  describe('useWebSocket — subscribe:ok handling', () => {
+    it('marks the channel as subscribed when subscribe:ok arrives', async () => {
+      const { ws } = await connectAndAuth();
+      const { subscribe } = useWebSocket();
+
+      const handler = vi.fn();
+      subscribe('post:abc', handler);
+
+      ws.simulateMessage({ type: 'subscribe:ok', channel: 'post:abc' });
+
+      const store = useRealtimeStore();
+      expect(store.isChannelSubscribed('post:abc')).toBe(true);
+    });
+
+    it('clears subscribed channels on disconnect', async () => {
+      const { ws } = await connectAndAuth();
+      const { subscribe, disconnect } = useWebSocket();
+
+      subscribe('post:abc', vi.fn());
+      ws.simulateMessage({ type: 'subscribe:ok', channel: 'post:abc' });
+
+      const store = useRealtimeStore();
+      expect(store.isChannelSubscribed('post:abc')).toBe(true);
+
+      disconnect();
+
+      expect(store.isChannelSubscribed('post:abc')).toBe(false);
+    });
+
+    it('clears subscribed channels when auth expires (state reverts)', async () => {
+      const tokenProvider = vi.fn().mockResolvedValue('token');
+      const { ws } = await connectAndAuth(tokenProvider);
+      const { subscribe } = useWebSocket();
+
+      subscribe('post:abc', vi.fn());
+      ws.simulateMessage({ type: 'subscribe:ok', channel: 'post:abc' });
+
+      const store = useRealtimeStore();
+      expect(store.isChannelSubscribed('post:abc')).toBe(true);
+
+      ws.simulateMessage({ type: 'auth:expired' });
+
+      expect(store.isChannelSubscribed('post:abc')).toBe(false);
+    });
+
+    it('clears the channel from subscribedChannels when local unsubscribe runs', async () => {
+      const { ws } = await connectAndAuth();
+      const { subscribe } = useWebSocket();
+
+      const cleanup = subscribe('post:abc', vi.fn());
+      ws.simulateMessage({ type: 'subscribe:ok', channel: 'post:abc' });
+
+      const store = useRealtimeStore();
+      expect(store.isChannelSubscribed('post:abc')).toBe(true);
+
+      cleanup();
+
+      expect(store.isChannelSubscribed('post:abc')).toBe(false);
+    });
+
+    it('clears subscribed channels on unintentional socket close (network drop)', async () => {
+      const { ws } = await connectAndAuth();
+      const { subscribe } = useWebSocket();
+
+      subscribe('post:abc', vi.fn());
+      ws.simulateMessage({ type: 'subscribe:ok', channel: 'post:abc' });
+
+      const store = useRealtimeStore();
+      expect(store.isChannelSubscribed('post:abc')).toBe(true);
+
+      // Network drop — onclose fires without disconnect() being called
+      ws.simulateClose();
+
+      expect(store.isChannelSubscribed('post:abc')).toBe(false);
+    });
+  });
 });

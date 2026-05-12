@@ -8,6 +8,7 @@ import {
   authOkMessageSchema,
   authErrorMessageSchema,
   authExpiredMessageSchema,
+  subscribeOkMessageSchema,
   commentNewMessageSchema,
   commentUpdatedMessageSchema,
   commentDeletedMessageSchema,
@@ -138,6 +139,37 @@ describe('subscribeMessageSchema', () => {
   it('rejects empty channel', () => {
     const result = subscribeMessageSchema.safeParse({ type: 'subscribe', channel: '' });
     expect(result.success).toBe(false);
+  });
+});
+
+describe('subscribeOkMessageSchema', () => {
+  it('parses a valid subscribe:ok message', () => {
+    const result = subscribeOkMessageSchema.safeParse({
+      type: 'subscribe:ok',
+      channel: 'post:abc',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects when type is wrong', () => {
+    const result = subscribeOkMessageSchema.safeParse({
+      type: 'auth:ok',
+      channel: 'post:abc',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects an empty channel', () => {
+    const result = subscribeOkMessageSchema.safeParse({
+      type: 'subscribe:ok',
+      channel: '',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects non-object input', () => {
+    expect(subscribeOkMessageSchema.safeParse(null).success).toBe(false);
+    expect(subscribeOkMessageSchema.safeParse('subscribe:ok').success).toBe(false);
   });
 });
 
@@ -515,6 +547,14 @@ describe('serverMessageSchema (discriminated union)', () => {
 
   it('parses auth:expired variant', () => {
     const result = serverMessageSchema.safeParse({ type: 'auth:expired' });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts a subscribe:ok variant via the discriminated union', () => {
+    const result = serverMessageSchema.safeParse({
+      type: 'subscribe:ok',
+      channel: 'post:abc',
+    });
     expect(result.success).toBe(true);
   });
 
