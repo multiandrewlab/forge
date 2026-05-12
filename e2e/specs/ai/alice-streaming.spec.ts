@@ -3,12 +3,11 @@ import { ai } from '../../fixtures/selectors/ai.js';
 import { withMockScript } from '../../fixtures/mock-llm.js';
 
 // Both tests below exercise alice's per-userId AI rate-limiter slot via
-// /api/ai/generate. At workers=4 (CI) Playwright will otherwise schedule
-// them on different workers concurrently, where one alice's in-flight
-// stream causes the other's /api/ai/generate to 429 and the error UI
-// surfaces the generic "Request failed" rather than the streamed
-// rate-limit message we expect. Forcing serial mode within this file keeps
-// both alice-scoped flows on the same worker.
+// /api/ai/generate. Serial mode keeps both flows on the same worker, AND
+// test 1 must wait for its stream to fully complete before exiting —
+// otherwise alice's slot is still held when test 2 starts and the gate
+// returns 429, surfacing the generic "Request failed" instead of the
+// streamed rate-limit message we want test 2 to assert against (#88).
 test.describe.configure({ mode: 'serial' });
 
 test('ai: generate panel streams chunks INTO the editor (alice)', async ({ alice }) => {
@@ -20,6 +19,10 @@ test('ai: generate panel streams chunks INTO the editor (alice)', async ({ alice
   await ai.generateSubmit(alice).click();
   // generate-readme-short emits: '# README\n', '\n', 'TODO: write content.', '[done]'
   await expect(ai.editorContent(alice)).toContainText('# README', { timeout: 10_000 });
+  // Wait for the full paced stream (~600ms) to finish — when panelState leaves
+  // 'generating' the toggle button re-renders. This releases alice's AI slot
+  // server-side before the next test fires its request (#88).
+  await expect(ai.generateToggle(alice)).toBeVisible({ timeout: 10_000 });
 });
 
 test('ai: error-rate-limit script surfaces error UI (alice)', async ({ alice }) => {

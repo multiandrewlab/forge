@@ -153,13 +153,63 @@ describe('useAiGenerate', () => {
     expect(error.value).toBeNull();
   });
 
-  // Additional: non-ok response sets error
-  it('non-ok response sets error.value', async () => {
+  // Additional: non-ok response with unparseable body sets fallback error
+  it('non-ok response with unparseable body sets fallback error', async () => {
     mockFetch.mockResolvedValue(new Response('Internal Server Error', { status: 500 }));
     const { start, error, isGenerating } = useAiGenerate();
     await start({ description: 'x', contentType: 'snippet' }, () => {});
     expect(error.value).toBe('Request failed');
     expect(isGenerating.value).toBe(false);
+  });
+
+  // Issue #88: surface server's structured error message on non-ok response
+  // so a 429 from the AI-gate (`{ error: 'AI request already in progress' }`)
+  // is shown to the user instead of the generic catch-all "Request failed".
+  it('non-ok response with JSON {error} body surfaces server message (#88)', async () => {
+    mockFetch.mockResolvedValue(
+      new Response(JSON.stringify({ error: 'AI request already in progress' }), {
+        status: 429,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    const { start, error } = useAiGenerate();
+    await start({ description: 'x', contentType: 'snippet' }, () => {});
+    expect(error.value).toBe('AI request already in progress');
+  });
+
+  // Defensive: a 2xx response with a null body (e.g. HEAD-like) falls back.
+  it('ok response with null body sets fallback error', async () => {
+    mockFetch.mockResolvedValue(new Response(null, { status: 200 }));
+    const { start, error } = useAiGenerate();
+    await start({ description: 'x', contentType: 'snippet' }, () => {});
+    expect(error.value).toBe('Request failed');
+  });
+
+  // Defensive: non-ok response with empty string error field falls back so
+  // the UI never surfaces a blank message (pins the `length > 0` guard).
+  it('non-ok response with empty string error field uses fallback', async () => {
+    mockFetch.mockResolvedValue(
+      new Response(JSON.stringify({ error: '' }), {
+        status: 500,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    const { start, error } = useAiGenerate();
+    await start({ description: 'x', contentType: 'snippet' }, () => {});
+    expect(error.value).toBe('Request failed');
+  });
+
+  // Non-ok response with JSON body that has no `error` field falls back.
+  it('non-ok response with JSON body lacking error field uses fallback', async () => {
+    mockFetch.mockResolvedValue(
+      new Response(JSON.stringify({ unrelated: 'shape' }), {
+        status: 500,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    const { start, error } = useAiGenerate();
+    await start({ description: 'x', contentType: 'snippet' }, () => {});
+    expect(error.value).toBe('Request failed');
   });
 
   // Cover fallback error message when error event data has no message string
