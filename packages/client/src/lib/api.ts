@@ -2,7 +2,9 @@ import { useAuthStore } from '@/stores/auth';
 import { useToastStore } from '@/stores/toast';
 import { useWebSocket } from '@/composables/useWebSocket';
 
-let refreshPromise: Promise<boolean> | null = null;
+type RefreshResult = { ok: boolean; response: Response | null };
+
+let refreshPromise: Promise<RefreshResult> | null = null;
 
 function maybePushServerError(response: Response): void {
   if (response.status >= 500) {
@@ -11,7 +13,7 @@ function maybePushServerError(response: Response): void {
   }
 }
 
-async function attemptRefresh(): Promise<boolean> {
+async function attemptRefresh(): Promise<RefreshResult> {
   const store = useAuthStore();
 
   try {
@@ -22,19 +24,19 @@ async function attemptRefresh(): Promise<boolean> {
 
     if (!response.ok) {
       store.clearAuth();
-      return false;
+      return { ok: false, response };
     }
 
     const data = (await response.json()) as { accessToken: string };
     store.$patch({ accessToken: data.accessToken });
-    return true;
+    return { ok: true, response };
   } catch {
     store.clearAuth();
-    return false;
+    return { ok: false, response: null };
   }
 }
 
-function getOrCreateRefreshPromise(): Promise<boolean> {
+function getOrCreateRefreshPromise(): Promise<RefreshResult> {
   if (refreshPromise) {
     return refreshPromise;
   }
@@ -77,10 +79,14 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
   }
 
   // Attempt token refresh (deduplicate concurrent refresh calls)
-  const refreshed = await getOrCreateRefreshPromise();
+  const refresh = await getOrCreateRefreshPromise();
 
-  if (!refreshed) {
-    maybePushServerError(response);
+  if (!refresh.ok) {
+    // Surface a 5xx that occurred during the refresh itself (e.g., DB outage,
+    // JWT secret missing). The original 401 alone never trips the 5xx toast,
+    // so without this the refresh failure is silent. The original response is
+    // still returned to the caller so 401-handling routes the user to login.
+    maybePushServerError(refresh.response ?? response);
     return response;
   }
 
