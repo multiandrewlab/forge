@@ -1,5 +1,9 @@
 <template>
-  <div data-testid="comment-section" class="flex flex-col gap-4">
+  <div
+    data-testid="comment-section"
+    :data-channel-subscribed="isChannelSubscribed.toString()"
+    class="flex flex-col gap-4"
+  >
     <h3 class="text-sm font-medium text-gray-400">Comments</h3>
 
     <!-- General comments (threaded) -->
@@ -42,14 +46,21 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue';
 import { useCommentsStore } from '../../stores/comments.js';
+import { useRealtimeStore } from '../../stores/realtime.js';
 import { useComments } from '../../composables/useComments.js';
 import CommentThread from './CommentThread.vue';
 import CommentInput from './CommentInput.vue';
 
 const props = defineProps<{ postId: string; currentUserId?: string }>();
 const store = useCommentsStore();
+const realtimeStore = useRealtimeStore();
 const { addComment } = useComments();
+
+const isChannelSubscribed = computed(() =>
+  realtimeStore.isChannelSubscribed(`post:${props.postId}`),
+);
 
 async function handleNewComment(body: string): Promise<void> {
   await addComment(props.postId, { body });
