@@ -185,6 +185,20 @@ describe('useAiGenerate', () => {
     expect(error.value).toBe('Request failed');
   });
 
+  // Defensive: non-ok response with empty string error field falls back so
+  // the UI never surfaces a blank message (pins the `length > 0` guard).
+  it('non-ok response with empty string error field uses fallback', async () => {
+    mockFetch.mockResolvedValue(
+      new Response(JSON.stringify({ error: '' }), {
+        status: 500,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    const { start, error } = useAiGenerate();
+    await start({ description: 'x', contentType: 'snippet' }, () => {});
+    expect(error.value).toBe('Request failed');
+  });
+
   // Non-ok response with JSON body that has no `error` field falls back.
   it('non-ok response with JSON body lacking error field uses fallback', async () => {
     mockFetch.mockResolvedValue(
