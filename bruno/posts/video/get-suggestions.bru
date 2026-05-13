@@ -1,0 +1,36 @@
+meta {
+  name: Get Video AI Suggestions
+  type: http
+  seq: 10
+}
+
+get {
+  url: {{baseUrl}}/api/posts/{{videoPostId}}/video/suggestions
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("suggestion.title is the seeded 'Seed video title'", function() {
+    expect(res.body.suggestion).to.exist;
+    expect(res.body.suggestion.title).to.equal("Seed video title");
+  });
+  test("status reflects the seeded ready state", function() {
+    expect(res.body.status).to.equal("ready");
+  });
+}
+
+docs {
+  Owner-only route. Returns the latest post_video_ai_runs row plus the
+  current pipeline status + last_error. The seed includes a single
+  ai_runs row (f0…001) bound to {{videoPostId}}, so suggestion.title
+  is deterministic.
+}

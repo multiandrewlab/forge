@@ -1,0 +1,25 @@
+meta {
+  name: Bookmark Video Post
+  type: http
+  seq: 12
+}
+
+post {
+  url: {{baseUrl}}/api/posts/{{videoPostId}}/bookmark
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Per-post toggle (POST /api/posts/:id/bookmark) — same shape as
+  bruno/bookmarks/toggle-bookmark.bru. Re-running flips the bookmark
+  state without changing the asserted status code.
+}

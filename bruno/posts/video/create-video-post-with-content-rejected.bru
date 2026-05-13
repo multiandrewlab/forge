@@ -1,0 +1,33 @@
+meta {
+  name: Create Video Post With Content (Rejected)
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/posts
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "title": "x",
+    "contentType": "video",
+    "content": "hi"
+  }
+}
+
+assert {
+  res.status: eq 400
+}
+
+docs {
+  createPostSchema's superRefine guards the video branch: non-empty content
+  is forbidden because revisions own the video transcript (set by the CF
+  Stream webhook handler). Asserting 400 protects the boundary.
+}

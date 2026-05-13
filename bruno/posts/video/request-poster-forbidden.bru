@@ -1,0 +1,24 @@
+meta {
+  name: Request Poster URL (private non-owner forbidden)
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/api/posts/{{privateVideoPostId}}/video/poster
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+assert {
+  res.status: eq 403
+}
+
+docs {
+  Same visibility-check semantics as request-playback-forbidden.bru.
+  See the docs block on that file for the 403-vs-404 reconciliation note.
+}

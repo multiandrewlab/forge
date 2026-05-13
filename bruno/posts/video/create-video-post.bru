@@ -1,0 +1,50 @@
+meta {
+  name: Create Video Post
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/posts
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "title": "Bruno video post {{$randomInt}}",
+    "contentType": "video"
+  }
+}
+
+script:post-response {
+  // Capture the ephemeral video post id for the upload-url request below.
+  // Distinct from the fixture {{videoPostId}}, which stays pinned to the
+  // seeded ready-state post (c0…098) so playback/poster/suggestion reads
+  // never depend on prior request state.
+  if (res.body.post) {
+    bru.setVar("createdVideoPostId", res.body.post.id);
+  }
+  if (res.body.revision) {
+    bru.setVar("createdVideoRevisionId", res.body.revision.id);
+  }
+}
+
+assert {
+  res.status: eq 201
+}
+
+docs {
+  Creates a video post via the discriminated createPostSchema branch:
+  contentType='video' with no content (revisions own the transcript, which
+  is written by the CF Stream webhook handler after upload). Issue #102.
+
+  The post is created in draft state (isDraft defaults to true). The
+  upload-url request (seq 3) targets this created post — it does NOT
+  target the seeded {{videoPostId}}, which is already ready and would
+  hit the replace path instead of the first-upload path.
+}

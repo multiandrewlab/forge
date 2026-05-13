@@ -1,0 +1,32 @@
+meta {
+  name: Vote on Video Post
+  type: http
+  seq: 11
+}
+
+post {
+  url: {{baseUrl}}/api/posts/{{videoPostId}}/vote
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "value": 1
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+docs {
+  Cross-cuts the social actions on a video post. Vote uses the existing
+  per-post toggle endpoint (POST /api/posts/:id/vote) — same shape as
+  bruno/votes/upvote.bru. Idempotent: re-running this file toggles the
+  vote off then back on without changing the asserted status code.
+}

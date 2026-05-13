@@ -1,0 +1,30 @@
+meta {
+  name: Request Poster URL (public)
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/posts/{{videoPostId}}/video/poster
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("posterUrl ends with thumbnails/thumbnail.jpg", function() {
+    expect(res.body.posterUrl).to.match(/thumbnails\/thumbnail\.jpg$/);
+  });
+}
+
+docs {
+  Public ready video → unsigned poster URL pointing at the customer
+  subdomain's thumbnails/thumbnail.jpg path.
+}

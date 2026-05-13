@@ -1,0 +1,31 @@
+meta {
+  name: Comment on Video Post
+  type: http
+  seq: 13
+}
+
+post {
+  url: {{baseUrl}}/api/posts/{{videoPostId}}/comments
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "body": "Great video!"
+  }
+}
+
+assert {
+  res.status: eq 201
+}
+
+docs {
+  Per-post comment create (POST /api/posts/:id/comments) — same shape as
+  bruno/comments/create-comment.bru. Confirms social comments work on a
+  video post just like any other content type.
+}

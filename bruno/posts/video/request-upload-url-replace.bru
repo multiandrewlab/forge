@@ -1,0 +1,37 @@
+meta {
+  name: Request Upload URL (replace existing)
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/posts/{{videoPostId}}/video/upload-url
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "filename": "replace.mp4",
+    "fileSizeBytes": 2048
+  }
+}
+
+assert {
+  res.status: eq 201
+}
+
+docs {
+  Replace path: the seeded {{videoPostId}} (c0…098) already has a ready
+  post_videos row. With no pending_cf_uid yet, this call should set
+  pending_cf_uid on the existing row and return 201.
+
+  STATE-MUTATING SIDE-EFFECT: after this request, {{videoPostId}} has a
+  pending_cf_uid. The next file (seq 5) exercises the 409 conflict that
+  results. A subsequent `bruno run -r` cycle needs a fresh seed (re-run
+  scripts/seed.sql) to reset the state to plain ready.
+}
