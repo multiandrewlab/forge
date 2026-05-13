@@ -211,6 +211,26 @@ describe('PostEditor', () => {
       expect(emitted).toBeTruthy();
       expect((emitted as unknown[][])[0]).toEqual(['New Title']);
     });
+
+    describe('a11y', () => {
+      it('renders an sr-only label associated with the title input', () => {
+        const label = wrapper.find('label[for="new-post-title"]');
+        expect(label.exists()).toBe(true);
+        expect(label.classes()).toContain('sr-only');
+        expect(label.text()).toContain('Title');
+      });
+
+      it('gives the title input a matching id', () => {
+        const input = wrapper.find('[data-testid="new-post-title-input"]');
+        expect(input.attributes('id')).toBe('new-post-title');
+      });
+
+      it('sets aria-required="true" and required on the title input', () => {
+        const input = wrapper.find('[data-testid="new-post-title-input"]');
+        expect(input.attributes('aria-required')).toBe('true');
+        expect(input.attributes('required')).toBeDefined();
+      });
+    });
   });
 
   describe('publish button', () => {

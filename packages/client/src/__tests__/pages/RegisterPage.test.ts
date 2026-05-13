@@ -92,6 +92,39 @@ describe('RegisterPage', () => {
     });
   });
 
+  describe('a11y: required-field indicators', () => {
+    it.each([
+      ['email', 'register-email-input', 'register-email-required'],
+      ['display-name', 'register-name-input', 'register-name-required'],
+      ['password', 'register-password-input', 'register-password-required'],
+      ['confirm-password', 'register-confirm-password-input', 'register-confirm-password-required'],
+    ])('shows the visible asterisk on the %s label', async (_field, _inputId, indicatorId) => {
+      const wrapper = await mountRegisterPage();
+      const indicator = wrapper.find(`[data-testid="${indicatorId}"]`);
+      expect(indicator.exists()).toBe(true);
+      expect(indicator.text()).toBe('*');
+      expect(indicator.attributes('aria-hidden')).toBe('true');
+    });
+
+    it('includes sr-only "required" text for each required field', async () => {
+      const wrapper = await mountRegisterPage();
+      const srOnly = wrapper.findAll('.sr-only').filter((el) => el.text() === 'required');
+      expect(srOnly).toHaveLength(4);
+    });
+
+    it.each([
+      'register-email-input',
+      'register-name-input',
+      'register-password-input',
+      'register-confirm-password-input',
+    ])('sets aria-required="true" on %s', async (inputId) => {
+      const wrapper = await mountRegisterPage();
+      const input = wrapper.find(`input[data-testid="${inputId}"]`);
+      expect(input.attributes('aria-required')).toBe('true');
+      expect(input.attributes('required')).toBeDefined();
+    });
+  });
+
   describe('client-side validation', () => {
     it('should show validation error for invalid email', async () => {
       const wrapper = await mountRegisterPage();

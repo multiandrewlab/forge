@@ -160,11 +160,15 @@ const markdownPreviewHtml = computed<string>(() => {
 <template>
   <div class="flex h-full flex-col rounded-lg border border-surface-500 bg-surface">
     <div class="flex items-center gap-3 border-b border-surface-500 px-4 py-3">
+      <label for="new-post-title" class="sr-only">Title (required)</label>
       <input
+        id="new-post-title"
         data-testid="new-post-title-input"
         :value="title"
         type="text"
         placeholder="Snippet title..."
+        required
+        aria-required="true"
         class="flex-1 bg-transparent text-lg text-gray-100 placeholder-gray-500 outline-none"
         @input="onTitleInput"
       />

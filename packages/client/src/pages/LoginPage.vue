@@ -35,25 +35,42 @@ async function handleSubmit(): Promise<void> {
 
       <form class="space-y-4" @submit.prevent="handleSubmit">
         <div>
-          <label for="email" class="block text-sm font-medium mb-1">Email</label>
+          <label for="email" class="block text-sm font-medium mb-1">
+            Email
+            <span aria-hidden="true" data-testid="login-email-required" class="text-red-400 ml-0.5"
+              >*</span
+            >
+            <span class="sr-only">required</span>
+          </label>
           <input
             id="email"
             v-model="email"
             data-testid="login-email-input"
             type="email"
             required
+            aria-required="true"
             class="w-full px-3 py-2 bg-surface-700 border border-surface-500 rounded focus:outline-none focus:ring-2 focus:ring-primary"
           />
         </div>
 
         <div>
-          <label for="password" class="block text-sm font-medium mb-1">Password</label>
+          <label for="password" class="block text-sm font-medium mb-1">
+            Password
+            <span
+              aria-hidden="true"
+              data-testid="login-password-required"
+              class="text-red-400 ml-0.5"
+              >*</span
+            >
+            <span class="sr-only">required</span>
+          </label>
           <input
             id="password"
             v-model="password"
             data-testid="login-password-input"
             type="password"
             required
+            aria-required="true"
             class="w-full px-3 py-2 bg-surface-700 border border-surface-500 rounded focus:outline-none focus:ring-2 focus:ring-primary"
           />
         </div>
