@@ -33,9 +33,16 @@ export function storageStatePath(user: AuthUser): string {
 
 type AuthFixtures = {
   actor: Page;
+  secondActor: Page;
   alice: Page;
   carol: Page;
 };
+
+// Per-worker user pool used by both `actor` and `secondActor`. Kept LOCAL
+// (not imported from packages/server) to avoid an e2e → server dependency.
+// Must stay in lock-step with WORKER_USER_IDS in
+// packages/server/src/routes/__test__.ts and the e2e_w seed users.
+const E2E_WORKER_USERS: AuthUser[] = ['e2e_w0', 'e2e_w1', 'e2e_w2', 'e2e_w3'];
 
 export const test = base.extend<AuthFixtures>({
   actor: async ({ browser }, use, testInfo) => {
@@ -51,6 +58,41 @@ export const test = base.extend<AuthFixtures>({
     const user = `e2e_w${idx}` as 'e2e_w0' | 'e2e_w1' | 'e2e_w2' | 'e2e_w3';
     testInfo.annotations.push({ type: 'actor', description: user });
     const ctx = await browser.newContext({ storageState: storageStatePath(user) });
+    const page = await ctx.newPage();
+    await attachE2EInitScript(page);
+    await use(page);
+    await ctx.close();
+  },
+  /**
+   * Second authenticated browser context, bound to a DIFFERENT e2e_wN user
+   * than `actor`. Used by cross-user specs (e.g. private-post visibility,
+   * non-author replace banner) where the second viewer must NOT be the
+   * author of the resource under test.
+   *
+   * Cycles to the next worker user, wrapping around — so worker 3 pairs
+   * with e2e_w0. Re-uses the storage state baked by global-setup; no
+   * inline login.
+   *
+   * NOTE: The reset fixture targets the test's own worker, not the
+   * secondActor's. Specs that need to assert cross-user-owned resources
+   * should create them through `actor` (whose worker DOES get reset) and
+   * read them through `secondActor` (whose worker state is irrelevant).
+   */
+  secondActor: async ({ browser }, use, testInfo) => {
+    const total = E2E_WORKER_USERS.length;
+    if (testInfo.parallelIndex >= total) {
+      throw new Error(
+        `[secondActor fixture] testInfo.parallelIndex=${testInfo.parallelIndex} ` +
+          `out of pool size ${total}. Expand the e2e_w pool to add more workers.`,
+      );
+    }
+    const otherIndex = (testInfo.parallelIndex + 1) % total;
+    // `otherIndex` is bounded `[0, total)` by the modulo above + the
+    // range check, so the lookup is provably defined. The cast satisfies
+    // noUncheckedIndexedAccess without a runtime branch.
+    const otherUser = E2E_WORKER_USERS[otherIndex] as AuthUser;
+    testInfo.annotations.push({ type: 'secondActor', description: otherUser });
+    const ctx = await browser.newContext({ storageState: storageStatePath(otherUser) });
     const page = await ctx.newPage();
     await attachE2EInitScript(page);
     await use(page);
