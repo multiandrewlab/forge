@@ -40,8 +40,14 @@ export default defineConfig({
   ],
   webServer: [
     {
+      // HOST=localhost is required for /api/__test__/* routes to register
+      // outside CI. The server's loopback guard at
+      // packages/server/src/routes/__test__.ts skips registration when HOST
+      // is not in {localhost, 127.0.0.1, ::1} unless CI=true. Without this,
+      // Playwright's globalSetup probe of /api/__test__/reset returns 404
+      // with the misleading message "ENABLE_TEST_ROUTES is not set". See #84.
       command:
-        'cd ../packages/server && ENABLE_TEST_ROUTES=1 LLM_PROVIDER=mock E2E_MODE=1 NODE_ENV=test npx tsx src/server.ts',
+        'cd ../packages/server && HOST=localhost ENABLE_TEST_ROUTES=1 LLM_PROVIDER=mock E2E_MODE=1 NODE_ENV=test npx tsx src/server.ts',
       url: `${API_BASE}/api/health`,
       // Always reuse existing servers. CI's e2e workflow pre-starts the API
       // and preview manually (env-var control + curl health-check) before
