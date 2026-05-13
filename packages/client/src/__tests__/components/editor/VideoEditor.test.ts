@@ -115,11 +115,15 @@ describe('VideoEditor', () => {
   it('hydrates the AI form from the initial suggestions GET response', async () => {
     mockApiFetch.mockResolvedValueOnce(
       jsonResponse({
-        runId: 'r1',
-        title: 'Cached Title',
-        description: 'Cached Description',
-        tags: ['cached'],
-        createdAt: '2026-05-13T00:00:00Z',
+        status: 'ready',
+        lastError: null,
+        suggestion: {
+          id: 'r1',
+          title: 'Cached Title',
+          description: 'Cached Description',
+          tags: ['cached'],
+          createdAt: '2026-05-13T00:00:00Z',
+        },
       }),
     );
     mockStatus.value = 'ready';
@@ -129,6 +133,17 @@ describe('VideoEditor', () => {
     expect(titleInput.element.value).toBe('Cached Title');
     const descInput = w.find<HTMLTextAreaElement>('[data-testid="video-editor-description"]');
     expect(descInput.element.value).toBe('Cached Description');
+  });
+
+  it('leaves the form blank when initial suggestion is null (server "no run yet")', async () => {
+    mockApiFetch.mockResolvedValueOnce(
+      jsonResponse({ status: 'ready', lastError: null, suggestion: null }),
+    );
+    mockStatus.value = 'ready';
+    const w = mount(VideoEditor, { props: { postId: 'p1', isAuthor: true } });
+    await flushPromises();
+    const titleInput = w.find<HTMLInputElement>('[data-testid="video-editor-title"]');
+    expect(titleInput.element.value).toBe('');
   });
 
   it('hydrates the form when a WS suggestion arrives after mount', async () => {
@@ -152,11 +167,15 @@ describe('VideoEditor', () => {
   it('renders AI title/description as TEXT ONLY (no <script> element)', async () => {
     mockApiFetch.mockResolvedValueOnce(
       jsonResponse({
-        runId: 'r',
-        title: '<script>alert(1)</script>x',
-        description: '<script>x</script>d',
-        tags: ['a'],
-        createdAt: '2026-05-13T00:00:00Z',
+        status: 'ready',
+        lastError: null,
+        suggestion: {
+          id: 'r',
+          title: '<script>alert(1)</script>x',
+          description: '<script>x</script>d',
+          tags: ['a'],
+          createdAt: '2026-05-13T00:00:00Z',
+        },
       }),
     );
     mockStatus.value = 'ready';
@@ -303,11 +322,15 @@ describe('VideoEditor', () => {
   it('removes a tag via the remove-tag button', async () => {
     mockApiFetch.mockResolvedValueOnce(
       jsonResponse({
-        runId: 'r',
-        title: 'T',
-        description: 'D',
-        tags: ['keep', 'drop'],
-        createdAt: '2026-05-13T00:00:00Z',
+        status: 'ready',
+        lastError: null,
+        suggestion: {
+          id: 'r',
+          title: 'T',
+          description: 'D',
+          tags: ['keep', 'drop'],
+          createdAt: '2026-05-13T00:00:00Z',
+        },
       }),
     );
     mockStatus.value = 'ready';
@@ -396,11 +419,15 @@ describe('VideoEditor', () => {
   it('ignores duplicate tag entries (no double-add)', async () => {
     mockApiFetch.mockResolvedValueOnce(
       jsonResponse({
-        runId: 'r',
-        title: 'T',
-        description: 'D',
-        tags: ['dup'],
-        createdAt: '2026-05-13T00:00:00Z',
+        status: 'ready',
+        lastError: null,
+        suggestion: {
+          id: 'r',
+          title: 'T',
+          description: 'D',
+          tags: ['dup'],
+          createdAt: '2026-05-13T00:00:00Z',
+        },
       }),
     );
     mockStatus.value = 'ready';
@@ -417,11 +444,15 @@ describe('VideoEditor', () => {
   it('does NOT clobber form edits when a stale WS suggestion arrives', async () => {
     mockApiFetch.mockResolvedValueOnce(
       jsonResponse({
-        runId: 'r1',
-        title: 'Initial',
-        description: 'Initial',
-        tags: [],
-        createdAt: '2026-05-13T00:00:00Z',
+        status: 'ready',
+        lastError: null,
+        suggestion: {
+          id: 'r1',
+          title: 'Initial',
+          description: 'Initial',
+          tags: [],
+          createdAt: '2026-05-13T00:00:00Z',
+        },
       }),
     );
     mockStatus.value = 'ready';

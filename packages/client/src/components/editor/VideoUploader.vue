@@ -81,6 +81,7 @@ async function onFileChange(ev: Event): Promise<void> {
 
   const res = await apiFetch(`/api/posts/${props.postId}/video/upload-url`, {
     method: 'POST',
+    headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ filename: file.name, fileSizeBytes: file.size }),
   });
   if (!res.ok) {

@@ -191,11 +191,15 @@ const appliedRunId = ref<string | null>(null);
 const replaceMode = ref(false);
 
 interface SuggestionFetchResponse {
-  runId: string;
-  title: string;
-  description: string;
-  tags: string[];
-  createdAt: string;
+  status: string;
+  lastError: string | null;
+  suggestion: {
+    id: string;
+    title: string;
+    description: string;
+    tags: string[];
+    createdAt: string;
+  } | null;
 }
 
 function applySuggestion(s: {
@@ -212,11 +216,13 @@ function applySuggestion(s: {
 
 onMounted(async () => {
   // One-shot read of the current AI suggestion (if any). 404 is the "no
-  // suggestion yet" path — leaves the form blank.
+  // suggestion yet" path — leaves the form blank. The server response shape
+  // is { status, lastError, suggestion: <row|null> } — unwrap before applying.
   const res = await apiFetch(`/api/posts/${props.postId}/video/suggestions`);
   if (!res.ok) return;
   const data = (await res.json()) as SuggestionFetchResponse;
-  applySuggestion(data);
+  if (!data.suggestion) return;
+  applySuggestion({ runId: data.suggestion.id, ...data.suggestion });
 });
 
 // React to live WS frames — only apply when the runId is new, so a stale

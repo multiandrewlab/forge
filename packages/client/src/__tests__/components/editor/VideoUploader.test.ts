@@ -123,6 +123,9 @@ describe('VideoUploader', () => {
       '/api/posts/p1/video/upload-url',
       expect.objectContaining({
         method: 'POST',
+        // Fastify parses request.body as null without a Content-Type header,
+        // which would cause a 400 INVALID body server-side. Pin the header.
+        headers: expect.objectContaining({ 'content-type': 'application/json' }),
         body: expect.stringContaining('"filename":"a.mp4"'),
       }),
     );
