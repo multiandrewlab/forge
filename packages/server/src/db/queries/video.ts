@@ -61,6 +61,19 @@ export async function getPostVideo(postId: string): Promise<PostVideo | null> {
   return result.rows[0] ? mapPostVideo(result.rows[0]) : null;
 }
 
+/**
+ * Locate a post_videos row by its primary CF UID or its in-flight `pending_cf_uid`.
+ * Used by the webhook + reconciler paths to resolve `cf_uid` → `post_id` without
+ * dragging the full PostVideo projection across the wire.
+ */
+export async function findPostVideoByCfUid(cfUid: string): Promise<{ postId: string } | null> {
+  const result = await query<{ post_id: string }>(
+    `SELECT post_id FROM post_videos WHERE cf_uid = $1 OR pending_cf_uid = $1`,
+    [cfUid],
+  );
+  return result.rows[0] ? { postId: result.rows[0].post_id } : null;
+}
+
 // ── status / transition helpers ────────────────────────────────────────────
 
 /**
@@ -129,6 +142,36 @@ export async function setPostVideoTranscript(args: {
       WHERE post_id = $1`,
     [args.postId, args.transcript],
   );
+}
+
+/**
+ * Direct write of `playback_requires_signed_url`. Used by the reconciler's
+ * CF-vs-DB drift correction path; the SAGA paths in `flipVisibility` set this
+ * column inside their `withTransaction` block via raw `client.query` instead.
+ */
+export async function setPlaybackRequiresSignedUrl(args: {
+  postId: string;
+  value: boolean;
+}): Promise<void> {
+  await query(
+    `UPDATE post_videos SET playback_requires_signed_url = $2, updated_at = NOW() WHERE post_id = $1`,
+    [args.postId, args.value],
+  );
+}
+
+/**
+ * Stamp `last_error` on a post_videos row so the reconciler picks it up on
+ * the next sweep. Used by the SAGA compensating-failure branches per spec §8.4
+ * to surface CF↔DB drift that needs human or automated reconciliation.
+ */
+export async function setPostVideoLastError(args: {
+  postId: string;
+  lastError: string;
+}): Promise<void> {
+  await query(`UPDATE post_videos SET last_error = $2, updated_at = NOW() WHERE post_id = $1`, [
+    args.postId,
+    args.lastError,
+  ]);
 }
 
 // ── reconciler / append-only AI run / cleanup ──────────────────────────────

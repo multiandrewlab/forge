@@ -23,7 +23,7 @@
 //     `video.visibility.drift-detected` so the reconciler picks it up.
 
 import * as q from '../db/queries/video.js';
-import { query, withTransaction } from '../db/connection.js';
+import { withTransaction } from '../db/connection.js';
 import { parseWebVttToTranscript } from '../lib/parse-webvtt.js';
 import type { VideoStatus } from '@forge/shared';
 import type { ICloudflareStreamService } from './cloudflare-stream.js';
@@ -159,6 +159,19 @@ export class VideoPipelineService {
     );
   }
 
+  /**
+   * Run the AI extraction over the current transcript and advance the state machine.
+   *
+   * Re-entrancy note: this method is called from both the webhook handler
+   * (captions.ready path) AND the reconciler (suggesting-state recovery). If a
+   * crash interleaves with the post-insertAiRun status CAS, a subsequent
+   * reconciler sweep will produce a second `post_video_ai_runs` row. This is
+   * INTENTIONAL — per spec §6 the table is append-only and the duplicate row
+   * forms part of the audit trail. The `tryAdvisoryXactLock` helper is
+   * reserved for the WU5 `/api/posts/:id/video/ai-rerun` route, where
+   * concurrent user-triggered runs must serialize within a single Fastify
+   * process.
+   */
   private async runAiAndAdvance(args: {
     postId: string;
     transcript: string;
@@ -371,10 +384,7 @@ export class VideoPipelineService {
     const row = await q.getPostVideo(postId);
     if (!row) return;
     if (row.playbackRequiresSignedUrl !== cfValue) {
-      await query(
-        `UPDATE post_videos SET playback_requires_signed_url = $2, updated_at = NOW() WHERE post_id = $1`,
-        [postId, cfValue],
-      );
+      await q.setPlaybackRequiresSignedUrl({ postId, value: cfValue });
       this.cfg.logger.warn(
         {
           event: 'video.visibility.drift-detected',
@@ -433,6 +443,26 @@ export class VideoPipelineService {
       try {
         await this.cfg.cloudflareStream.setRequireSignedUrls(args.cfUid, false);
       } catch (cfErr) {
+        // Per spec §8.4 step 4: stamp last_error so the reconciler picks the
+        // row up and reconciles DB to CF's actual state. We wrap in try/catch
+        // so a failure in this best-effort write does not mask the original
+        // dbErr that we still surface below.
+        try {
+          await q.setPostVideoLastError({
+            postId: args.postId,
+            lastError: 'visibility-flip-drift',
+          });
+        } catch (stampErr) {
+          this.cfg.logger.warn(
+            {
+              event: 'video.visibility.last-error-stamp-failed',
+              postId: args.postId,
+              stage: 'compensating-after-db-fail',
+              err: stampErr,
+            },
+            'failed to stamp last_error after compensating CF revert failed',
+          );
+        }
         this.cfg.logger.warn(
           {
             event: 'video.visibility.drift-detected',
@@ -501,6 +531,25 @@ export class VideoPipelineService {
           );
         });
       } catch (revertErr) {
+        // Per spec §8.4 step 4: stamp last_error so the reconciler picks the
+        // row up. Wrapped in try/catch — a failure here must not mask the
+        // original cfErr that surfaces as VIDEO_VISIBILITY_FLIP_FAILED below.
+        try {
+          await q.setPostVideoLastError({
+            postId: args.postId,
+            lastError: 'visibility-flip-drift',
+          });
+        } catch (stampErr) {
+          this.cfg.logger.warn(
+            {
+              event: 'video.visibility.last-error-stamp-failed',
+              postId: args.postId,
+              stage: 'compensating-after-cf-fail',
+              err: stampErr,
+            },
+            'failed to stamp last_error after compensating DB revert failed',
+          );
+        }
         this.cfg.logger.warn(
           {
             event: 'video.visibility.drift-detected',
@@ -523,12 +572,7 @@ export class VideoPipelineService {
   // ─── helpers ────────────────────────────────────────────────────────────
 
   private async findRowByCfUid(cfUid: string): Promise<{ postId: string } | null> {
-    const result = await query<{ post_id: string }>(
-      `SELECT post_id FROM post_videos WHERE cf_uid = $1 OR pending_cf_uid = $1`,
-      [cfUid],
-    );
-    const row = result.rows[0];
-    return row ? { postId: row.post_id } : null;
+    return q.findPostVideoByCfUid(cfUid);
   }
 
   private defer(task: () => Promise<void>, ctx: { postId: string; step: string }): void {

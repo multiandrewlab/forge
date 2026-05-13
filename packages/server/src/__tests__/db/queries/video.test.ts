@@ -18,6 +18,9 @@ import {
   deletePostVideo,
   tryAdvisoryXactLock,
   insertWebhookEvent,
+  findPostVideoByCfUid,
+  setPlaybackRequiresSignedUrl,
+  setPostVideoLastError,
 } from '../../../db/queries/video.js';
 
 const mockQuery = query as Mock;
@@ -300,6 +303,56 @@ describe('video queries', () => {
       );
       // The module-level query mock MUST NOT be touched when a client is passed.
       expect(mockQuery).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('findPostVideoByCfUid', () => {
+    it('returns the mapped { postId } when a row matches by cf_uid or pending_cf_uid', async () => {
+      mockQuery.mockResolvedValue({ rows: [{ post_id: postId }], rowCount: 1 });
+      const found = await findPostVideoByCfUid('cf-abc');
+      expect(found).toEqual({ postId });
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('SELECT post_id FROM post_videos'),
+        ['cf-abc'],
+      );
+      const sql = mockQuery.mock.calls[0][0] as string;
+      expect(sql).toMatch(/cf_uid\s*=\s*\$1\s+OR\s+pending_cf_uid\s*=\s*\$1/);
+    });
+
+    it('returns null when no row matches', async () => {
+      mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });
+      const found = await findPostVideoByCfUid('cf-missing');
+      expect(found).toBeNull();
+    });
+  });
+
+  describe('setPlaybackRequiresSignedUrl', () => {
+    it('updates playback_requires_signed_url for the post', async () => {
+      mockQuery.mockResolvedValue({ rowCount: 1 });
+      await setPlaybackRequiresSignedUrl({ postId, value: true });
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringMatching(/UPDATE post_videos SET playback_requires_signed_url/i),
+        [postId, true],
+      );
+      const sql = mockQuery.mock.calls[0][0] as string;
+      expect(sql).toMatch(/playback_requires_signed_url\s*=\s*\$2/);
+      expect(sql).toMatch(/updated_at\s*=\s*NOW\(\)/);
+      expect(sql).toMatch(/WHERE\s+post_id\s*=\s*\$1/);
+    });
+  });
+
+  describe('setPostVideoLastError', () => {
+    it('updates last_error for the post', async () => {
+      mockQuery.mockResolvedValue({ rowCount: 1 });
+      await setPostVideoLastError({ postId, lastError: 'visibility-flip-drift' });
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('UPDATE post_videos SET last_error'),
+        [postId, 'visibility-flip-drift'],
+      );
+      const sql = mockQuery.mock.calls[0][0] as string;
+      expect(sql).toMatch(/last_error\s*=\s*\$2/);
+      expect(sql).toMatch(/updated_at\s*=\s*NOW\(\)/);
+      expect(sql).toMatch(/WHERE\s+post_id\s*=\s*\$1/);
     });
   });
 

@@ -10,7 +10,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from 'vitest';
 
 vi.mock('../../db/connection.js', () => ({
-  query: vi.fn(),
   withTransaction: vi.fn(),
 }));
 
@@ -26,14 +25,15 @@ vi.mock('../../db/queries/video.js', () => ({
   deletePostVideo: vi.fn(),
   tryAdvisoryXactLock: vi.fn(),
   insertWebhookEvent: vi.fn(),
+  findPostVideoByCfUid: vi.fn(),
+  setPlaybackRequiresSignedUrl: vi.fn(),
+  setPostVideoLastError: vi.fn(),
 }));
 
-import { query } from '../../db/connection.js';
 import * as q from '../../db/queries/video.js';
 import { VideoPipelineService } from '../../services/video-pipeline.js';
 import type { ICloudflareStreamService } from '../../services/cloudflare-stream.js';
 
-const mockQuery = query as Mock;
 const mockedQ = q as unknown as Record<string, Mock>;
 
 function makeFakeCf(): ICloudflareStreamService & Record<string, Mock> {
@@ -90,7 +90,6 @@ function makeBed(overrides: Partial<TestBed> = {}): TestBed {
 
 beforeEach(() => {
   for (const m of Object.values(mockedQ)) m.mockReset();
-  mockQuery.mockReset();
 });
 
 afterEach(() => {
@@ -99,7 +98,7 @@ afterEach(() => {
 
 describe('VideoPipelineService.handleWebhook — video.ready', () => {
   it('advances uploading → processing via CAS and defers requestCaptions + processing → captions', async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [{ post_id: 'p1' }], rowCount: 1 });
+    mockedQ.findPostVideoByCfUid.mockResolvedValueOnce({ postId: 'p1' });
     mockedQ.setPostVideoStatus.mockResolvedValueOnce(true).mockResolvedValueOnce(true);
     const { cf, svc } = makeBed();
 
@@ -124,22 +123,19 @@ describe('VideoPipelineService.handleWebhook — video.ready', () => {
     });
   });
 
-  it('looks up rows by cf_uid OR pending_cf_uid', async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [{ post_id: 'p1' }], rowCount: 1 });
+  it('looks up rows by cf_uid via the findPostVideoByCfUid helper', async () => {
+    mockedQ.findPostVideoByCfUid.mockResolvedValueOnce({ postId: 'p1' });
     mockedQ.setPostVideoStatus.mockResolvedValue(true);
     const { svc } = makeBed();
 
     await svc.handleWebhook({ type: 'video.ready', cfUid: 'cf-x' });
     await flushDeferred();
 
-    expect(mockQuery).toHaveBeenCalled();
-    const firstCall = mockQuery.mock.calls[0] as [string, unknown[]];
-    const sql = firstCall[0];
-    expect(sql).toMatch(/cf_uid\s*=\s*\$1\s+OR\s+pending_cf_uid\s*=\s*\$1/);
+    expect(mockedQ.findPostVideoByCfUid).toHaveBeenCalledWith('cf-x');
   });
 
   it('is a no-op when CAS loses (duplicate webhook after row already advanced)', async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [{ post_id: 'p1' }], rowCount: 1 });
+    mockedQ.findPostVideoByCfUid.mockResolvedValueOnce({ postId: 'p1' });
     mockedQ.setPostVideoStatus.mockResolvedValueOnce(false);
     const { cf, svc } = makeBed();
 
@@ -151,7 +147,7 @@ describe('VideoPipelineService.handleWebhook — video.ready', () => {
   });
 
   it('is a no-op when the row is not found (unknown cf_uid)', async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+    mockedQ.findPostVideoByCfUid.mockResolvedValueOnce(null);
     const { cf, svc } = makeBed();
 
     await svc.handleWebhook({ type: 'video.ready', cfUid: 'orphan' });
@@ -162,7 +158,7 @@ describe('VideoPipelineService.handleWebhook — video.ready', () => {
   });
 
   it('logs deferred-error when the captions request throws after CAS', async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [{ post_id: 'p1' }], rowCount: 1 });
+    mockedQ.findPostVideoByCfUid.mockResolvedValueOnce({ postId: 'p1' });
     mockedQ.setPostVideoStatus.mockResolvedValueOnce(true);
     const cf = makeFakeCf();
     cf.requestCaptions.mockRejectedValueOnce(new Error('cf api 500'));
@@ -184,7 +180,7 @@ describe('VideoPipelineService.handleWebhook — video.ready', () => {
 
 describe('VideoPipelineService.handleWebhook — captions.ready', () => {
   it('advances captions → suggesting then runs the deferred fetch+parse+AI+ready flow', async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [{ post_id: 'p1' }], rowCount: 1 });
+    mockedQ.findPostVideoByCfUid.mockResolvedValueOnce({ postId: 'p1' });
     mockedQ.setPostVideoStatus
       .mockResolvedValueOnce(true) // captions → suggesting
       .mockResolvedValueOnce(true); // suggesting → ready
@@ -240,7 +236,7 @@ describe('VideoPipelineService.handleWebhook — captions.ready', () => {
   });
 
   it('on AI failure flips suggesting → failed with lastError and emits deferred-error', async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [{ post_id: 'p1' }], rowCount: 1 });
+    mockedQ.findPostVideoByCfUid.mockResolvedValueOnce({ postId: 'p1' });
     mockedQ.setPostVideoStatus
       .mockResolvedValueOnce(true) // captions → suggesting
       .mockResolvedValueOnce(true); // suggesting → failed
@@ -268,7 +264,7 @@ describe('VideoPipelineService.handleWebhook — captions.ready', () => {
   });
 
   it('replace flow: swaps cf_uid + deletes prior asset + emits video.replaced', async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [{ post_id: 'p1' }], rowCount: 1 });
+    mockedQ.findPostVideoByCfUid.mockResolvedValueOnce({ postId: 'p1' });
     mockedQ.setPostVideoStatus.mockResolvedValueOnce(true); // captions → suggesting
     mockedQ.getPostVideo.mockResolvedValueOnce({
       postId: 'p1',
@@ -302,7 +298,7 @@ describe('VideoPipelineService.handleWebhook — captions.ready', () => {
   });
 
   it('replace flow: prior-asset deletion failure is logged but does not throw', async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [{ post_id: 'p1' }], rowCount: 1 });
+    mockedQ.findPostVideoByCfUid.mockResolvedValueOnce({ postId: 'p1' });
     mockedQ.setPostVideoStatus.mockResolvedValueOnce(true);
     mockedQ.getPostVideo.mockResolvedValueOnce({
       postId: 'p1',
@@ -328,7 +324,7 @@ describe('VideoPipelineService.handleWebhook — captions.ready', () => {
   });
 
   it('is a no-op when CAS loses on captions → suggesting', async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [{ post_id: 'p1' }], rowCount: 1 });
+    mockedQ.findPostVideoByCfUid.mockResolvedValueOnce({ postId: 'p1' });
     mockedQ.setPostVideoStatus.mockResolvedValueOnce(false);
     const { svc, cf } = makeBed();
 
@@ -339,7 +335,7 @@ describe('VideoPipelineService.handleWebhook — captions.ready', () => {
   });
 
   it('is a no-op when the row is missing on captions.ready', async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+    mockedQ.findPostVideoByCfUid.mockResolvedValueOnce(null);
     const { svc, cf } = makeBed();
 
     await svc.handleWebhook({ type: 'captions.ready', cfUid: 'orphan' });
@@ -352,7 +348,7 @@ describe('VideoPipelineService.handleWebhook — captions.ready', () => {
 
 describe('VideoPipelineService.handleWebhook — video.error', () => {
   it('flips the first in-flight status to failed (uploading→failed)', async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [{ post_id: 'p1' }], rowCount: 1 });
+    mockedQ.findPostVideoByCfUid.mockResolvedValueOnce({ postId: 'p1' });
     mockedQ.setPostVideoStatus.mockResolvedValueOnce(true);
     const { svc } = makeBed();
 
@@ -368,7 +364,7 @@ describe('VideoPipelineService.handleWebhook — video.error', () => {
   });
 
   it('falls through to the next status when CAS misses (covers processing/captions/suggesting)', async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [{ post_id: 'p1' }], rowCount: 1 });
+    mockedQ.findPostVideoByCfUid.mockResolvedValueOnce({ postId: 'p1' });
     mockedQ.setPostVideoStatus
       .mockResolvedValueOnce(false) // uploading
       .mockResolvedValueOnce(false) // processing
@@ -387,7 +383,7 @@ describe('VideoPipelineService.handleWebhook — video.error', () => {
   });
 
   it('exhausts all in-flight statuses without throwing when none match', async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [{ post_id: 'p1' }], rowCount: 1 });
+    mockedQ.findPostVideoByCfUid.mockResolvedValueOnce({ postId: 'p1' });
     mockedQ.setPostVideoStatus.mockResolvedValue(false);
     const { svc } = makeBed();
 
@@ -397,7 +393,7 @@ describe('VideoPipelineService.handleWebhook — video.error', () => {
   });
 
   it('is a no-op when the row is missing', async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+    mockedQ.findPostVideoByCfUid.mockResolvedValueOnce(null);
     const { svc } = makeBed();
 
     await svc.handleWebhook({ type: 'video.error', cfUid: 'orphan' });
@@ -424,7 +420,7 @@ describe('VideoPipelineService.handleWebhook — unknown event', () => {
 
 describe('VideoPipelineService audit-log emissions (3.6)', () => {
   it('emits video.uploaded after uploading → processing CAS succeeds', async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [{ post_id: 'p1' }], rowCount: 1 });
+    mockedQ.findPostVideoByCfUid.mockResolvedValueOnce({ postId: 'p1' });
     mockedQ.setPostVideoStatus.mockResolvedValue(true);
     const { svc, logger } = makeBed();
 
@@ -449,7 +445,7 @@ describe('VideoPipelineService audit-log emissions (3.6)', () => {
   });
 
   it('emits video.ai-extract with outcome=success and timing on success', async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [{ post_id: 'p1' }], rowCount: 1 });
+    mockedQ.findPostVideoByCfUid.mockResolvedValueOnce({ postId: 'p1' });
     mockedQ.setPostVideoStatus.mockResolvedValue(true);
     mockedQ.getPostVideo.mockResolvedValueOnce({
       postId: 'p1',
@@ -484,7 +480,7 @@ describe('VideoPipelineService audit-log emissions (3.6)', () => {
   });
 
   it('emits video.ai-extract with outcome=failure on failure', async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [{ post_id: 'p1' }], rowCount: 1 });
+    mockedQ.findPostVideoByCfUid.mockResolvedValueOnce({ postId: 'p1' });
     mockedQ.setPostVideoStatus.mockResolvedValue(true);
     const cf = makeFakeCf();
     cf.fetchCaptionsWebVTT.mockResolvedValueOnce('WEBVTT\n');
@@ -506,7 +502,7 @@ describe('VideoPipelineService audit-log emissions (3.6)', () => {
   });
 
   it('truncates transcript at maxTranscriptChars and records wasTruncated=true', async () => {
-    mockQuery.mockResolvedValueOnce({ rows: [{ post_id: 'p1' }], rowCount: 1 });
+    mockedQ.findPostVideoByCfUid.mockResolvedValueOnce({ postId: 'p1' });
     mockedQ.setPostVideoStatus.mockResolvedValue(true);
     mockedQ.getPostVideo.mockResolvedValueOnce({
       postId: 'p1',

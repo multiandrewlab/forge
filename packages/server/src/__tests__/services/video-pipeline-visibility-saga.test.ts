@@ -4,7 +4,6 @@
 import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest';
 
 vi.mock('../../db/connection.js', () => ({
-  query: vi.fn(),
   withTransaction: vi.fn(),
 }));
 
@@ -20,13 +19,17 @@ vi.mock('../../db/queries/video.js', () => ({
   deletePostVideo: vi.fn(),
   tryAdvisoryXactLock: vi.fn(),
   insertWebhookEvent: vi.fn(),
+  findPostVideoByCfUid: vi.fn(),
+  setPlaybackRequiresSignedUrl: vi.fn(),
+  setPostVideoLastError: vi.fn(),
 }));
 
-import { query, withTransaction } from '../../db/connection.js';
+import { withTransaction } from '../../db/connection.js';
+import * as q from '../../db/queries/video.js';
 import { VideoPipelineService } from '../../services/video-pipeline.js';
 import type { ICloudflareStreamService } from '../../services/cloudflare-stream.js';
 
-const mockQuery = query as Mock;
+const mockedQ = q as unknown as Record<string, Mock>;
 const mockWithTransaction = withTransaction as Mock;
 
 function makeFakeCf(): ICloudflareStreamService & Record<string, Mock> {
@@ -68,7 +71,7 @@ function defaultWithTransaction() {
 }
 
 beforeEach(() => {
-  mockQuery.mockReset();
+  for (const m of Object.values(mockedQ)) m.mockReset();
   mockWithTransaction.mockReset();
   defaultWithTransaction();
 });
@@ -144,7 +147,7 @@ describe('flipVisibility — public → private (CF first, then DB)', () => {
     expect(cf.setRequireSignedUrls).toHaveBeenNthCalledWith(2, 'cf-1', false);
   });
 
-  it('CF ok, DB fails, compensating CF also fails → emits video.visibility.drift-detected audit log', async () => {
+  it('CF ok, DB fails, compensating CF also fails → stamps last_error AND emits video.visibility.drift-detected audit log', async () => {
     const cf = makeFakeCf();
     cf.setRequireSignedUrls
       .mockResolvedValueOnce(undefined) // initial flip succeeds
@@ -156,11 +159,35 @@ describe('flipVisibility — public → private (CF first, then DB)', () => {
       svc.flipVisibility({ postId: 'p1', from: 'public', to: 'private', cfUid: 'cf-1' }),
     ).rejects.toThrow();
 
+    expect(mockedQ.setPostVideoLastError).toHaveBeenCalledWith({
+      postId: 'p1',
+      lastError: 'visibility-flip-drift',
+    });
     expect(logger.warn).toHaveBeenCalledWith(
       expect.objectContaining({
         event: 'video.visibility.drift-detected',
         postId: 'p1',
       }),
+      expect.any(String),
+    );
+  });
+
+  it('public→private compensating-CF-failed branch: setPostVideoLastError throw is contained (warn-logged, original error still surfaces)', async () => {
+    const cf = makeFakeCf();
+    cf.setRequireSignedUrls
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('cf 503'));
+    mockWithTransaction.mockRejectedValueOnce(new Error('pg explode'));
+    mockedQ.setPostVideoLastError.mockRejectedValueOnce(new Error('last_error write failed'));
+    const { svc, logger } = makeSvc(cf);
+
+    await expect(
+      svc.flipVisibility({ postId: 'p1', from: 'public', to: 'private', cfUid: 'cf-1' }),
+    ).rejects.toThrow(/VIDEO_VISIBILITY_FLIP_FAILED.*pg explode/);
+    expect(mockedQ.setPostVideoLastError).toHaveBeenCalled();
+    // Drift-detected log still emitted; the helper failure is logged in addition.
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'video.visibility.drift-detected', postId: 'p1' }),
       expect.any(String),
     );
   });
@@ -246,7 +273,7 @@ describe('flipVisibility — private → public (DB first, then CF)', () => {
     expect(mockWithTransaction).toHaveBeenCalledTimes(2);
   });
 
-  it('DB ok, CF fails, compensating DB also fails → drift-detected audit log', async () => {
+  it('DB ok, CF fails, compensating DB also fails → stamps last_error AND drift-detected audit log', async () => {
     const cf = makeFakeCf();
     cf.setRequireSignedUrls.mockRejectedValueOnce(new Error('cf 502'));
     // First withTransaction succeeds (initial commit), second one (compensating) fails
@@ -261,11 +288,36 @@ describe('flipVisibility — private → public (DB first, then CF)', () => {
       svc.flipVisibility({ postId: 'p1', from: 'private', to: 'public', cfUid: 'cf-1' }),
     ).rejects.toThrow();
 
+    expect(mockedQ.setPostVideoLastError).toHaveBeenCalledWith({
+      postId: 'p1',
+      lastError: 'visibility-flip-drift',
+    });
     expect(logger.warn).toHaveBeenCalledWith(
       expect.objectContaining({
         event: 'video.visibility.drift-detected',
         postId: 'p1',
       }),
+      expect.any(String),
+    );
+  });
+
+  it('private→public compensating-DB-failed branch: setPostVideoLastError throw is contained (warn-logged, original error still surfaces)', async () => {
+    const cf = makeFakeCf();
+    cf.setRequireSignedUrls.mockRejectedValueOnce(new Error('cf 502'));
+    mockWithTransaction
+      .mockImplementationOnce(async (fn: (c: { query: Mock }) => Promise<unknown>) =>
+        fn({ query: vi.fn().mockResolvedValue({ rows: [], rowCount: 1 }) }),
+      )
+      .mockRejectedValueOnce(new Error('pg revert failed'));
+    mockedQ.setPostVideoLastError.mockRejectedValueOnce(new Error('last_error write failed'));
+    const { svc, logger } = makeSvc(cf);
+
+    await expect(
+      svc.flipVisibility({ postId: 'p1', from: 'private', to: 'public', cfUid: 'cf-1' }),
+    ).rejects.toThrow(/VIDEO_VISIBILITY_FLIP_FAILED.*cf 502/);
+    expect(mockedQ.setPostVideoLastError).toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'video.visibility.drift-detected', postId: 'p1' }),
       expect.any(String),
     );
   });

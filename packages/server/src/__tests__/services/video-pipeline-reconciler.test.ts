@@ -9,7 +9,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from 'vitest';
 
 vi.mock('../../db/connection.js', () => ({
-  query: vi.fn(),
   withTransaction: vi.fn(),
 }));
 
@@ -25,9 +24,11 @@ vi.mock('../../db/queries/video.js', () => ({
   deletePostVideo: vi.fn(),
   tryAdvisoryXactLock: vi.fn(),
   insertWebhookEvent: vi.fn(),
+  findPostVideoByCfUid: vi.fn(),
+  setPlaybackRequiresSignedUrl: vi.fn(),
+  setPostVideoLastError: vi.fn(),
 }));
 
-import { query } from '../../db/connection.js';
 import * as q from '../../db/queries/video.js';
 import {
   VideoPipelineService,
@@ -36,7 +37,6 @@ import {
 } from '../../services/video-pipeline.js';
 import type { ICloudflareStreamService } from '../../services/cloudflare-stream.js';
 
-const mockQuery = query as Mock;
 const mockedQ = q as unknown as Record<string, Mock>;
 
 function makeFakeCf(): ICloudflareStreamService & Record<string, Mock> {
@@ -84,7 +84,6 @@ async function flushDeferred() {
 
 beforeEach(() => {
   for (const m of Object.values(mockedQ)) m.mockReset();
-  mockQuery.mockReset();
 });
 
 afterEach(() => {
@@ -130,8 +129,8 @@ describe('runReconcilerSweep — uploading recovery', () => {
       readyToStream: true,
       requireSignedURLs: false,
     });
-    // findRowByCfUid raw lookup inside onVideoReady + signed-url drift check
-    mockQuery.mockResolvedValueOnce({ rows: [{ post_id: 'p1' }], rowCount: 1 });
+    // findPostVideoByCfUid lookup inside onVideoReady + signed-url drift check
+    mockedQ.findPostVideoByCfUid.mockResolvedValueOnce({ postId: 'p1' });
     mockedQ.setPostVideoStatus.mockResolvedValue(true);
     mockedQ.getPostVideo.mockResolvedValueOnce({
       postId: 'p1',
@@ -260,8 +259,8 @@ describe('runReconcilerSweep — captions recovery', () => {
     mockedQ.selectReconcilerCandidates.mockResolvedValueOnce([
       { postId: 'p1', cfUid: 'cf-1', pendingCfUid: null, status: 'captions' },
     ]);
-    // onCaptionsReady looks up the row via raw query
-    mockQuery.mockResolvedValueOnce({ rows: [{ post_id: 'p1' }], rowCount: 1 });
+    // onCaptionsReady looks up the row via findPostVideoByCfUid helper
+    mockedQ.findPostVideoByCfUid.mockResolvedValueOnce({ postId: 'p1' });
     mockedQ.setPostVideoStatus.mockResolvedValueOnce(true);
     const { svc, cf } = makeSvc();
 
@@ -399,15 +398,14 @@ describe('runReconcilerSweep — drift detection', () => {
       postId: 'p1',
       playbackRequiresSignedUrl: false, // … DB says false
     });
-    mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 1 });
     const { svc, logger } = makeSvc({ cf });
 
     await svc.runReconcilerSweep({ staleness: 'interval' });
 
-    expect(mockQuery).toHaveBeenCalledWith(
-      expect.stringMatching(/UPDATE post_videos SET playback_requires_signed_url/i),
-      ['p1', true],
-    );
+    expect(mockedQ.setPlaybackRequiresSignedUrl).toHaveBeenCalledWith({
+      postId: 'p1',
+      value: true,
+    });
     expect(logger.warn).toHaveBeenCalledWith(
       expect.objectContaining({
         event: 'video.visibility.drift-detected',
@@ -436,10 +434,7 @@ describe('runReconcilerSweep — drift detection', () => {
 
     await svc.runReconcilerSweep({ staleness: 'interval' });
 
-    expect(mockQuery).not.toHaveBeenCalledWith(
-      expect.stringMatching(/UPDATE post_videos SET playback_requires_signed_url/i),
-      expect.anything(),
-    );
+    expect(mockedQ.setPlaybackRequiresSignedUrl).not.toHaveBeenCalled();
     expect(logger.warn).not.toHaveBeenCalledWith(
       expect.objectContaining({ event: 'video.visibility.drift-detected' }),
       expect.any(String),
