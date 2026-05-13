@@ -3,6 +3,8 @@
 import { ref, watch, onMounted, onBeforeUnmount } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import PostEditor from '@/components/editor/PostEditor.vue';
+import VideoEditor from '@/components/editor/VideoEditor.vue';
+import { useAuth } from '@/composables/useAuth';
 import { usePosts } from '@/composables/usePosts';
 import { usePostsStore } from '@/stores/posts';
 import { storeToRefs } from 'pinia';
@@ -13,6 +15,7 @@ const router = useRouter();
 const { fetchPost, saveRevision, updatePost, publishPost, error, errorStatus } = usePosts();
 const store = usePostsStore();
 const { currentPost, saveStatus, lastSavedAt } = storeToRefs(store);
+const { user } = useAuth();
 
 const title = ref('');
 const content = ref('');
@@ -176,6 +179,19 @@ async function handleCancel(): Promise<void> {
       </div>
 
       <div v-if="loading" class="text-gray-400 text-center py-12">Loading...</div>
+
+      <!--
+        Video posts (#102 WU8b) route to VideoEditor; it composes the badge,
+        player, AI-suggestion form, and recovery CTAs internally. The Publish
+        button stays in the page chrome (out of scope of VideoEditor) and
+        will be gated on post.video.status === 'ready' once WU5's GET shape
+        is wired here. For now, mount VideoEditor for the author's edit view.
+      -->
+      <VideoEditor
+        v-else-if="currentPost && currentPost.contentType === 'video'"
+        :post-id="currentPost.id"
+        :is-author="user?.id === currentPost.authorId"
+      />
 
       <PostEditor
         v-else-if="currentPost"

@@ -85,6 +85,14 @@ async function handlePublish(): Promise<void> {
     content: content.value || undefined,
   });
   if (id) {
+    // Video posts (#102 WU8b): we can't publish here because the upload has
+    // not started — server gates publish on video.status === 'ready'. Route
+    // the user straight to the edit page where VideoEditor handles upload +
+    // AI metadata, and the Publish action lives in the page chrome there.
+    if (contentType.value === 'video') {
+      router.push({ name: 'post-edit', params: { id } });
+      return;
+    }
     // Upload locally-staged files first so we can commit them to the next
     // revision; otherwise they remain orphaned in staging.
     const stagedFileIds = await flushLocalFiles(id);
@@ -117,6 +125,13 @@ async function handleSaveDraft(): Promise<void> {
     content: content.value || undefined,
   });
   if (id) {
+    // Video drafts: skip saveRevision (no text body) and route to the edit
+    // page so the VideoEditor takes over for upload + AI metadata. See
+    // handlePublish for the same branch on the publish path.
+    if (contentType.value === 'video') {
+      router.push({ name: 'post-edit', params: { id } });
+      return;
+    }
     const stagedFileIds = await flushLocalFiles(id);
     if (content.value || stagedFileIds.length > 0) {
       if (stagedFileIds.length > 0) {

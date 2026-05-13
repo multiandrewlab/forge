@@ -25,6 +25,8 @@ import PresenceIndicator from '@/components/post/PresenceIndicator.vue';
 import PostActions from '@/components/post/PostActions.vue';
 import CommentSection from '@/components/post/CommentSection.vue';
 import Breadcrumbs from '@/components/feedback/Breadcrumbs.vue';
+import VideoPlayer from '@/components/post/VideoPlayer.vue';
+import VideoStatusBadge from '@/components/post/VideoStatusBadge.vue';
 import { usePosts } from '@/composables/usePosts';
 import { useComments } from '@/composables/useComments';
 import { useVotes } from '@/composables/useVotes';
@@ -33,7 +35,27 @@ import { usePostsStore } from '@/stores/posts';
 import { useFilesStore } from '@/stores/files';
 import { useAuth } from '@/composables/useAuth';
 import { apiFetch } from '@/lib/api';
-import type { PostFile, PostWithRevision } from '@forge/shared';
+import type { PostFile, PostWithRevision, VideoStatus } from '@forge/shared';
+
+// Video metadata is attached by the server at runtime to GET /api/posts/:id
+// for video posts (WU5b §5.13). The shape diverges by viewer; we type both
+// branches and dispatch via `pendingReplacement` (non-author) vs `cfUid`
+// (author). The shared PostWithRevision type does not include the field
+// because it is response-shape-only — we attach it here, narrowed.
+interface AuthorVideoField {
+  status: VideoStatus;
+  cfUid: string;
+  pendingCfUid: string | null;
+  lastError: string | null;
+  playbackRequiresSignedUrl: boolean;
+}
+interface NonAuthorVideoField {
+  status: VideoStatus;
+  pendingReplacement: boolean;
+}
+type PostWithRevisionAndVideo = PostWithRevision & {
+  video?: AuthorVideoField | NonAuthorVideoField;
+};
 
 const route = useRoute();
 const router = useRouter();
@@ -61,6 +83,35 @@ const showDeleteDialog = ref(false);
 const latestRevision = computed(() => {
   if (!currentPost.value) return undefined;
   return currentPost.value.revisions[0];
+});
+
+// Video metadata accessor (#102 WU8b). Returns the typed `video` field when
+// the server attached one to the GET response; undefined for non-video posts
+// or when the field has not hydrated yet. Routed by `isAuthor` to discriminate
+// the author vs non-author response shapes.
+const videoField = computed(() => {
+  const p = currentPost.value as PostWithRevisionAndVideo | null;
+  return p?.video;
+});
+
+// Author-shape video metadata; null when the viewer is a non-author OR the
+// post has no video field. Used to drive the VideoStatusBadge.
+const authorVideo = computed<AuthorVideoField | null>(() => {
+  const v = videoField.value;
+  if (!v || !isAuthor.value) return null;
+  // Discriminate by the presence of `cfUid` (author-only field).
+  if ('cfUid' in v) return v;
+  return null;
+});
+
+// Non-author "new version processing" banner (spec §9.5): the viewer is NOT
+// the author, the server signaled a pending replacement, AND the visible
+// asset is not yet ready. The author sees the badge instead.
+const showReplaceBanner = computed(() => {
+  const v = videoField.value;
+  if (!v || isAuthor.value) return false;
+  if (!('pendingReplacement' in v)) return false;
+  return v.pendingReplacement && v.status !== 'ready';
 });
 
 // Adapter: PostActions expects PostWithAuthor, but the post-view store carries
@@ -261,8 +312,31 @@ async function downloadFile(file: PostFile): Promise<void> {
           </div>
         </div>
 
+        <!--
+          Video posts (#102 WU8b): render VideoPlayer + (author-only) status
+          badge + (non-author-only) replacement banner. Non-video posts fall
+          through to CodeViewer below.
+        -->
+        <template v-if="currentPost.contentType === 'video'">
+          <div
+            v-if="showReplaceBanner"
+            data-testid="video-replace-banner"
+            class="mb-3 rounded bg-blue-50 px-3 py-2 text-sm text-blue-900"
+          >
+            A new version of this video is processing.
+          </div>
+          <VideoStatusBadge
+            v-if="authorVideo"
+            :status="authorVideo.status"
+            :pending-cf-uid="authorVideo.pendingCfUid"
+            :last-error="authorVideo.lastError"
+            class="mb-3"
+          />
+          <VideoPlayer :post-id="currentPost.id" />
+        </template>
+
         <CodeViewer
-          v-if="latestRevision"
+          v-else-if="latestRevision"
           :code="latestRevision.content"
           :language="currentPost.language ?? undefined"
         />

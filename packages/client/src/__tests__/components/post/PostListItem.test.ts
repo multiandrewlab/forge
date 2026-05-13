@@ -215,6 +215,27 @@ describe('PostListItem', () => {
     });
   });
 
+  describe('video icon', () => {
+    it('shows video icon when contentType is "video"', () => {
+      const router = createTestRouter();
+      const videoPost = { ...mockPost, contentType: 'video' as const };
+      const wrapper = mount(PostListItem, {
+        props: { post: videoPost, selected: false },
+        global: { plugins: [router] },
+      });
+      expect(wrapper.find('[data-testid="video-icon"]').exists()).toBe(true);
+    });
+
+    it('does not show video icon when contentType is "snippet"', () => {
+      const router = createTestRouter();
+      const wrapper = mount(PostListItem, {
+        props: { post: mockPost, selected: false },
+        global: { plugins: [router] },
+      });
+      expect(wrapper.find('[data-testid="video-icon"]').exists()).toBe(false);
+    });
+  });
+
   describe('author profile link', () => {
     it('wraps author avatar and name in a RouterLink to user profile', () => {
       const router = createTestRouter();
