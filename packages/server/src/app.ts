@@ -41,6 +41,7 @@ import {
   runExtractVideoMetadata,
 } from './plugins/langchain/chains/extract-video-metadata.js';
 import { EXTRACT_VIDEO_METADATA_PROMPT_VERSION } from './plugins/langchain/prompts/extract-video-metadata.js';
+import { createLogger } from './logger.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -50,9 +51,10 @@ declare module 'fastify' {
 }
 
 export async function buildApp() {
-  const app = Fastify({
-    logger: process.env.NODE_ENV !== 'test',
-  });
+  const app =
+    process.env.NODE_ENV === 'test'
+      ? Fastify({ logger: false })
+      : Fastify({ loggerInstance: createLogger() });
 
   await app.register(cors);
   await app.register(cookie);

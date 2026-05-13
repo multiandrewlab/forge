@@ -1,6 +1,7 @@
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { assertProductionGuards, generateE2ESecret, isE2EFlagSet } from './env-guards.js';
+import { assertCfEnv } from './cf-stream-config.js';
 
 export type BootHooks = {
   onError?: (msg: string) => void;
@@ -14,6 +15,7 @@ export function runBootGuards(env: NodeJS.ProcessEnv, hooks: BootHooks = {}): vo
 
   try {
     assertProductionGuards(env);
+    assertCfEnv(env);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     onError(msg);
