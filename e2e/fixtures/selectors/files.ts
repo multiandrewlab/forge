@@ -26,4 +26,6 @@ export const files = {
   fileRemoveBtn: (page: Page, filename: string): Locator =>
     page.getByTestId(`file-remove-btn-${filename}`),
   fileUploadError: (page: Page): Locator => page.getByTestId('file-upload-error'),
+  // Per-file download affordance on PostViewPage (issue #83)
+  postFileDownloadLink: (page: Page): Locator => page.getByTestId('post-file-download-link'),
 };

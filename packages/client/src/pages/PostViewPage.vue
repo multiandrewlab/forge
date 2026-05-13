@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/* global window, URL */
+/* global window, URL, document */
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
@@ -32,6 +32,7 @@ import { storeToRefs } from 'pinia';
 import { usePostsStore } from '@/stores/posts';
 import { useFilesStore } from '@/stores/files';
 import { useAuth } from '@/composables/useAuth';
+import { apiFetch } from '@/lib/api';
 import type { PostFile, PostWithRevision } from '@forge/shared';
 
 const route = useRoute();
@@ -133,6 +134,34 @@ async function handleFork(): Promise<void> {
   if (newPostId) {
     router.push(`/posts/${newPostId}/edit`);
   }
+}
+
+// Per-file download (issue #83 WU1). The file endpoint requires the bearer
+// token, so a plain anchor href would 401. We fetch the blob via apiFetch,
+// build a transient ObjectURL, programmatically click an `<a download>`, and
+// revoke the URL synchronously after .click() — the browser has captured the
+// download by that point. Mirrors FilePreview's blob/ObjectURL approach.
+async function downloadFile(file: PostFile): Promise<void> {
+  if (!currentPost.value) return;
+  const response = await apiFetch(`/api/posts/${currentPost.value.id}/files/${file.id}`);
+  if (!response.ok) {
+    error.value = `Failed to download ${file.filename}`;
+    // Clear any stale errorStatus (e.g., a prior 403) so the generic red error
+    // banner renders, not the dedicated forbidden surface that branches on
+    // `errorStatus === 403`. Without this, a stale status from a previous
+    // failed request would route the download error into the wrong UI.
+    errorStatus.value = null;
+    return;
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = file.filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 </script>
 
@@ -246,9 +275,18 @@ async function handleFork(): Promise<void> {
           <li
             v-for="file in revisionFiles"
             :key="file.id"
-            class="rounded border border-surface-500 bg-surface-700 px-2 py-1 text-xs text-gray-300"
+            class="flex items-center gap-2 rounded border border-surface-500 bg-surface-700 px-2 py-1 text-xs text-gray-300"
           >
-            {{ file.filename }}
+            <span>{{ file.filename }}</span>
+            <button
+              type="button"
+              data-testid="post-file-download-link"
+              :aria-label="`Download ${file.filename}`"
+              class="rounded border border-surface-500 px-1.5 py-0.5 text-xs text-primary hover:bg-surface-500 hover:text-white"
+              @click="downloadFile(file)"
+            >
+              Download
+            </button>
           </li>
         </ul>
 

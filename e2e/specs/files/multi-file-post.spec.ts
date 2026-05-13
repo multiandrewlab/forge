@@ -35,6 +35,9 @@ test('multi-file post: 3 files attached to one post all appear, in upload order'
   await expect(files.postFileList(actor)).toContainText('sample.md');
 
   // Order assertion — the rendered <li> sequence must match upload order.
-  const items = await files.postFileList(actor).locator('li').allTextContents();
+  // Each <li> contains a <span> with the filename plus a Download button
+  // (issue #83), so we scope to the filename <span> per row to keep the
+  // button text out of allTextContents().
+  const items = await files.postFileList(actor).locator('li > span').allTextContents();
   expect(items).toEqual(['sample.json', 'sample.yaml', 'sample.md']);
 });

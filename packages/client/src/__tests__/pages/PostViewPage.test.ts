@@ -58,6 +58,16 @@ vi.mock('@/stores/files', () => ({
   }),
 }));
 
+// --- Mock apiFetch ---
+// The Download button (issue #83 WU1) calls apiFetch directly so the request
+// is bearer-authenticated. The test stubs it per-case to simulate happy/error
+// paths; download flow specs replace the default with their own resolved value.
+const mockApiFetch = vi.fn();
+
+vi.mock('@/lib/api', () => ({
+  apiFetch: (...args: unknown[]) => mockApiFetch(...args),
+}));
+
 // --- Mock pinia storeToRefs to return our mock refs ---
 vi.mock('pinia', async () => {
   const actual = await vi.importActual<typeof import('pinia')>('pinia');
@@ -232,6 +242,9 @@ describe('PostViewPage', () => {
     mockCommentsSubscribeCleanup.mockClear();
     mockVotesSubscribeRealtime.mockClear();
     mockVotesSubscribeCleanup.mockClear();
+    mockApiFetch.mockReset();
+    mockFetchFiles.mockClear();
+    mockFilesByRevision.value = {};
   });
 
   async function mountPage(postId = 'post-1') {
@@ -901,6 +914,185 @@ describe('PostViewPage', () => {
 
       // Even with no revision, postForActions must still resolve (uses ?? fallbacks).
       expect(wrapper.find('[data-testid="post-actions"]').exists()).toBe(true);
+    });
+  });
+
+  // Issue #83 WU1: per-file Download button in `post-file-list`. The handler
+  // calls apiFetch (bearer-authenticated), receives a Blob, creates an
+  // ObjectURL, programmatically clicks an `<a download>`, and revokes the URL
+  // synchronously after .click() — mirroring FilePreview's blob/ObjectURL
+  // approach so the download works under cookie-less auth.
+  describe('file download affordance', () => {
+    function makeFile(
+      overrides: Partial<{
+        id: string;
+        postId: string;
+        revisionId: string | null;
+        filename: string;
+        mimeType: string | null;
+        fileSize: number | null;
+        sortOrder: number;
+        createdAt: Date;
+      }> = {},
+    ) {
+      return {
+        id: 'file-1',
+        postId: 'post-1',
+        revisionId: 'rev-1',
+        filename: 'attachment.txt',
+        mimeType: 'text/plain',
+        fileSize: 12,
+        sortOrder: 0,
+        createdAt: new Date('2025-01-01'),
+        ...overrides,
+      };
+    }
+
+    function setupSinglePostWithFile(files = [makeFile()]) {
+      const post = createMockPost();
+      mockFetchPost.mockImplementation(async () => {
+        mockCurrentPost.value = post;
+      });
+      // The vi.mock for `@/stores/files` returns `mockFilesByRevision.value`
+      // at the moment `useFilesStore()` is called (component setup), so the
+      // files must be pre-populated before mount — fetchFiles is a no-op in
+      // this test scope.
+      mockFilesByRevision.value = { 'rev-1': files };
+      mockUser.value = createMockUser({ id: post.authorId });
+      return post;
+    }
+
+    it('renders a Download button per file with aria-label', async () => {
+      setupSinglePostWithFile([
+        makeFile({ id: 'f-a', filename: 'first.ts' }),
+        makeFile({ id: 'f-b', filename: 'second.md' }),
+      ]);
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      const buttons = wrapper.findAll('[data-testid="post-file-download-link"]');
+      expect(buttons).toHaveLength(2);
+      expect(buttons[0]?.attributes('aria-label')).toBe('Download first.ts');
+      expect(buttons[1]?.attributes('aria-label')).toBe('Download second.md');
+    });
+
+    it('happy path: clicking Download fetches blob, creates ObjectURL, clicks <a>, revokes URL', async () => {
+      setupSinglePostWithFile([makeFile({ id: 'f-x', filename: 'report.csv' })]);
+
+      const blobData = new Blob(['col1,col2\n1,2'], { type: 'text/csv' });
+      mockApiFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        blob: () => Promise.resolve(blobData),
+        headers: new Headers({ 'content-type': 'text/csv' }),
+      } as Response);
+
+      const mockUrl = 'blob:http://localhost/dl-1';
+      const createObjectURLSpy = vi.fn().mockReturnValue(mockUrl);
+      const revokeObjectURLSpy = vi.fn();
+      globalThis.URL.createObjectURL = createObjectURLSpy;
+      globalThis.URL.revokeObjectURL = revokeObjectURLSpy;
+
+      // Spy on createElement so we can inspect the transient <a> element
+      // without relying on it staying in the DOM after .click() + .remove().
+      const realCreateElement = document.createElement.bind(document);
+      const anchorEl = realCreateElement('a') as HTMLAnchorElement;
+      const clickSpy = vi.spyOn(anchorEl, 'click').mockImplementation(() => {});
+      const createElementSpy = vi
+        .spyOn(document, 'createElement')
+        .mockImplementation((tag: string) => {
+          if (tag === 'a') return anchorEl;
+          return realCreateElement(tag);
+        });
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      const button = wrapper.find('[data-testid="post-file-download-link"]');
+      expect(button.exists()).toBe(true);
+
+      await button.trigger('click');
+      await flushPromises();
+
+      expect(mockApiFetch).toHaveBeenCalledWith('/api/posts/post-1/files/f-x');
+      expect(createObjectURLSpy).toHaveBeenCalledTimes(1);
+      expect(createObjectURLSpy).toHaveBeenCalledWith(blobData);
+      expect(anchorEl.href).toContain(mockUrl);
+      expect(anchorEl.download).toBe('report.csv');
+      expect(clickSpy).toHaveBeenCalledTimes(1);
+      expect(revokeObjectURLSpy).toHaveBeenCalledWith(mockUrl);
+
+      createElementSpy.mockRestore();
+    });
+
+    it('guard path: invoking download while currentPost is null short-circuits before apiFetch', async () => {
+      // Covers the `if (!currentPost.value) return;` guard at the top of
+      // downloadFile. Under normal flow the post-file-list block is hidden when
+      // currentPost is null, but the guard defends against the post being
+      // cleared between render and click (e.g., a real-time refresh emptying
+      // the store). We mount with a post + file present, then null out
+      // currentPost before triggering the click — the handler must return
+      // without calling apiFetch.
+      setupSinglePostWithFile([makeFile({ id: 'f-z', filename: 'orphan.txt' })]);
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      const button = wrapper.find('[data-testid="post-file-download-link"]');
+      expect(button.exists()).toBe(true);
+
+      // Clear the mock call count from any setup-time apiFetch (none expected,
+      // but defensive) so we can assert apiFetch was NOT called by the handler.
+      mockApiFetch.mockClear();
+      mockCurrentPost.value = null;
+
+      await button.trigger('click');
+      await flushPromises();
+
+      expect(mockApiFetch).not.toHaveBeenCalled();
+      expect(mockPostError.value).not.toBe('Failed to download orphan.txt');
+    });
+
+    it('error path: non-ok response surfaces a "Failed to download <filename>" error and skips ObjectURL', async () => {
+      setupSinglePostWithFile([makeFile({ id: 'f-y', filename: 'broken.bin' })]);
+
+      mockApiFetch.mockResolvedValue({
+        ok: false,
+        status: 500,
+        blob: () => Promise.resolve(new Blob([])),
+        headers: new Headers(),
+      } as Response);
+
+      const createObjectURLSpy = vi.fn();
+      const revokeObjectURLSpy = vi.fn();
+      globalThis.URL.createObjectURL = createObjectURLSpy;
+      globalThis.URL.revokeObjectURL = revokeObjectURLSpy;
+
+      // Seed a stale errorStatus from a prior request so we can prove the
+      // download handler clears it. Without the clear, the download error
+      // would be rendered inside the dedicated 403 forbidden surface instead
+      // of the generic red error banner.
+      mockPostErrorStatus.value = 403;
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      const button = wrapper.find('[data-testid="post-file-download-link"]');
+      expect(button.exists()).toBe(true);
+
+      await button.trigger('click');
+      await flushPromises();
+
+      expect(createObjectURLSpy).not.toHaveBeenCalled();
+      expect(revokeObjectURLSpy).not.toHaveBeenCalled();
+      expect(mockPostError.value).toBe('Failed to download broken.bin');
+      // The download handler must clear stale errorStatus so the generic red
+      // error banner renders, NOT the dedicated 403 forbidden surface.
+      expect(mockPostErrorStatus.value).toBeNull();
+      expect(wrapper.find('[data-testid="forbidden-page"]').exists()).toBe(false);
+      // The generic error banner now renders the message.
+      expect(wrapper.text()).toContain('Failed to download broken.bin');
     });
   });
 
