@@ -1,9 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { aiSearchFiltersSchema } from '@forge/shared';
+import { aiSearchFiltersSchema, videoMetadataSchema } from '@forge/shared';
 import {
   mockScripts,
   DEFAULT_SCRIPT_KEY,
   resolveMockScript,
+  MOCK_SCRIPT_KEYS,
+  withMockScript,
+  getCurrentMockScriptKey,
 } from '../../../plugins/langchain/mock-scripts.js';
 import { ChatMock, mockScriptStorage } from '../../../plugins/langchain/mock-provider.js';
 import { createSearchChain } from '../../../plugins/langchain/chains/search.js';
@@ -122,5 +125,92 @@ describe('search-resolves-to-typescript-tag mock script (Issue #49)', () => {
         textQuery: 'typescript',
       });
     }
+  });
+});
+
+describe('MOCK_SCRIPT_KEYS registry (Issue #102 — video metadata bridge)', () => {
+  it('exposes a stable videoMetadata key constant', () => {
+    expect(MOCK_SCRIPT_KEYS.videoMetadata).toBe('video-metadata');
+  });
+
+  it('registers the videoMetadata script under that key', () => {
+    expect(mockScripts[MOCK_SCRIPT_KEYS.videoMetadata]).toBeDefined();
+    expect(mockScripts[MOCK_SCRIPT_KEYS.videoMetadata].length).toBeGreaterThan(0);
+  });
+
+  it('videoMetadata chunks concatenate to valid JSON parsable by videoMetadataSchema', () => {
+    const assembled = mockScripts[MOCK_SCRIPT_KEYS.videoMetadata]
+      .filter((c) => c !== '[done]')
+      .join('');
+    const parsed: unknown = JSON.parse(assembled);
+    const validation = videoMetadataSchema.safeParse(parsed);
+    expect(validation.success).toBe(true);
+  });
+
+  it('videoMetadata script ends with the [done] sentinel', () => {
+    const chunks = mockScripts[MOCK_SCRIPT_KEYS.videoMetadata];
+    expect(chunks[chunks.length - 1]).toBe('[done]');
+  });
+});
+
+describe('withMockScript / getCurrentMockScriptKey', () => {
+  it('getCurrentMockScriptKey returns undefined outside any withMockScript context', () => {
+    expect(getCurrentMockScriptKey()).toBeUndefined();
+  });
+
+  it('withMockScript seeds the key and getCurrentMockScriptKey reads it inside the callback', async () => {
+    const observed = await withMockScript('autocomplete-typescript-react', async () => {
+      return getCurrentMockScriptKey();
+    });
+    expect(observed).toBe('autocomplete-typescript-react');
+  });
+
+  it('withMockScript propagates the key into ChatMock streaming (uses the same storage)', async () => {
+    const KEY = MOCK_SCRIPT_KEYS.videoMetadata;
+    const model = new ChatMock({});
+    const assembled = await withMockScript(KEY, async () => {
+      const collected: string[] = [];
+      const stream = await model.stream([]);
+      for await (const chunk of stream) {
+        collected.push(String(chunk.content));
+      }
+      return collected.join('');
+    });
+    // The videoMetadata script's non-sentinel chunks concatenate to valid JSON.
+    const jsonPart = assembled.replace(/\[done\]$/, '');
+    const parsed: unknown = JSON.parse(jsonPart);
+    expect(videoMetadataSchema.safeParse(parsed).success).toBe(true);
+  });
+
+  it('withMockScript context does NOT leak outside the callback', async () => {
+    await withMockScript('autocomplete-typescript-react', async () => {
+      expect(getCurrentMockScriptKey()).toBe('autocomplete-typescript-react');
+    });
+    expect(getCurrentMockScriptKey()).toBeUndefined();
+  });
+
+  it('withMockScript returns the callback return value', async () => {
+    const result = await withMockScript('autocomplete-typescript-react', async () => 42);
+    expect(result).toBe(42);
+  });
+
+  it('withMockScript propagates errors thrown inside the callback', async () => {
+    await expect(
+      withMockScript('autocomplete-typescript-react', async () => {
+        throw new Error('boom');
+      }),
+    ).rejects.toThrow('boom');
+    // ...and still clears the storage afterwards.
+    expect(getCurrentMockScriptKey()).toBeUndefined();
+  });
+
+  it('nested withMockScript replaces the key inside the inner scope and restores on exit', async () => {
+    await withMockScript('autocomplete-typescript-react', async () => {
+      expect(getCurrentMockScriptKey()).toBe('autocomplete-typescript-react');
+      await withMockScript('generate-readme-short', async () => {
+        expect(getCurrentMockScriptKey()).toBe('generate-readme-short');
+      });
+      expect(getCurrentMockScriptKey()).toBe('autocomplete-typescript-react');
+    });
   });
 });
