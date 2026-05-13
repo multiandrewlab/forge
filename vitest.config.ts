@@ -27,6 +27,7 @@ export default defineConfig({
         'packages/shared/src/types/file.ts',
         'packages/shared/src/types/mock-script-keys.ts',
         'packages/shared/src/types/profile.ts',
+        'packages/shared/src/types/video.ts',
         'packages/shared/src/validators/index.ts',
         '**/*.config.*',
         '**/*.d.ts',

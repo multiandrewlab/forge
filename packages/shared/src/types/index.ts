@@ -109,3 +109,10 @@ export type {
   UserProfilePost,
   UserProfileResponse,
 } from './profile.js';
+export type {
+  VideoStatus,
+  PostVideo,
+  PostVideoSuggestion,
+  VideoStatusEvent,
+  VideoAiSuggestionReadyEvent,
+} from './video.js';

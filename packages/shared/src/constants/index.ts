@@ -3,6 +3,7 @@ export const ContentType = {
   Prompt: 'prompt',
   Document: 'document',
   Link: 'link',
+  Video: 'video',
 } as const;
 
 export type ContentType = (typeof ContentType)[keyof typeof ContentType];

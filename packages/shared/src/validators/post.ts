@@ -20,15 +20,32 @@ export const createPostSchema = z
       ContentType.Prompt,
       ContentType.Document,
       ContentType.Link,
+      ContentType.Video,
     ]),
     language: z.string().nullable().optional(),
     visibility: z.enum([Visibility.Public, Visibility.Private]).default(Visibility.Public),
     isDraft: z.boolean().default(true),
-    content: z.string().min(1).pipe(contentByteCap).optional(),
+    // Video posts allow an empty-string content (revisions own the transcript), so the
+    // non-empty check moved into superRefine where we can branch on contentType.
+    content: z.string().pipe(contentByteCap).optional(),
     linkUrl: z.string().url().optional(),
     tags: z.array(z.string()).max(10).optional(),
   })
   .superRefine((data, ctx) => {
+    if (data.contentType === ContentType.Video) {
+      // Video posts: content is forbidden at create time — the transcript lives on the
+      // PostVideo row, written by the CF Stream webhook handler. An empty-string content
+      // is tolerated (clients sometimes send the field unconditionally).
+      if (data.content !== undefined && data.content.length > 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'content is not allowed for video posts; revisions own video content',
+          path: ['content'],
+        });
+      }
+      data.linkUrl = undefined;
+      return;
+    }
     if (data.contentType === ContentType.Link) {
       // Link posts require linkUrl; content is optional
       if (!data.linkUrl) {
@@ -38,18 +55,17 @@ export const createPostSchema = z
           path: ['linkUrl'],
         });
       }
-    } else {
-      // Non-link posts require content; strip linkUrl
-      if (!data.content || data.content.length === 0) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'content is required for non-link posts',
-          path: ['content'],
-        });
-      }
-      // Strip linkUrl for non-link types
-      data.linkUrl = undefined;
+      return;
     }
+    // Snippet/prompt/document: require non-empty content; strip linkUrl
+    if (!data.content || data.content.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'content is required for non-link posts',
+        path: ['content'],
+      });
+    }
+    data.linkUrl = undefined;
   });
 
 export type CreatePostInput = z.infer<typeof createPostSchema>;
@@ -57,7 +73,13 @@ export type CreatePostInput = z.infer<typeof createPostSchema>;
 export const updatePostSchema = z.object({
   title: z.string().min(1).max(500).optional(),
   contentType: z
-    .enum([ContentType.Snippet, ContentType.Prompt, ContentType.Document, ContentType.Link])
+    .enum([
+      ContentType.Snippet,
+      ContentType.Prompt,
+      ContentType.Document,
+      ContentType.Link,
+      ContentType.Video,
+    ])
     .optional(),
   language: z.string().nullable().optional(),
   visibility: z.enum([Visibility.Public, Visibility.Private]).optional(),
