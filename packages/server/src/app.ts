@@ -115,7 +115,7 @@ export async function buildApp() {
   const extractChain = createExtractVideoMetadataChain(app.aiProvider());
   // Thin closure adapter; behaviour is covered by the VideoPipelineService
   // and extract-video-metadata chain tests.
-  /* v8 ignore next */
+  /* v8 ignore next 2 */
   const runExtract = (input: { transcript: string }) =>
     runExtractVideoMetadata(extractChain, input);
   const videoPipeline = new VideoPipelineService({
