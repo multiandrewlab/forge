@@ -21,6 +21,7 @@ import {
   findPostVideoByCfUid,
   setPlaybackRequiresSignedUrl,
   setPostVideoLastError,
+  getLatestAiRunForPost,
 } from '../../../db/queries/video.js';
 
 const mockQuery = query as Mock;
@@ -353,6 +354,43 @@ describe('video queries', () => {
       expect(sql).toMatch(/last_error\s*=\s*\$2/);
       expect(sql).toMatch(/updated_at\s*=\s*NOW\(\)/);
       expect(sql).toMatch(/WHERE\s+post_id\s*=\s*\$1/);
+    });
+  });
+
+  describe('getLatestAiRunForPost', () => {
+    it('returns the most recent run mapped to camelCase when rows exist', async () => {
+      const createdAt = new Date('2026-05-13T10:00:00Z');
+      mockQuery.mockResolvedValue({
+        rows: [
+          {
+            id: 'run-1',
+            title: 'Sample title',
+            description: 'Sample description',
+            tags: ['typescript', 'demo'],
+            created_at: createdAt,
+          },
+        ],
+        rowCount: 1,
+      });
+      const run = await getLatestAiRunForPost(postId);
+      expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining('FROM post_video_ai_runs'), [
+        postId,
+      ]);
+      const sql = mockQuery.mock.calls[0][0] as string;
+      expect(sql).toMatch(/ORDER\s+BY\s+created_at\s+DESC/);
+      expect(sql).toMatch(/LIMIT\s+1/);
+      expect(run).toEqual({
+        id: 'run-1',
+        title: 'Sample title',
+        description: 'Sample description',
+        tags: ['typescript', 'demo'],
+        createdAt,
+      });
+    });
+
+    it('returns null when no run exists', async () => {
+      mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });
+      expect(await getLatestAiRunForPost(postId)).toBeNull();
     });
   });
 

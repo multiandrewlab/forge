@@ -252,6 +252,44 @@ export async function deletePostVideo(args: { postId: string }): Promise<void> {
 }
 
 /**
+ * Latest AI extraction run for a post. The route `GET /api/posts/:id/video/suggestions`
+ * uses this to surface the most recent run + its metadata to the owner so the
+ * editor can offer "Use suggestion" without paging through the append-only
+ * history.
+ */
+export async function getLatestAiRunForPost(postId: string): Promise<{
+  id: string;
+  title: string;
+  description: string;
+  tags: string[];
+  createdAt: Date;
+} | null> {
+  const result = await query<{
+    id: string;
+    title: string;
+    description: string;
+    tags: string[];
+    created_at: Date;
+  }>(
+    `SELECT id, title, description, tags, created_at
+       FROM post_video_ai_runs
+      WHERE post_id = $1
+      ORDER BY created_at DESC
+      LIMIT 1`,
+    [postId],
+  );
+  const row = result.rows[0];
+  if (!row) return null;
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    tags: row.tags,
+    createdAt: row.created_at,
+  };
+}
+
+/**
  * Try to acquire a transaction-scoped advisory lock for the AI extraction of
  * a given post. The lock is keyed by `hashtext('video-ai:' || post_id)` so it
  * does not collide with other advisory locks the application might add later.
