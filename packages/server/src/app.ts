@@ -19,12 +19,35 @@ import { aiRoutes } from './routes/ai.js';
 import { playgroundRoutes } from './routes/playground.js';
 import { fileRoutes } from './routes/files.js';
 import { userProfileRoutes } from './routes/user-profiles.js';
+import { videoRoutes } from './routes/video.js';
+import { cfStreamWebhookRoutes } from './routes/cf-stream-webhook.js';
 import { websocketPlugin } from './plugins/websocket/index.js';
 import { langchainPlugin } from './plugins/langchain/index.js';
 import { findStaleStagedFiles, deleteStagedFilesByIds } from './db/queries/post-files.js';
 import { registerTestRoutes } from './routes/__test__.js';
 import { isE2EFlagSet } from './lib/env-guards.js';
 import { query, withTransaction } from './db/connection.js';
+import {
+  createCloudflareStream,
+  type ICloudflareStreamService,
+} from './services/cloudflare-stream.js';
+import {
+  VideoPipelineService,
+  startReconciler,
+  stopReconciler,
+} from './services/video-pipeline.js';
+import {
+  createExtractVideoMetadataChain,
+  runExtractVideoMetadata,
+} from './plugins/langchain/chains/extract-video-metadata.js';
+import { EXTRACT_VIDEO_METADATA_PROMPT_VERSION } from './plugins/langchain/prompts/extract-video-metadata.js';
+
+declare module 'fastify' {
+  interface FastifyInstance {
+    cloudflareStream: ICloudflareStreamService;
+    videoPipeline: VideoPipelineService;
+  }
+}
 
 export async function buildApp() {
   const app = Fastify({
@@ -85,6 +108,27 @@ export async function buildApp() {
   await app.register(authPlugin);
   await app.register(langchainPlugin);
   await app.register(websocketPlugin);
+
+  // Cloudflare Stream + video pipeline wiring (issue #102, WU5b).
+  // Constructed AFTER langchainPlugin so the chat model is available.
+  const cloudflareStream = createCloudflareStream(process.env);
+  const extractChain = createExtractVideoMetadataChain(app.aiProvider());
+  // Thin closure adapter; behaviour is covered by the VideoPipelineService
+  // and extract-video-metadata chain tests.
+  /* v8 ignore next */
+  const runExtract = (input: { transcript: string }) =>
+    runExtractVideoMetadata(extractChain, input);
+  const videoPipeline = new VideoPipelineService({
+    cloudflareStream,
+    runExtractVideoMetadata: runExtract,
+    logger: app.log,
+    maxTranscriptChars: 120_000,
+    promptVersion: EXTRACT_VIDEO_METADATA_PROMPT_VERSION,
+    model: process.env.LLM_PROVIDER ?? 'mock',
+  });
+  app.decorate('cloudflareStream', cloudflareStream as ICloudflareStreamService);
+  app.decorate('videoPipeline', videoPipeline);
+
   await app.register(healthRoutes);
   await app.register(authRoutes, { prefix: '/api/auth' });
   await app.register(postRoutes, { prefix: '/api/posts' });
@@ -97,6 +141,44 @@ export async function buildApp() {
   await app.register(playgroundRoutes, { prefix: '/api' });
   await app.register(fileRoutes, { prefix: '/api/posts' });
   await app.register(userProfileRoutes, { prefix: '/api/users' });
+
+  // Video routes — registered with the pipeline + chain deps. The wrapper
+  // closure passes `deps` through to videoRoutes so app.ts owns construction.
+  await app.register(
+    async (instance) => {
+      await videoRoutes(instance, {
+        cloudflareStream,
+        videoPipeline,
+        runExtractVideoMetadata: runExtract,
+        promptVersion: EXTRACT_VIDEO_METADATA_PROMPT_VERSION,
+        model: process.env.LLM_PROVIDER ?? 'mock',
+      });
+    },
+    { prefix: '/api/posts' },
+  );
+
+  // CF Stream webhook — POST /api/cf-stream/webhook
+  await app.register(
+    async (instance) => {
+      await cfStreamWebhookRoutes(instance, {
+        videoPipeline,
+        webhookSecret: process.env.CF_STREAM_WEBHOOK_SECRET ?? '',
+      });
+    },
+    { prefix: '/api/cf-stream' },
+  );
+
+  // Reconciler sweep — boot + 5-minute interval. Skipped in test envs so unit
+  // tests don't hang on the interval timer.
+  if (process.env.NODE_ENV !== 'test') {
+    const reconcilerHandle = startReconciler({
+      service: videoPipeline,
+      intervalMs: 5 * 60 * 1000,
+    });
+    app.addHook('onClose', async () => {
+      stopReconciler(reconcilerHandle);
+    });
+  }
 
   if (isE2EFlagSet(process.env.ENABLE_TEST_ROUTES)) {
     await registerTestRoutes(app, {
@@ -111,6 +193,8 @@ export async function buildApp() {
         await query(sql);
       },
       pgTransaction: withTransaction,
+      cloudflareStream,
+      videoPipeline,
     });
   }
 

@@ -125,7 +125,10 @@ export async function videoRoutes(app: FastifyInstance, deps: VideoRouteDeps): P
         await q.setPendingCfUid({ postId: id, pendingCfUid: cfUid });
       }
 
-      // TODO[WU5b]: emit audit log `video.upload-url.requested` here.
+      request.log.info(
+        { event: 'video.upload-url.requested', postId: id, cfUid },
+        'video upload url minted',
+      );
       return reply.status(201).send({ uploadUrl, cfUid });
     },
   );
@@ -167,15 +170,16 @@ export async function videoRoutes(app: FastifyInstance, deps: VideoRouteDeps): P
           await cf.deleteAsset(video.pendingCfUid);
         }
         // CF delete succeeded — drop the post (cascade removes post_videos
-        // + post_video_ai_runs). The actual post deletion query lives in
-        // db/queries/posts.ts; for WU5a we proxy via raw SQL inside the
-        // existing transaction helper to avoid coupling to that module's
-        // softDelete vs hard-delete semantics (still being finalised in
-        // Sub-WU5b).
+        // + post_video_ai_runs). WU5b 5.10 confirmed: video DELETE is a hard
+        // delete (cancel semantics differ from snippet soft-delete), so the
+        // inline raw SQL inside withTransaction is correct.
         await withTransaction(async (client) => {
           await client.query('DELETE FROM posts WHERE id = $1', [id]);
         });
-        // TODO[WU5b]: emit audit log `video.cancelled` here.
+        request.log.info(
+          { event: 'video.cancelled', postId: id, cfUid: video.cfUid },
+          'video cancelled',
+        );
         return reply.status(204).send();
       } catch (err) {
         const message = err instanceof Error ? err.message : 'cf delete failed';
@@ -185,7 +189,10 @@ export async function videoRoutes(app: FastifyInstance, deps: VideoRouteDeps): P
           to: 'pending_cancel',
           lastError: message,
         });
-        // TODO[WU5b]: emit audit log `video.cancelled` with retry note.
+        request.log.info(
+          { event: 'video.cancelled', postId: id, cfUid: video.cfUid, retry: true, err: message },
+          'video cancel deferred to reconciler',
+        );
         return reply.status(204).send();
       }
     },
@@ -325,7 +332,15 @@ export async function videoRoutes(app: FastifyInstance, deps: VideoRouteDeps): P
         });
       }
 
-      // TODO[WU5b]: emit audit log `video.ai-rerun.requested` here.
+      request.log.info(
+        {
+          event: 'video.ai-rerun.requested',
+          postId: id,
+          userId: request.user.id,
+          fromStatus: video.status,
+        },
+        'ai re-run requested',
+      );
 
       const transcript = video.transcript;
       const fromStatus = video.status;

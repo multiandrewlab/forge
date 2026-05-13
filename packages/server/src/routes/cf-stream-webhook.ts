@@ -84,7 +84,10 @@ export async function cfStreamWebhookRoutes(
       const header = request.headers['webhook-signature'];
       const parsedSig = parseSignatureHeader(typeof header === 'string' ? header : undefined);
       if (!parsedSig) {
-        // TODO[WU5b]: emit `cf-stream.webhook.rejected` reason=malformed-header.
+        request.log.warn(
+          { event: 'cf-stream.webhook.rejected', reason: 'malformed-header', fromIp: request.ip },
+          'cf-stream webhook rejected',
+        );
         return reply.status(400).send({
           error: 'Malformed Webhook-Signature header',
           code: 'WEBHOOK_SIGNATURE_INVALID',
@@ -103,7 +106,10 @@ export async function cfStreamWebhookRoutes(
         expectedBuf.length !== givenBuf.length ||
         !crypto.timingSafeEqual(expectedBuf, givenBuf)
       ) {
-        // TODO[WU5b]: emit `cf-stream.webhook.rejected` reason=signature-invalid.
+        request.log.warn(
+          { event: 'cf-stream.webhook.rejected', reason: 'signature-invalid', fromIp: request.ip },
+          'cf-stream webhook rejected',
+        );
         return reply.status(401).send({
           error: 'Invalid webhook signature',
           code: 'WEBHOOK_SIGNATURE_INVALID',
@@ -113,7 +119,10 @@ export async function cfStreamWebhookRoutes(
       // 3. Timestamp freshness
       const now = Math.floor(Date.now() / 1000);
       if (Math.abs(now - t) > TIMESTAMP_TOLERANCE_SECONDS) {
-        // TODO[WU5b]: emit `cf-stream.webhook.rejected` reason=stale-timestamp.
+        request.log.warn(
+          { event: 'cf-stream.webhook.rejected', reason: 'stale-timestamp', fromIp: request.ip },
+          'cf-stream webhook rejected',
+        );
         return reply.status(400).send({
           error: 'Webhook timestamp is stale',
           code: 'WEBHOOK_TIMESTAMP_STALE',
@@ -127,10 +136,13 @@ export async function cfStreamWebhookRoutes(
       const eventId =
         typeof body.id === 'string' && body.id ? body.id : `${cfUid}:${eventType}:${t}`;
       const inserted = await q.insertWebhookEvent({ eventId, cfUid, eventType });
-      // TODO[WU5b]: emit `cf-stream.webhook.received` here (only when inserted).
       if (!inserted) {
         return reply.status(200).send({ ok: true });
       }
+      request.log.info(
+        { event: 'cf-stream.webhook.received', eventId, eventType, cfUid },
+        'cf-stream webhook received',
+      );
 
       // 5. Dispatch (deferred) — never block the HTTP reply on pipeline work.
       const event = toCfWebhookEvent(body);

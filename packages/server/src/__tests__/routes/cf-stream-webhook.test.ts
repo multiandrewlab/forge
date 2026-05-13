@@ -421,4 +421,99 @@ describe('routes/cf-stream-webhook', () => {
     expect(res.statusCode).toBe(400);
     await app.close();
   });
+
+  // ─── WU5b 5.15 — audit-log emissions ────────────────────────────────────
+  describe('audit-log emissions', () => {
+    it('emits cf-stream.webhook.received on accepted event', async () => {
+      insertWebhookEventMock.mockResolvedValue(true);
+      const app = await buildTestApp();
+      const infoSpy = vi.spyOn(app.log, 'info');
+      const body = JSON.stringify({ id: 'evt-audit-1', type: 'video.ready', uid: 'cf-audit' });
+      const ts = Math.floor(Date.now() / 1000);
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/cf-stream/webhook',
+        headers: {
+          'webhook-signature': sign(body, SECRET, ts),
+          'content-type': 'application/json',
+        },
+        payload: body,
+      });
+      expect(res.statusCode).toBe(200);
+      const call = infoSpy.mock.calls.find(
+        (args) => (args[0] as { event?: string })?.event === 'cf-stream.webhook.received',
+      );
+      expect(call, 'expected cf-stream.webhook.received log').toBeDefined();
+      const payload = call?.[0] as { eventId: string; eventType: string; cfUid: string };
+      expect(payload.eventId).toBe('evt-audit-1');
+      expect(payload.eventType).toBe('video.ready');
+      expect(payload.cfUid).toBe('cf-audit');
+      await app.close();
+    });
+
+    it('emits cf-stream.webhook.rejected (reason=malformed-header) on bad header', async () => {
+      const app = await buildTestApp();
+      const warnSpy = vi.spyOn(app.log, 'warn');
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/cf-stream/webhook',
+        headers: { 'webhook-signature': 'garbage', 'content-type': 'application/json' },
+        payload: '{}',
+      });
+      expect(res.statusCode).toBe(400);
+      const call = warnSpy.mock.calls.find((args) => {
+        const p = args[0] as { event?: string; reason?: string };
+        return p?.event === 'cf-stream.webhook.rejected' && p.reason === 'malformed-header';
+      });
+      expect(call, 'expected malformed-header rejected log').toBeDefined();
+      const payload = call?.[0] as { fromIp?: string };
+      expect(payload).toHaveProperty('fromIp');
+      await app.close();
+    });
+
+    it('emits cf-stream.webhook.rejected (reason=signature-invalid) on bad HMAC', async () => {
+      const app = await buildTestApp();
+      const warnSpy = vi.spyOn(app.log, 'warn');
+      const ts = Math.floor(Date.now() / 1000);
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/cf-stream/webhook',
+        headers: {
+          'webhook-signature': `t=${ts},v1=${'00'.repeat(32)}`,
+          'content-type': 'application/json',
+        },
+        payload: '{}',
+      });
+      expect(res.statusCode).toBe(401);
+      const call = warnSpy.mock.calls.find((args) => {
+        const p = args[0] as { event?: string; reason?: string };
+        return p?.event === 'cf-stream.webhook.rejected' && p.reason === 'signature-invalid';
+      });
+      expect(call, 'expected signature-invalid rejected log').toBeDefined();
+      await app.close();
+    });
+
+    it('emits cf-stream.webhook.rejected (reason=stale-timestamp) on old timestamp', async () => {
+      const app = await buildTestApp();
+      const warnSpy = vi.spyOn(app.log, 'warn');
+      const oldTs = Math.floor(Date.now() / 1000) - 10 * 60;
+      const body = JSON.stringify({ id: 'evt-old', type: 'video.ready', uid: 'cf-x' });
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/cf-stream/webhook',
+        headers: {
+          'webhook-signature': sign(body, SECRET, oldTs),
+          'content-type': 'application/json',
+        },
+        payload: body,
+      });
+      expect(res.statusCode).toBe(400);
+      const call = warnSpy.mock.calls.find((args) => {
+        const p = args[0] as { event?: string; reason?: string };
+        return p?.event === 'cf-stream.webhook.rejected' && p.reason === 'stale-timestamp';
+      });
+      expect(call, 'expected stale-timestamp rejected log').toBeDefined();
+      await app.close();
+    });
+  });
 });

@@ -944,4 +944,115 @@ describe('routes/video', () => {
       await app.close();
     });
   });
+
+  // ─── WU5b 5.15 — audit-log emissions ────────────────────────────────────
+  describe('audit-log emissions', () => {
+    it('emits video.upload-url.requested on successful upload-url mint', async () => {
+      findPostByIdMock.mockResolvedValue(makePost({ is_draft: true }));
+      getPostVideoMock.mockResolvedValue(null);
+      const cf = makeCf({
+        requestUploadUrl: vi.fn(async () => ({
+          uploadUrl: 'https://mock/up',
+          cfUid: 'cf-audit-1',
+        })),
+      });
+      const app = await buildTestApp({ cf });
+      const infoSpy = vi.spyOn(app.log, 'info');
+
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/posts/${postId}/video/upload-url`,
+        headers: { authorization: `Bearer ${token(app, ownerId)}` },
+        payload: { filename: 'v.mp4', fileSizeBytes: 1024 },
+      });
+      expect(res.statusCode).toBe(201);
+      const call = infoSpy.mock.calls.find(
+        (args) => (args[0] as { event?: string })?.event === 'video.upload-url.requested',
+      );
+      expect(call, 'expected video.upload-url.requested log').toBeDefined();
+      const payload = call?.[0] as { postId: string; cfUid: string };
+      expect(payload.postId).toBe(postId);
+      expect(payload.cfUid).toBe('cf-audit-1');
+      await app.close();
+    });
+
+    it('emits video.cancelled on successful cancel', async () => {
+      findPostByIdMock.mockResolvedValue(makePost({ is_draft: true }));
+      getPostVideoMock.mockResolvedValue(makeVideo({ cfUid: 'cf-cancel-1', pendingCfUid: null }));
+      const cf = makeCf();
+      const app = await buildTestApp({ cf });
+      const infoSpy = vi.spyOn(app.log, 'info');
+
+      const res = await app.inject({
+        method: 'DELETE',
+        url: `/api/posts/${postId}/video`,
+        headers: { authorization: `Bearer ${token(app, ownerId)}` },
+      });
+      expect(res.statusCode).toBe(204);
+      const call = infoSpy.mock.calls.find(
+        (args) => (args[0] as { event?: string })?.event === 'video.cancelled',
+      );
+      expect(call, 'expected video.cancelled log').toBeDefined();
+      const payload = call?.[0] as { postId: string; cfUid: string; retry?: boolean };
+      expect(payload.postId).toBe(postId);
+      expect(payload.cfUid).toBe('cf-cancel-1');
+      expect(payload.retry).toBeUndefined();
+      await app.close();
+    });
+
+    it('emits video.cancelled with retry=true on CF failure', async () => {
+      findPostByIdMock.mockResolvedValue(makePost({ is_draft: true }));
+      getPostVideoMock.mockResolvedValue(
+        makeVideo({ cfUid: 'cf-cancel-2', pendingCfUid: null, status: 'ready' }),
+      );
+      const cf = makeCf({
+        deleteAsset: vi.fn(async () => {
+          throw new Error('cf 500');
+        }),
+      });
+      const app = await buildTestApp({ cf });
+      const infoSpy = vi.spyOn(app.log, 'info');
+
+      const res = await app.inject({
+        method: 'DELETE',
+        url: `/api/posts/${postId}/video`,
+        headers: { authorization: `Bearer ${token(app, ownerId)}` },
+      });
+      expect(res.statusCode).toBe(204);
+      const call = infoSpy.mock.calls.find((args) => {
+        const p = args[0] as { event?: string; retry?: boolean };
+        return p?.event === 'video.cancelled' && p.retry === true;
+      });
+      expect(call, 'expected video.cancelled retry log').toBeDefined();
+      await app.close();
+    });
+
+    it('emits video.ai-rerun.requested before locking', async () => {
+      findPostByIdMock.mockResolvedValue(makePost({ visibility: 'public' }));
+      getPostVideoMock.mockResolvedValue(
+        makeVideo({ status: 'ready', transcript: 'good transcript' }),
+      );
+      tryAdvisoryXactLockMock.mockResolvedValue(true);
+      insertAiRunMock.mockResolvedValue({ id: 'run-1' });
+      setPostVideoStatusMock.mockResolvedValue(true);
+      const app = await buildTestApp();
+      const infoSpy = vi.spyOn(app.log, 'info');
+
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/posts/${postId}/video/ai-rerun`,
+        headers: { authorization: `Bearer ${token(app, ownerId)}` },
+      });
+      expect(res.statusCode).toBe(200);
+      const call = infoSpy.mock.calls.find(
+        (args) => (args[0] as { event?: string })?.event === 'video.ai-rerun.requested',
+      );
+      expect(call, 'expected video.ai-rerun.requested log').toBeDefined();
+      const payload = call?.[0] as { postId: string; userId: string; fromStatus: string };
+      expect(payload.postId).toBe(postId);
+      expect(payload.userId).toBe(ownerId);
+      expect(payload.fromStatus).toBe('ready');
+      await app.close();
+    });
+  });
 });

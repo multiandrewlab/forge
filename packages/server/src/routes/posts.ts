@@ -20,6 +20,7 @@ import {
   createRevisionAtomic,
 } from '../db/queries/revisions.js';
 import { findFilesByRevisionId, createPostFile } from '../db/queries/post-files.js';
+import { getPostVideo } from '../db/queries/video.js';
 import { toPost, toRevision, toPostWithRevision } from '../services/posts.js';
 import { syncVariablesFromContent } from '../services/playground.js';
 import { permanentKey } from '../services/files.js';
@@ -63,9 +64,13 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
       linkPreview = await fetchLinkPreview(parsed.data.linkUrl);
     }
 
+    // Per spec §5.1: video posts start with an empty initial revision — the
+    // transcript will populate via the captions.ready webhook later.
     // For link posts, content is optional — default to linkUrl for the revision.
-    // After validation: non-link posts always have content, link posts always have linkUrl.
-    const revisionContent = content || (parsed.data.linkUrl as string);
+    // After validation: non-link/non-video posts always have content, link posts
+    // always have linkUrl.
+    const revisionContent =
+      contentType === ContentType.Video ? '' : content || (parsed.data.linkUrl as string);
 
     const postRow = await createPost({
       authorId: userId,
@@ -165,7 +170,33 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
 
     if (!assertCanReadPost(row, request.user.id, reply)) return;
 
-    return reply.send({ post: toPostWithRevision(row) });
+    const post = toPostWithRevision(row);
+
+    // Video posts (WU5b 5.13, spec §9.5): attach a `video` field whose shape
+    // depends on whether the caller is the owner. Non-owners NEVER see the raw
+    // cfUid / pendingCfUid — only a `pendingReplacement` boolean so the
+    // non-author banner can render without leaking CF identifiers.
+    if (row.content_type === ContentType.Video) {
+      const video = await getPostVideo(id);
+      if (video) {
+        const isOwner = row.author_id === request.user.id;
+        const videoField = isOwner
+          ? {
+              status: video.status,
+              cfUid: video.cfUid,
+              pendingCfUid: video.pendingCfUid,
+              lastError: video.lastError,
+              playbackRequiresSignedUrl: video.playbackRequiresSignedUrl,
+            }
+          : {
+              status: video.status,
+              pendingReplacement: video.pendingCfUid != null,
+            };
+        return reply.send({ post: { ...post, video: videoField } });
+      }
+    }
+
+    return reply.send({ post });
   });
 
   // PATCH /:id — update metadata only (ownership check)
@@ -186,6 +217,39 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
       return reply
         .status(400)
         .send({ error: parsed.error.errors.map((e) => e.message).join(', ') });
+    }
+
+    // Video visibility-flip SAGA (spec §8.4, WU5b 5.9): when a video post's
+    // visibility changes, route through `videoPipeline.flipVisibility` instead
+    // of the inline UPDATE so CF and DB stay in sync. Other field updates
+    // (title, language, isDraft, contentType) still go through the normal
+    // updatePost helper below.
+    if (
+      existing.content_type === ContentType.Video &&
+      parsed.data.visibility !== undefined &&
+      parsed.data.visibility !== existing.visibility
+    ) {
+      const video = await getPostVideo(id);
+      if (video) {
+        try {
+          await app.videoPipeline.flipVisibility({
+            postId: id,
+            from: existing.visibility as 'public' | 'private',
+            to: parsed.data.visibility as 'public' | 'private',
+            cfUid: video.cfUid,
+          });
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'unknown';
+          if (message.includes('VIDEO_VISIBILITY_FLIP_FAILED')) {
+            return reply.status(502).send({
+              error: 'Could not change visibility',
+              code: 'VIDEO_VISIBILITY_FLIP_FAILED',
+              details: { cause: message },
+            });
+          }
+          throw err;
+        }
+      }
     }
 
     const updatedRow = await updatePost(id, parsed.data);
@@ -218,6 +282,31 @@ export async function postRoutes(app: FastifyInstance): Promise<void> {
 
     if (existing.author_id !== request.user.id) {
       return reply.status(403).send({ error: 'You can only delete your own posts' });
+    }
+
+    // Video posts (WU5b 5.10): best-effort CF asset cleanup BEFORE the DB
+    // delete. CF errors are logged as `video.pipeline.orphan-cf-asset` but do
+    // NOT block the soft-delete — the post must always be removable.
+    if (existing.content_type === ContentType.Video) {
+      const video = await getPostVideo(id);
+      if (video) {
+        try {
+          await app.cloudflareStream.deleteAsset(video.cfUid);
+          if (video.pendingCfUid) {
+            await app.cloudflareStream.deleteAsset(video.pendingCfUid);
+          }
+        } catch (err) {
+          request.log.warn(
+            {
+              event: 'video.pipeline.orphan-cf-asset',
+              postId: id,
+              cfUid: video.cfUid,
+              err,
+            },
+            'orphaned cf asset on post delete',
+          );
+        }
+      }
     }
 
     await softDeletePost(id);

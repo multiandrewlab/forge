@@ -304,3 +304,46 @@ describe('app — test routes', () => {
     vi.doUnmock('../db/connection.js');
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WU5b 5.14: video pipeline wiring + reconciler branch
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('buildApp — video pipeline wiring (WU5b)', () => {
+  let app: Awaited<ReturnType<typeof buildApp>> | undefined;
+  const originalEnv = { ...process.env };
+
+  afterEach(async () => {
+    if (app) {
+      await app.close();
+      app = undefined;
+    }
+    process.env = { ...originalEnv };
+    vi.resetModules();
+  });
+
+  it('decorates cloudflareStream and videoPipeline on the Fastify instance', async () => {
+    const { buildApp: buildAppFresh } = await import('../app.js');
+    app = await buildAppFresh();
+    await app.ready();
+
+    expect(app.cloudflareStream).toBeDefined();
+    expect(app.videoPipeline).toBeDefined();
+    expect(typeof app.videoPipeline.flipVisibility).toBe('function');
+  });
+
+  it('starts and stops the reconciler when NODE_ENV !== "test"', async () => {
+    process.env.NODE_ENV = 'development';
+    process.env.JWT_SECRET = 'dev-secret-for-test';
+    // Avoid hitting any real CF endpoints — mock service is used since no
+    // CF_ACCOUNT_ID is set in dev fallback.
+
+    const { buildApp: buildAppFresh } = await import('../app.js');
+    app = await buildAppFresh();
+    await app.ready();
+    // The reconciler interval should be active; closing the app must clear it
+    // via the onClose hook (otherwise vitest hangs on open handles).
+    await app.close();
+    app = undefined;
+  });
+});
