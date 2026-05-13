@@ -70,20 +70,37 @@ export const createPostSchema = z
 
 export type CreatePostInput = z.infer<typeof createPostSchema>;
 
-export const updatePostSchema = z.object({
-  title: z.string().min(1).max(500).optional(),
-  contentType: z
-    .enum([
-      ContentType.Snippet,
-      ContentType.Prompt,
-      ContentType.Document,
-      ContentType.Link,
-      ContentType.Video,
-    ])
-    .optional(),
-  language: z.string().nullable().optional(),
-  visibility: z.enum([Visibility.Public, Visibility.Private]).optional(),
-});
+export const updatePostSchema = z
+  .object({
+    title: z.string().min(1).max(500).optional(),
+    contentType: z
+      .enum([
+        ContentType.Snippet,
+        ContentType.Prompt,
+        ContentType.Document,
+        ContentType.Link,
+        ContentType.Video,
+      ])
+      .optional(),
+    language: z.string().nullable().optional(),
+    visibility: z.enum([Visibility.Public, Visibility.Private]).optional(),
+    // content is not part of the update payload (revisions own content), but clients
+    // sometimes send it; we accept it so we can apply the video-branch guard symmetrically
+    // with createPostSchema. Snippet/prompt/document updates ignore it here — revisions
+    // own that path.
+    content: z.string().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.contentType === ContentType.Video) {
+      if (data.content !== undefined && data.content.length > 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'content is not allowed for video posts; revisions own video content',
+          path: ['content'],
+        });
+      }
+    }
+  });
 
 export type UpdatePostInput = z.infer<typeof updatePostSchema>;
 

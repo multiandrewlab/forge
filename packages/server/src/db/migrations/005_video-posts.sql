@@ -31,7 +31,9 @@ CREATE TABLE post_videos (
   size_bytes BIGINT,
   transcript TEXT,
   playback_requires_signed_url BOOLEAN NOT NULL DEFAULT false,
-  last_error TEXT,
+  -- last_error is bounded to defend against pathological CF Stream error payloads;
+  -- legitimate failure messages fit comfortably in 2000 chars.
+  last_error VARCHAR(2000),
   last_status_change_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -63,6 +65,7 @@ CREATE INDEX post_video_ai_runs_post_created_idx
 -- cf_stream_webhook_events: idempotency table for CF Stream webhook callbacks.
 -- Cloudflare may re-deliver the same event; INSERT … ON CONFLICT DO NOTHING
 -- on event_id makes the handler safe to retry.
+-- NOTE: retention sweep is a v2 follow-up (#102 spec §15). Table grows unbounded in v1.
 CREATE TABLE cf_stream_webhook_events (
   event_id VARCHAR(128) PRIMARY KEY,
   cf_uid VARCHAR(64) NOT NULL,
@@ -109,11 +112,17 @@ $$ LANGUAGE plpgsql;
 -- Trigger B: refresh posts.search_vector when post_videos.transcript changes
 -- WITHOUT touching posts.updated_at — the feed sort key — by using a direct
 -- UPDATE on posts.search_vector rather than rewriting the whole row.
+--
+-- COALESCE defends against the case where the posts row is gone (e.g. CASCADE
+-- ordering during a delete that touches both tables): compute_post_search_vector
+-- returns NULL when its SELECT finds no posts row, and an unguarded write would
+-- replace a valid search_vector with NULL. Trigger A is safe without this guard
+-- because it runs BEFORE INSERT/UPDATE on posts itself.
 CREATE OR REPLACE FUNCTION refresh_post_search_vector_from_transcript()
 RETURNS trigger AS $$
 BEGIN
   UPDATE posts
-     SET search_vector = compute_post_search_vector(NEW.post_id)
+     SET search_vector = COALESCE(compute_post_search_vector(NEW.post_id), ''::tsvector)
    WHERE id = NEW.post_id;
   RETURN NEW;
 END

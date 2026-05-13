@@ -13,6 +13,10 @@ export type VideoStatus =
   | 'failed'
   | 'pending_cancel';
 
+// PostVideo intentionally omits `lastStatusChangeAt` (post_videos.last_status_change_at
+// in migration 005). That column is internal-only — used by the reconciler sweep to
+// detect stalled assets — and never surfaced to client code, so it is excluded from the
+// shared type to keep the WS/REST surface narrow.
 export interface PostVideo {
   postId: string;
   cfUid: string;
@@ -42,8 +46,9 @@ export interface VideoStatusEvent {
   type: 'video:status';
   postId: string;
   status: VideoStatus;
+  // Optional-omit shape (no nulls on the wire) — keep both fields consistent.
   lastError?: string;
-  pendingCfUid?: string | null;
+  pendingCfUid?: string;
 }
 
 export interface VideoAiSuggestionReadyEvent {

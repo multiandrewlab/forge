@@ -11,7 +11,7 @@ export const requestVideoUploadUrlSchema = z.object({
 export type RequestVideoUploadUrlInput = z.infer<typeof requestVideoUploadUrlSchema>;
 
 // Tag format: lowercase alphanumerics, hyphens, must start with [a-z0-9],
-// length 1-40. Matches the wider tag normalisation in tags/index.ts.
+// length 1-40. This regex is the source of truth for video-tag validation.
 export const videoTagSchema = z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/);
 
 export const videoMetadataSchema = z.object({

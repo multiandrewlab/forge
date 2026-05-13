@@ -57,14 +57,26 @@ describe('video types', () => {
   });
 
   it('VideoStatusEvent shape compiles with optional fields', () => {
+    // pendingCfUid is `string | undefined` (optional-omit), aligned with lastError.
+    // Absent fields are omitted on the wire — never serialised as null.
     const e: VideoStatusEvent = {
       type: 'video:status',
       postId: 'p1',
       status: 'failed',
       lastError: 'CF rejected',
-      pendingCfUid: null,
+      pendingCfUid: 'cf-pending-uid',
     };
     expect(e.type).toBe('video:status');
+  });
+
+  it('VideoStatusEvent allows omitting optional fields entirely', () => {
+    const e: VideoStatusEvent = {
+      type: 'video:status',
+      postId: 'p1',
+      status: 'ready',
+    };
+    expect(e.lastError).toBeUndefined();
+    expect(e.pendingCfUid).toBeUndefined();
   });
 
   it('VideoAiSuggestionReadyEvent shape compiles', () => {
