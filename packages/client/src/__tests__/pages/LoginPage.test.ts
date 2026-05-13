@@ -91,6 +91,44 @@ describe('LoginPage', () => {
     });
   });
 
+  describe('a11y: required-field indicators', () => {
+    it('shows the visible asterisk on the email label', async () => {
+      const wrapper = await mountLoginPage();
+      const indicator = wrapper.find('[data-testid="login-email-required"]');
+      expect(indicator.exists()).toBe(true);
+      expect(indicator.text()).toBe('*');
+      expect(indicator.attributes('aria-hidden')).toBe('true');
+    });
+
+    it('shows the visible asterisk on the password label', async () => {
+      const wrapper = await mountLoginPage();
+      const indicator = wrapper.find('[data-testid="login-password-required"]');
+      expect(indicator.exists()).toBe(true);
+      expect(indicator.text()).toBe('*');
+      expect(indicator.attributes('aria-hidden')).toBe('true');
+    });
+
+    it('includes sr-only "required" text for each required field', async () => {
+      const wrapper = await mountLoginPage();
+      const srOnly = wrapper.findAll('.sr-only').filter((el) => el.text() === 'required');
+      expect(srOnly).toHaveLength(2);
+    });
+
+    it('sets aria-required="true" on the email input', async () => {
+      const wrapper = await mountLoginPage();
+      const input = wrapper.find('input[data-testid="login-email-input"]');
+      expect(input.attributes('aria-required')).toBe('true');
+      expect(input.attributes('required')).toBeDefined();
+    });
+
+    it('sets aria-required="true" on the password input', async () => {
+      const wrapper = await mountLoginPage();
+      const input = wrapper.find('input[data-testid="login-password-input"]');
+      expect(input.attributes('aria-required')).toBe('true');
+      expect(input.attributes('required')).toBeDefined();
+    });
+  });
+
   describe('form submission', () => {
     it('should call login with email and password on submit', async () => {
       mockLogin.mockResolvedValue(undefined);
