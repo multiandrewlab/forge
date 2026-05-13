@@ -5,8 +5,11 @@
 # fork PR exploit ENABLE_TEST_ROUTES against this repo's database. With
 # `pull_request`, fork PRs run with a read-only GITHUB_TOKEN.
 #
-# Initial state: continue-on-error=true, NOT a required check.
-# Promotion to required after 14 consecutive green main runs (tracked in #43).
+# Blocking: this job reports failures normally (no continue-on-error).
+# Flip to blocking happened after 20 consecutive green main runs vs.
+# the 14-run gate defined in #43. If the suite produces 3 red runs on
+# main within any 7-day window, revert this to non-blocking via PR per
+# the inverse criterion in #43; the 14-run gate must be re-cleared.
 
 name: E2E (Playwright)
 
@@ -27,7 +30,6 @@ jobs:
   e2e:
     name: Playwright journey smoke
     runs-on: ubuntu-latest
-    continue-on-error: true
     timeout-minutes: 15
 
     # The github-script "Comment on PR with artifact link" step needs to write
@@ -352,8 +354,6 @@ jobs:
               '',
               `Report artifact: ${runUrl}#artifacts (look for \`playwright-report\`).`,
               `Server logs: \`e2e-server-logs\`.`,
-              '',
-              '_This check is currently `continue-on-error: true` and does not block merge._',
             ].join('\n');
             await github.rest.issues.createComment({
               issue_number: context.issue.number,

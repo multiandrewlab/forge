@@ -49,8 +49,10 @@ Use the `visual-review` skill to take screenshots of web pages, presentations, o
 
 - **TDD is mandatory** — Write tests first, watch them fail, then implement
 - **100% test coverage required** — Lines, branches, functions, and statements. Enforced via `.coverage-thresholds.json` as a blocking gate before PR creation and task completion
+- **Playwright E2E suite is blocking** — `e2e/` specs run in CI via `.github/workflows/e2e-playwright.yml` at `workers: 4`, `retries: 0`; a red run blocks merge alongside coverage and Bruno (flip-to-blocking per #43, 2026-05-13)
 - Test command: `npm test`
 - Coverage command: `npm run test:coverage`
+- E2E command: `npm run e2e`
 
 ## Coverage
 
@@ -144,6 +146,7 @@ The `actor` fixture throws with an explicit error message if `testInfo.workerInd
 - **Plan Review Gate**: Automatic adversarial review after any implementation plan is drafted. Spawns 3 independent reviewers (Feasibility, Completeness, Scope & Alignment) in parallel — ALL must PASS before the plan is presented to the user. See `skills/plan-review-gate/SKILL.md`
 - **Coverage Gate**: Reads `.coverage-thresholds.json` and runs the enforcement command — BLOCKING gate before PR creation
 - **Bruno API Gate**: All Bruno requests for affected endpoints must pass against a running server — BLOCKING gate before PR creation
+- **E2E Playwright Gate**: `.github/workflows/e2e-playwright.yml` runs the full Playwright suite at `workers: 4`, `retries: 0` on every PR and `main` push — BLOCKING gate before PR merge. Inverse criterion: 3 red main runs within any 7-day window reverts the workflow to non-blocking via PR; the 14-run gate must be re-cleared (see #43)
 
 ## Workflow Enforcement (MANDATORY)
 
