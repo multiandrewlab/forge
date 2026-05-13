@@ -1,5 +1,5 @@
 meta {
-  name: AI Re-run on Video Post (asserts AI_EXTRACTION_FAILED in mock mode)
+  name: AI Re-run on Video Post (happy path)
   type: http
   seq: 15
 }
@@ -15,43 +15,30 @@ auth:bearer {
 }
 
 assert {
-  res.status: eq 502
+  res.status: eq 200
 }
 
 tests {
-  test("response carries AI_EXTRACTION_FAILED code", function() {
-    expect(res.body.code).to.equal("AI_EXTRACTION_FAILED");
+  test("response carries a new runId and the parsed mock metadata", function() {
+    expect(res.body.runId).to.be.a("string");
+    expect(res.body.title).to.be.a("string");
+    expect(res.body.title.length).to.be.greaterThan(0);
+    expect(res.body.description).to.be.a("string");
+    expect(res.body.tags).to.be.an("array");
+    expect(res.body.tags.length).to.be.at.least(1);
   });
 }
 
 docs {
-  Owner-only re-extraction at POST /:id/video/ai-rerun. The route's
-  preconditions are all satisfied (owner = testuser, video.status =
-  'ready', transcript present), so the request reaches the
-  `runExtractVideoMetadata` call inside the advisory-locked transaction.
+  Owner-only re-extraction at POST /:id/video/ai-rerun. Preconditions
+  are all satisfied by the seed: owner = testuser, post_videos.status
+  = 'ready', transcript is present. The route acquires the advisory
+  xact lock, calls `runExtractVideoMetadata` over the stored
+  transcript, inserts a new `post_video_ai_runs` row, and returns
+  the new runId + parsed metadata.
 
-  ── Why this asserts 502 instead of 200 ──────────────────────────────
-  The seeded mock-script for video-metadata
-  (packages/server/src/plugins/langchain/mock-scripts.ts) emits chunks
-  whose concatenation is `{...valid JSON...}[done]`. The chain wraps
-  the model in StringOutputParser, returning the raw concatenated
-  string verbatim. `runExtractVideoMetadata`'s `tryParseAttempt`
-  then calls `JSON.parse(raw)` directly — the trailing `[done]`
-  sentinel causes a SyntaxError, the retry hits the same bug, and
-  the route surfaces `AiExtractionFailedError` as a 502 with
-  `code: 'AI_EXTRACTION_FAILED'`.
-
-  This is a pre-existing bug in the mock path (the production path
-  with a real LLM returns clean JSON and works). Fixing it requires
-  either stripping `/\[done\]$/` inside `streamAndAccumulate` or
-  removing the `[done]` chunk from the videoMetadata mock script —
-  both server-code changes that are out of WU7b's scope.
-
-  Asserting 502 + AI_EXTRACTION_FAILED here pins the CURRENT runtime
-  behavior so a future fix (when it lands) intentionally inverts this
-  assertion — preventing silent regressions in either direction. When
-  the mock-mode bug is fixed, update the assertion to:
-    res.status: eq 200
-    body has { runId, title, description, tags }
-  and remove this docs block.
+  In mock mode (MOCK_CF_STREAM=1 / LLM_PROVIDER=mock), the chain's
+  `streamAndAccumulate` strips the trailing `[done]` sentinel from
+  the ChatMock output before JSON.parse, so the mock script's
+  `{"title":"Mock video title",...}[done]` chunks parse cleanly.
 }

@@ -173,6 +173,21 @@ describe('runExtractVideoMetadata', () => {
     expect(result.title).toBe('Intro to CI');
   });
 
+  it('strips the trailing [done] sentinel before JSON.parse', async () => {
+    // ChatMock and other project chains terminate streams with a `[done]`
+    // marker that JSON-parsing callers must drop. Without the strip, the
+    // mock-script-driven video pipeline returns 502 AI_EXTRACTION_FAILED.
+    const { chain } = makeFakeChain([[validJson, '[done]']]);
+    const result = await runExtractVideoMetadata(chain, { transcript: 't' });
+    expect(result.title).toBe('Intro to CI');
+  });
+
+  it('also strips [done] with surrounding whitespace', async () => {
+    const { chain } = makeFakeChain([[validJson, '  [done]\n']]);
+    const result = await runExtractVideoMetadata(chain, { transcript: 't' });
+    expect(result.title).toBe('Intro to CI');
+  });
+
   it('retries once on invalid JSON, populating previousError on the second call', async () => {
     const { chain, streamSpy, calls } = makeFakeChain(['not-json-at-all', validJson]);
     const result = await runExtractVideoMetadata(chain, { transcript: 'transcript text' });

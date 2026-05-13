@@ -141,7 +141,10 @@ async function streamAndAccumulate(
   let acc = '';
   const stream = await chain.stream(input);
   for await (const chunk of stream) acc += chunk;
-  return acc;
+  // ChatMock and the project's other chains emit a trailing `[done]` sentinel
+  // that downstream clients strip before rendering. For JSON-parsed chains we
+  // must strip it here too — otherwise JSON.parse chokes on the marker.
+  return acc.replace(/\[done\]\s*$/, '').trim();
 }
 
 /**
