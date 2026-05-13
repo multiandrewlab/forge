@@ -23,6 +23,13 @@ function jsonRes(body: unknown, status = 200): Response {
   });
 }
 
+describe('CloudflareStreamService.customerSubdomain', () => {
+  it('exposes the configured subdomain so route handlers can assemble URLs', () => {
+    const svc = makeService(vi.fn());
+    expect(svc.customerSubdomain).toBe('customer-xyz');
+  });
+});
+
 describe('CloudflareStreamService.requestUploadUrl', () => {
   it('posts with bearer + tus headers and returns uploadUrl + cfUid', async () => {
     const http = vi.fn().mockResolvedValue(
@@ -219,6 +226,30 @@ describe('CloudflareStreamService.fetchCaptionsWebVTT', () => {
     await expect(
       makeService(http).fetchCaptionsWebVTT('https://videodelivery.net/u/captions/en'),
     ).rejects.toThrow(/too large/i);
+  });
+
+  it('rejects pre-buffer when content-length declares > 4MB (DoS guard)', async () => {
+    // Honest oversized declaration: server says "I'm sending you 5MB" — we
+    // reject BEFORE awaiting res.text() so memory is never allocated.
+    const res = new Response('partial body', {
+      status: 200,
+      headers: { 'content-length': String(5 * 1024 * 1024) },
+    });
+    const http = vi.fn().mockResolvedValue(res);
+    await expect(
+      makeService(http).fetchCaptionsWebVTT('https://videodelivery.net/u/captions/en'),
+    ).rejects.toThrow(/too large/i);
+  });
+
+  it('accepts when content-length is missing (chunked) and body is small', async () => {
+    // No content-length header → pre-check is skipped; post-buffer check governs.
+    const res = new Response('WEBVTT\n\n00:00.000 --> 00:01.000\nhello');
+    res.headers.delete('content-length');
+    const http = vi.fn().mockResolvedValue(res);
+    const out = await makeService(http).fetchCaptionsWebVTT(
+      'https://videodelivery.net/u/captions/en',
+    );
+    expect(out).toMatch(/^WEBVTT/);
   });
 
   it('throws on non-2xx response', async () => {

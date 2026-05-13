@@ -51,6 +51,9 @@ export interface VideoStatusResult {
 
 /** Public contract every CloudflareStream* class implements. */
 export interface ICloudflareStreamService {
+  /** Used by WU5 route handlers to assemble CF playback URLs. */
+  readonly customerSubdomain: string;
+
   requestUploadUrl(req: UploadUrlRequest): Promise<{ uploadUrl: string; cfUid: string }>;
   getVideoStatus(cfUid: string): Promise<VideoStatusResult | null>;
   requestCaptions(cfUid: string): Promise<void>;
@@ -68,9 +71,13 @@ const VTT_FETCH_TIMEOUT_MS = 30_000;
 
 export class CloudflareStreamServiceImpl implements ICloudflareStreamService {
   private readonly http: typeof fetch;
+  // Exposed to WU5 route handlers that need to construct CF playback URLs
+  // (e.g. `https://customer-<subdomain>.cloudflarestream.com/<cfUid>/manifest/video.m3u8`).
+  public readonly customerSubdomain: string;
 
   constructor(private readonly cfg: CloudflareStreamConfig) {
     this.http = cfg.httpClient ?? globalThis.fetch.bind(globalThis);
+    this.customerSubdomain = cfg.customerSubdomain;
   }
 
   private baseUrl(): string {
@@ -156,6 +163,13 @@ export class CloudflareStreamServiceImpl implements ICloudflareStreamService {
       const res = await this.http(url, { redirect: 'error', signal: ac.signal });
       if (res.status < 200 || res.status >= 300) {
         throw new Error(`CF_UPSTREAM_ERROR: fetchCaptionsWebVTT ${res.status}`);
+      }
+      // Pre-buffer DoS guard: reject when the server honestly declares an
+      // oversized body before we await `res.text()`. The post-buffer check
+      // below remains as a defense for chunked/no-content-length responses.
+      const declared = res.headers.get('content-length');
+      if (declared != null && Number(declared) > MAX_VTT_BYTES) {
+        throw new Error('webvtt body too large');
       }
       const text = await res.text();
       if (text.length > MAX_VTT_BYTES) {
@@ -257,6 +271,7 @@ const SAMPLE_CAPTIONS_PATH = join(
 export class MockCloudflareStreamService implements ICloudflareStreamService {
   private readonly assets = new Map<string, MockAsset>();
   public readonly purgeCalls: string[] = [];
+  public readonly customerSubdomain = 'mock-subdomain';
   private counter = 0;
 
   async requestUploadUrl(req: UploadUrlRequest): Promise<{ uploadUrl: string; cfUid: string }> {
