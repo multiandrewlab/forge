@@ -1026,6 +1026,34 @@ describe('PostViewPage', () => {
       createElementSpy.mockRestore();
     });
 
+    it('guard path: invoking download while currentPost is null short-circuits before apiFetch', async () => {
+      // Covers the `if (!currentPost.value) return;` guard at the top of
+      // downloadFile. Under normal flow the post-file-list block is hidden when
+      // currentPost is null, but the guard defends against the post being
+      // cleared between render and click (e.g., a real-time refresh emptying
+      // the store). We mount with a post + file present, then null out
+      // currentPost before triggering the click — the handler must return
+      // without calling apiFetch.
+      setupSinglePostWithFile([makeFile({ id: 'f-z', filename: 'orphan.txt' })]);
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      const button = wrapper.find('[data-testid="post-file-download-link"]');
+      expect(button.exists()).toBe(true);
+
+      // Clear the mock call count from any setup-time apiFetch (none expected,
+      // but defensive) so we can assert apiFetch was NOT called by the handler.
+      mockApiFetch.mockClear();
+      mockCurrentPost.value = null;
+
+      await button.trigger('click');
+      await flushPromises();
+
+      expect(mockApiFetch).not.toHaveBeenCalled();
+      expect(mockPostError.value).not.toBe('Failed to download orphan.txt');
+    });
+
     it('error path: non-ok response surfaces a "Failed to download <filename>" error and skips ObjectURL', async () => {
       setupSinglePostWithFile([makeFile({ id: 'f-y', filename: 'broken.bin' })]);
 
