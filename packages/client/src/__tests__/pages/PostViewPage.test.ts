@@ -1041,6 +1041,12 @@ describe('PostViewPage', () => {
       globalThis.URL.createObjectURL = createObjectURLSpy;
       globalThis.URL.revokeObjectURL = revokeObjectURLSpy;
 
+      // Seed a stale errorStatus from a prior request so we can prove the
+      // download handler clears it. Without the clear, the download error
+      // would be rendered inside the dedicated 403 forbidden surface instead
+      // of the generic red error banner.
+      mockPostErrorStatus.value = 403;
+
       const wrapper = await mountPage();
       await flushPromises();
 
@@ -1053,6 +1059,10 @@ describe('PostViewPage', () => {
       expect(createObjectURLSpy).not.toHaveBeenCalled();
       expect(revokeObjectURLSpy).not.toHaveBeenCalled();
       expect(mockPostError.value).toBe('Failed to download broken.bin');
+      // The download handler must clear stale errorStatus so the generic red
+      // error banner renders, NOT the dedicated 403 forbidden surface.
+      expect(mockPostErrorStatus.value).toBeNull();
+      expect(wrapper.find('[data-testid="forbidden-page"]').exists()).toBe(false);
       // The generic error banner now renders the message.
       expect(wrapper.text()).toContain('Failed to download broken.bin');
     });

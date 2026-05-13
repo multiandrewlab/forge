@@ -146,6 +146,11 @@ async function downloadFile(file: PostFile): Promise<void> {
   const response = await apiFetch(`/api/posts/${currentPost.value.id}/files/${file.id}`);
   if (!response.ok) {
     error.value = `Failed to download ${file.filename}`;
+    // Clear any stale errorStatus (e.g., a prior 403) so the generic red error
+    // banner renders, not the dedicated forbidden surface that branches on
+    // `errorStatus === 403`. Without this, a stale status from a previous
+    // failed request would route the download error into the wrong UI.
+    errorStatus.value = null;
     return;
   }
   const blob = await response.blob();
@@ -277,7 +282,7 @@ async function downloadFile(file: PostFile): Promise<void> {
               type="button"
               data-testid="post-file-download-link"
               :aria-label="`Download ${file.filename}`"
-              class="rounded border border-surface-500 px-1.5 py-0.5 text-xs text-accent-400 hover:bg-surface-500 hover:text-white"
+              class="rounded border border-surface-500 px-1.5 py-0.5 text-xs text-primary hover:bg-surface-500 hover:text-white"
               @click="downloadFile(file)"
             >
               Download
