@@ -1,0 +1,49 @@
+meta {
+  name: CF Stream Webhook (invalid signature → 401)
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/api/cf-stream/webhook
+  body: json
+  auth: none
+}
+
+headers {
+  content-type: application/json
+  Webhook-Signature: t=1700000000,v1=0000000000000000000000000000000000000000000000000000000000000000
+}
+
+body:json {
+  {
+    "id": "bru-evt-invalid-sig",
+    "type": "video.ready",
+    "uid": "seedcfuid_88",
+    "data": { "readyToStream": true }
+  }
+}
+
+assert {
+  res.status: eq 401
+}
+
+tests {
+  test("response carries WEBHOOK_SIGNATURE_INVALID code", function() {
+    expect(res.body.code).to.equal("WEBHOOK_SIGNATURE_INVALID");
+  });
+}
+
+docs {
+  Signature mismatch path. Header carries a syntactically valid v1=
+  (64 hex chars of '0', same length as a real HMAC-SHA256 hex digest)
+  so the parser accepts the header shape, then `crypto.timingSafeEqual`
+  rejects the value. The timestamp '1700000000' is well outside the
+  ±5-minute window, but the signature check runs BEFORE the freshness
+  check in the route handler — so 401 (not 400) is what surfaces here.
+
+  This file deliberately uses a STATIC Webhook-Signature in the headers
+  block (no pre-request script) to prove the failure path doesn't
+  depend on dynamic state — any client sending the wrong signature
+  must be rejected, regardless of body bytes.
+}

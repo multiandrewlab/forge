@@ -1,0 +1,57 @@
+meta {
+  name: AI Re-run on Video Post (asserts AI_EXTRACTION_FAILED in mock mode)
+  type: http
+  seq: 15
+}
+
+post {
+  url: {{baseUrl}}/api/posts/{{videoPostId}}/video/ai-rerun
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+assert {
+  res.status: eq 502
+}
+
+tests {
+  test("response carries AI_EXTRACTION_FAILED code", function() {
+    expect(res.body.code).to.equal("AI_EXTRACTION_FAILED");
+  });
+}
+
+docs {
+  Owner-only re-extraction at POST /:id/video/ai-rerun. The route's
+  preconditions are all satisfied (owner = testuser, video.status =
+  'ready', transcript present), so the request reaches the
+  `runExtractVideoMetadata` call inside the advisory-locked transaction.
+
+  ── Why this asserts 502 instead of 200 ──────────────────────────────
+  The seeded mock-script for video-metadata
+  (packages/server/src/plugins/langchain/mock-scripts.ts) emits chunks
+  whose concatenation is `{...valid JSON...}[done]`. The chain wraps
+  the model in StringOutputParser, returning the raw concatenated
+  string verbatim. `runExtractVideoMetadata`'s `tryParseAttempt`
+  then calls `JSON.parse(raw)` directly — the trailing `[done]`
+  sentinel causes a SyntaxError, the retry hits the same bug, and
+  the route surfaces `AiExtractionFailedError` as a 502 with
+  `code: 'AI_EXTRACTION_FAILED'`.
+
+  This is a pre-existing bug in the mock path (the production path
+  with a real LLM returns clean JSON and works). Fixing it requires
+  either stripping `/\[done\]$/` inside `streamAndAccumulate` or
+  removing the `[done]` chunk from the videoMetadata mock script —
+  both server-code changes that are out of WU7b's scope.
+
+  Asserting 502 + AI_EXTRACTION_FAILED here pins the CURRENT runtime
+  behavior so a future fix (when it lands) intentionally inverts this
+  assertion — preventing silent regressions in either direction. When
+  the mock-mode bug is fixed, update the assertion to:
+    res.status: eq 200
+    body has { runId, title, description, tags }
+  and remove this docs block.
+}
