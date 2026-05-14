@@ -1,4 +1,4 @@
-import Fastify from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyBaseLogger } from 'fastify';
 import cors from '@fastify/cors';
 import cookie from '@fastify/cookie';
 import jwt from '@fastify/jwt';
@@ -51,10 +51,16 @@ declare module 'fastify' {
 }
 
 export async function buildApp() {
-  const app =
+  // Type-unify the two branches: `Fastify({ logger: false })` and
+  // `Fastify({ loggerInstance: pinoLogger })` produce DIFFERENT generic
+  // instantiations of FastifyInstance (the second carries pino's Logger type
+  // in the type parameters, which makes the union "not callable" when
+  // calling app.register / app.addHook). Force both to the default
+  // FastifyInstance shape so the rest of the wiring typechecks cleanly.
+  const app: FastifyInstance =
     process.env.NODE_ENV === 'test'
       ? Fastify({ logger: false })
-      : Fastify({ loggerInstance: createLogger() });
+      : Fastify({ loggerInstance: createLogger() as unknown as FastifyBaseLogger });
 
   await app.register(cors);
   await app.register(cookie);

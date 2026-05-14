@@ -97,12 +97,15 @@ test('video private-access: non-owner sees 403 / forbidden-page, not the resourc
   });
   expect(getDetail.status()).toBe(403);
 
-  // 2. The video playback URL mint is blocked at the same helper.
-  //    (See video routes — assertCanReadPost runs before getPostVideo.)
+  // 2. The video playback URL mint uses the STRICT visibility helper
+  //    (`assertCanReadPostStrict` — see WU5 #6 fix). Per spec §8.2
+  //    visibility-before-existence, a non-owner reading a private video
+  //    must get 404 (not 403) so the response does not reveal that the
+  //    post exists at all.
   const playback = await secondActor.request.get(`/api/posts/${postId}/video/playback`, {
     headers: { Authorization: `Bearer ${secondToken}` },
   });
-  expect(playback.status()).toBe(403);
+  expect(playback.status()).toBe(404);
 
   // 3. Navigating in the browser surfaces the forbidden-page chrome.
   await secondActor.goto(`/posts/${postId}`);
