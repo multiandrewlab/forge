@@ -1,5 +1,5 @@
 meta {
-  name: Request Playback URL (private non-owner forbidden)
+  name: Request Playback URL (private non-owner returns 404)
   type: http
   seq: 7
 }
@@ -15,18 +15,14 @@ auth:bearer {
 }
 
 assert {
-  res.status: eq 403
+  res.status: eq 404
 }
 
 docs {
   {{privateVideoPostId}} is owned by bruno_other_user; testuser is the
-  Bruno bootstrap actor. assertCanReadPost (packages/server/src/lib/
-  visibility.ts) returns 403 'This post is private' for private+non-owner,
-  so the visibility check intercepts before any post_videos lookup.
-
-  NOTE: WU7a spec called for asserting 404 ("visibility-before-existence
-  per spec §8.2"), but the current visibility.ts implementation returns
-  403 (only the unit-test mock returns 404). Asserting 403 matches the
-  live server. If WU5b reconciles the implementation to 404 in a later
-  commit, this assertion will need to be updated in lockstep.
+  Bruno bootstrap actor. assertCanReadPostStrict (packages/server/src/
+  lib/visibility.ts) returns 404 'Post not found' for private+non-owner
+  so the response does not leak post existence. Per spec §8.2
+  (visibility-before-existence) — the visibility check intercepts before
+  any post_videos lookup.
 }

@@ -35,7 +35,7 @@ vi.mock('../../db/queries/posts.js', () => ({
 }));
 
 vi.mock('../../lib/visibility.js', () => ({
-  assertCanReadPost: vi.fn(),
+  assertCanReadPostStrict: vi.fn(),
 }));
 
 // ---------------------------------------------------------------------------
@@ -48,14 +48,14 @@ import rateLimit from '@fastify/rate-limit';
 
 import { findPostById } from '../../db/queries/posts.js';
 import * as q from '../../db/queries/video.js';
-import { assertCanReadPost } from '../../lib/visibility.js';
+import { assertCanReadPostStrict } from '../../lib/visibility.js';
 import { videoRoutes, type VideoRouteDeps } from '../../routes/video.js';
 import type { PostRow } from '../../db/queries/types.js';
 import type { ICloudflareStreamService } from '../../services/cloudflare-stream.js';
 import { AiExtractionFailedError } from '../../plugins/langchain/chains/extract-video-metadata.js';
 
 const findPostByIdMock = findPostById as Mock;
-const assertCanReadPostMock = assertCanReadPost as Mock;
+const assertCanReadPostStrictMock = assertCanReadPostStrict as Mock;
 const getPostVideoMock = q.getPostVideo as Mock;
 const insertPostVideoMock = q.insertPostVideo as Mock;
 const setPendingCfUidMock = q.setPendingCfUid as Mock;
@@ -204,8 +204,8 @@ function token(app: FastifyInstance, userId: string): string {
 describe('routes/video', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // default: assertCanReadPost permits owner reads
-    assertCanReadPostMock.mockImplementation(
+    // default: assertCanReadPostStrict permits owner reads
+    assertCanReadPostStrictMock.mockImplementation(
       (post: { visibility: string; author_id: string }, callerId: string, reply: FastifyReply) => {
         if (post.visibility === 'private' && post.author_id !== callerId) {
           reply.status(404).send({ error: 'Post not found' });
@@ -552,7 +552,7 @@ describe('routes/video', () => {
 
     it('private + non-owner returns 404 BEFORE q.getPostVideo is called (visibility-before-existence)', async () => {
       findPostByIdMock.mockResolvedValue(makePost({ visibility: 'private', is_draft: false }));
-      // assertCanReadPost will set 404 reply
+      // assertCanReadPostStrict will set 404 reply
       const app = await buildTestApp();
       const res = await app.inject({
         method: 'GET',

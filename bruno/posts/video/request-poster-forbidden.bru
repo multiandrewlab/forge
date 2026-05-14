@@ -1,5 +1,5 @@
 meta {
-  name: Request Poster URL (private non-owner forbidden)
+  name: Request Poster URL (private non-owner returns 404)
   type: http
   seq: 9
 }
@@ -15,10 +15,11 @@ auth:bearer {
 }
 
 assert {
-  res.status: eq 403
+  res.status: eq 404
 }
 
 docs {
-  Same visibility-check semantics as request-playback-forbidden.bru.
-  See the docs block on that file for the 403-vs-404 reconciliation note.
+  Same visibility-before-existence semantics as request-playback-forbidden.bru.
+  assertCanReadPostStrict returns 404 'Post not found' for private+non-owner
+  so the response does not leak post existence. Per spec §8.2.
 }

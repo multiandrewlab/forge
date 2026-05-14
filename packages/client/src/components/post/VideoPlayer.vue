@@ -13,10 +13,15 @@
     <div v-else-if="loadError" data-testid="video-player-error" class="text-sm text-red-700">
       Could not load video.
     </div>
-    <!-- v-else branch is only reached after initialLoad sets playbackUrl. -->
+    <!--
+      v-else branch is only reached after initialLoad sets playbackUrl. The
+      <video> src is attached imperatively via attachPlayback() so we can use
+      hls.js on Chrome/Firefox (HLS via MediaSource Extensions) while still
+      letting Safari use its native HLS support.
+    -->
     <video
       v-else
-      :src="playbackSrc"
+      ref="videoRef"
       controls
       data-testid="video-player-element"
       class="w-full rounded"
@@ -25,8 +30,9 @@
 </template>
 
 <script setup lang="ts">
-/* global setTimeout, clearTimeout */
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+/* global setTimeout, clearTimeout, HTMLVideoElement */
+import { ref, onMounted, onUnmounted, nextTick } from 'vue';
+import Hls from 'hls.js';
 import { apiFetch } from '../../lib/api.js';
 
 const props = defineProps<{ postId: string }>();
@@ -39,10 +45,8 @@ const loading = ref(true);
 const loadError = ref(false);
 const refreshFailing = ref(false);
 
-// playbackSrc narrows playbackUrl to string for the template. The v-else
-// branch only renders after initialLoad sets playbackUrl, so this cast is
-// safe.
-const playbackSrc = computed(() => playbackUrl.value as string);
+const videoRef = ref<HTMLVideoElement | null>(null);
+let hls: Hls | null = null;
 
 // CF Stream signs playback URLs for 1 hour; refresh 5 min before expiry.
 const REFRESH_LEAD_MS = 55 * 60_000;
@@ -61,6 +65,57 @@ function clearTimers(): void {
     clearTimeout(retryTimer);
     retryTimer = null;
   }
+}
+
+function destroyHls(): void {
+  if (hls !== null) {
+    hls.destroy();
+    hls = null;
+  }
+}
+
+/**
+ * Attach the current playback URL to the <video> element using the right
+ * mechanism for the browser:
+ *
+ *  - Safari natively plays HLS — set video.src directly.
+ *  - Chrome/Firefox/Edge need MediaSource Extensions — use hls.js.
+ *  - As a last resort (neither native HLS nor MSE), set video.src and let
+ *    the browser fail; the existing initial-load error path covers the UX.
+ *
+ * Called on initial fetch, on every 55-min refresh, and on each retry.
+ */
+function attachPlayback(): void {
+  const video = videoRef.value;
+  // attachPlayback is only called from initialLoad/runRefresh AFTER a
+  // successful fetchPlayback (`playbackUrl` is always non-null at this
+  // point). `videoRef` is set by the v-else branch which is rendered after
+  // `loading.value = false`; the nextTick() in initialLoad covers that.
+  // The null guard below is defensive against a future refactor that calls
+  // attachPlayback before the v-else has mounted (e.g. mid-unmount race).
+  /* v8 ignore next */
+  if (video === null) return;
+  const url = playbackUrl.value as string;
+
+  // Safari: native HLS support.
+  if (video.canPlayType('application/vnd.apple.mpegurl') !== '') {
+    destroyHls();
+    video.src = url;
+    return;
+  }
+
+  // Chrome / Firefox / Edge: hls.js via MediaSource Extensions.
+  if (Hls.isSupported()) {
+    destroyHls();
+    hls = new Hls();
+    hls.loadSource(url);
+    hls.attachMedia(video);
+    return;
+  }
+
+  // Fallback — no native HLS, no MSE. Likely fails, but try anyway so the
+  // user sees the browser's own error UI rather than a silent blank player.
+  video.src = url;
 }
 
 interface PlaybackResponse {
@@ -104,6 +159,12 @@ async function runRefresh(): Promise<void> {
   if (ok) {
     refreshFailing.value = false;
     retryIndex = 0;
+    // Re-attach the (possibly identical) URL — the playbackUrl watcher won't
+    // fire on a same-value set, but we still need to mint a new hls.js
+    // session so the new signed manifest URL is fetched. Without this call
+    // the player would keep using the old URL until the CF signature
+    // expired and playback stalled.
+    attachPlayback();
     scheduleRefresh();
   } else {
     refreshFailing.value = true;
@@ -119,6 +180,12 @@ async function initialLoad(): Promise<void> {
     loadError.value = true;
     return;
   }
+  // After flipping `loading` to false, the v-else branch is rendered on the
+  // next tick. Wait for the <video> element to exist, then attach. The
+  // playbackUrl watcher would also fire eventually but races with the v-if
+  // transition; doing it explicitly here is deterministic.
+  await nextTick();
+  attachPlayback();
   scheduleRefresh();
 }
 
@@ -128,5 +195,6 @@ onMounted(() => {
 
 onUnmounted(() => {
   clearTimers();
+  destroyHls();
 });
 </script>

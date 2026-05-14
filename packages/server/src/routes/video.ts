@@ -14,8 +14,11 @@
 //   - `runExtractVideoMetadata` for the AI re-run path; injected so the same
 //     route file can be unit-tested with a stub without standing up LangChain.
 //
-// Visibility-before-existence (spec §8.2): `assertCanReadPost` MUST run BEFORE
-// any `getPostVideo` lookup so private-post leaks become 404s instead of 403s.
+// Visibility-before-existence (spec §8.2): `assertCanReadPostStrict` MUST run
+// BEFORE any `getPostVideo` lookup so private-post leaks become 404s instead
+// of 403s. The strict variant is used instead of `assertCanReadPost` because
+// video playback/poster responses can leak resource identity (e.g. cf_uid in
+// the manifest URL) even when the route name is guessable.
 //
 // Audit-log emissions (`video.cancelled`, `video.ai-rerun.requested`,
 // `video.uploaded`, …) are reserved for Sub-WU5b; TODO markers point at the
@@ -26,7 +29,7 @@ import { requestVideoUploadUrlSchema } from '@forge/shared';
 import * as q from '../db/queries/video.js';
 import { findPostById } from '../db/queries/posts.js';
 import { withTransaction } from '../db/connection.js';
-import { assertCanReadPost } from '../lib/visibility.js';
+import { assertCanReadPostStrict } from '../lib/visibility.js';
 import type { ICloudflareStreamService } from '../services/cloudflare-stream.js';
 import type { VideoPipelineService } from '../services/video-pipeline.js';
 import { AiExtractionFailedError } from '../plugins/langchain/chains/extract-video-metadata.js';
@@ -213,9 +216,9 @@ export async function videoRoutes(app: FastifyInstance, deps: VideoRouteDeps): P
         return reply.status(404).send({ error: 'Post not found' });
       }
 
-      // CRITICAL: visibility-before-existence per spec §8.2 — assertCanReadPost
-      // MUST run BEFORE any post_videos lookup so private+non-owner gets 404
-      // without leaking existence.
+      // CRITICAL: visibility-before-existence per spec §8.2 —
+      // assertCanReadPostStrict MUST run BEFORE any post_videos lookup so
+      // private+non-owner gets 404 without leaking existence.
       if (!assertCanReadPostInternal(post, request, reply)) return;
 
       const video = await q.getPostVideo(id);
@@ -394,7 +397,7 @@ function assertCanReadPostInternal(
   request: FastifyRequest,
   reply: FastifyReply,
 ): boolean {
-  return assertCanReadPost(post, request.user.id, reply);
+  return assertCanReadPostStrict(post, request.user.id, reply);
 }
 
 async function buildPlaybackUrl(
