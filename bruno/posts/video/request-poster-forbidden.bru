@@ -1,0 +1,25 @@
+meta {
+  name: Request Poster URL (private non-owner returns 404)
+  type: http
+  seq: 9
+}
+
+get {
+  url: {{baseUrl}}/api/posts/{{privateVideoPostId}}/video/poster
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+assert {
+  res.status: eq 404
+}
+
+docs {
+  Same visibility-before-existence semantics as request-playback-forbidden.bru.
+  assertCanReadPostStrict returns 404 'Post not found' for private+non-owner
+  so the response does not leak post existence. Per spec §8.2.
+}

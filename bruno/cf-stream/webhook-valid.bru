@@ -1,0 +1,71 @@
+meta {
+  name: CF Stream Webhook (valid signature)
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/cf-stream/webhook
+  body: json
+  auth: none
+}
+
+headers {
+  content-type: application/json
+}
+
+body:json {
+  {
+    "id": "placeholder — overwritten in pre-request",
+    "type": "video.ready",
+    "uid": "seedcfuid_88",
+    "data": { "readyToStream": true }
+  }
+}
+
+script:pre-request {
+  // The webhook handler verifies HMAC-SHA256 over `${t}.${rawBody}` and
+  // `crypto.timingSafeEqual`s the result against the v1=<hex> portion of
+  // the Webhook-Signature header. To match the bytes Fastify will see,
+  // we build the body object, JSON.stringify it ourselves, and call
+  // req.setBody(body) so Bruno re-serializes to the same canonical form
+  // (insertion order, no whitespace). Then we HMAC that exact string.
+  const CryptoJS = require("crypto-js");
+  const ts = Math.floor(Date.now() / 1000);
+  const body = {
+    id: `bru-evt-${ts}-${Math.floor(Math.random() * 1e9)}`,
+    type: "video.ready",
+    uid: "seedcfuid_88",
+    data: { readyToStream: true },
+  };
+  const rawBody = JSON.stringify(body);
+  const secret = bru.getEnvVar("cfStreamWebhookSecret");
+  const sig = CryptoJS.HmacSHA256(`${ts}.${rawBody}`, secret).toString(CryptoJS.enc.Hex);
+  req.setBody(body);
+  req.setHeader("Webhook-Signature", `t=${ts},v1=${sig}`);
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("response is {ok: true}", function() {
+    expect(res.body.ok).to.equal(true);
+  });
+}
+
+docs {
+  Happy path for POST /api/cf-stream/webhook (packages/server/src/routes/
+  cf-stream-webhook.ts). Builds a deterministic JSON body, stringifies it
+  to know the exact bytes Bruno will send, HMACs over `${ts}.${rawBody}`,
+  and sets the Webhook-Signature header. The cfUid 'seedcfuid_88' maps
+  to the seeded videoPostId; the deferred videoPipeline.handleWebhook
+  call may log non-fatal noise in the server log if the seeded post is
+  already in 'ready' status — the HTTP reply is 200 regardless of
+  pipeline outcome (per the route's setImmediate dispatch).
+
+  The id includes a timestamp + random suffix so each run inserts a new
+  cf_stream_webhook_events row instead of short-circuiting to the
+  idempotency 200-no-op branch (covered by webhook-duplicate.bru).
+}

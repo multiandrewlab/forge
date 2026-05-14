@@ -46,6 +46,12 @@ jobs:
       MINIO_ACCESS_KEY: forge_minio
       MINIO_SECRET_KEY: forge_minio_secret
       MINIO_BUCKET: forge-bruno
+      # Video pipeline (issue #102 WU7b): mock CF Stream + a shared webhook
+      # secret. Must match bruno/environments/local.bru `cfStreamWebhookSecret`
+      # so the HMAC signatures the .bru files compute validate against
+      # CF_STREAM_WEBHOOK_SECRET on the server side.
+      MOCK_CF_STREAM: '1'
+      CF_STREAM_WEBHOOK_SECRET: test-webhook-secret-do-not-use-in-prod
 
     steps:
       - uses: actions/checkout@v4

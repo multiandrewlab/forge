@@ -1,0 +1,44 @@
+meta {
+  name: AI Re-run on Video Post (happy path)
+  type: http
+  seq: 15
+}
+
+post {
+  url: {{baseUrl}}/api/posts/{{videoPostId}}/video/ai-rerun
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("response carries a new runId and the parsed mock metadata", function() {
+    expect(res.body.runId).to.be.a("string");
+    expect(res.body.title).to.be.a("string");
+    expect(res.body.title.length).to.be.greaterThan(0);
+    expect(res.body.description).to.be.a("string");
+    expect(res.body.tags).to.be.an("array");
+    expect(res.body.tags.length).to.be.at.least(1);
+  });
+}
+
+docs {
+  Owner-only re-extraction at POST /:id/video/ai-rerun. Preconditions
+  are all satisfied by the seed: owner = testuser, post_videos.status
+  = 'ready', transcript is present. The route acquires the advisory
+  xact lock, calls `runExtractVideoMetadata` over the stored
+  transcript, inserts a new `post_video_ai_runs` row, and returns
+  the new runId + parsed metadata.
+
+  In mock mode (MOCK_CF_STREAM=1 / LLM_PROVIDER=mock), the chain's
+  `streamAndAccumulate` strips the trailing `[done]` sentinel from
+  the ChatMock output before JSON.parse, so the mock script's
+  `{"title":"Mock video title",...}[done]` chunks parse cleanly.
+}

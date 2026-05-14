@@ -34,3 +34,6 @@ export {
   fileMetadataSchema,
 } from './file.js';
 export type { StageFileInput, RemoveFileInput, FileMetadataInput } from './file.js';
+
+export { requestVideoUploadUrlSchema, videoTagSchema, videoMetadataSchema } from './video.js';
+export type { RequestVideoUploadUrlInput, VideoMetadata } from './video.js';

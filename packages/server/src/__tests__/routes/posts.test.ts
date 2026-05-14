@@ -2422,4 +2422,569 @@ describe('post routes', () => {
       );
     });
   });
+
+  // ─── Video post extensions (WU5b 5.1, 5.9, 5.10, 5.13) ──────────────────
+  describe('video post extensions', () => {
+    const videoPostRow: PostRow = {
+      ...samplePostRow,
+      content_type: 'video',
+      visibility: 'public',
+      is_draft: true,
+    };
+
+    describe('POST /api/posts — video', () => {
+      it('5.1: creates a video post with empty initial revision (no content)', async () => {
+        const insertedVideoPost = { ...videoPostRow };
+        // createPost
+        mockQuery.mockResolvedValueOnce({ rows: [insertedVideoPost], rowCount: 1 });
+        // createRevision (empty content)
+        mockQuery.mockResolvedValueOnce({
+          rows: [{ ...sampleRevisionRow, content: '' }],
+          rowCount: 1,
+        });
+        // findFeedPostById
+        mockFindFeedPostById.mockResolvedValueOnce({
+          ...sampleFeedRow,
+          content_type: 'video',
+        });
+
+        const response = await app.inject({
+          method: 'POST',
+          url: '/api/posts',
+          headers: { authorization: `Bearer ${token}` },
+          payload: { title: 'My video', contentType: 'video', visibility: 'public' },
+        });
+
+        expect(response.statusCode).toBe(201);
+        const body = response.json();
+        expect(body.post.contentType).toBe('video');
+        expect(body.revision.content).toBe('');
+        // createRevision called with content=''
+        expect(mockQuery).toHaveBeenCalledWith(
+          expect.stringMatching(/INSERT INTO post_revisions/),
+          [insertedVideoPost.id, userId, '', null, 1],
+        );
+      });
+
+      it('5.1: rejects video post create with non-empty content (400 VALIDATION_FAILED)', async () => {
+        const response = await app.inject({
+          method: 'POST',
+          url: '/api/posts',
+          headers: { authorization: `Bearer ${token}` },
+          payload: {
+            title: 'Bad video',
+            contentType: 'video',
+            visibility: 'public',
+            content: 'hi',
+          },
+        });
+
+        expect(response.statusCode).toBe(400);
+        // No DB write — schema rejects before route work
+        expect(mockQuery).not.toHaveBeenCalledWith(
+          expect.stringMatching(/INSERT INTO posts/),
+          expect.any(Array),
+        );
+      });
+    });
+
+    describe('PATCH /api/posts/:id — visibility-flip SAGA (5.9)', () => {
+      it('routes video visibility change through videoPipeline.flipVisibility (happy path)', async () => {
+        const videoQ = await import('../../db/queries/video.js');
+        const getPostVideoSpy = vi.spyOn(videoQ, 'getPostVideo').mockResolvedValueOnce({
+          postId,
+          cfUid: 'cf-abc',
+          pendingCfUid: null,
+          status: 'ready',
+          durationSec: null,
+          sizeBytes: null,
+          transcript: null,
+          playbackRequiresSignedUrl: false,
+          lastError: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+        const flipSpy = vi
+          .spyOn(app.videoPipeline, 'flipVisibility')
+          .mockResolvedValueOnce(undefined);
+
+        // findPostById — public video
+        mockQuery.mockResolvedValueOnce({ rows: [videoPostRow], rowCount: 1 });
+        // updatePost
+        mockQuery.mockResolvedValueOnce({
+          rows: [{ ...videoPostRow, visibility: 'private' }],
+          rowCount: 1,
+        });
+        mockFindFeedPostById.mockResolvedValueOnce(sampleFeedRow);
+
+        const response = await app.inject({
+          method: 'PATCH',
+          url: `/api/posts/${postId}`,
+          headers: { authorization: `Bearer ${token}` },
+          payload: { visibility: 'private' },
+        });
+
+        expect(response.statusCode).toBe(200);
+        expect(flipSpy).toHaveBeenCalledWith({
+          postId,
+          from: 'public',
+          to: 'private',
+          cfUid: 'cf-abc',
+        });
+
+        flipSpy.mockRestore();
+        getPostVideoSpy.mockRestore();
+      });
+
+      it('returns 502 with VIDEO_VISIBILITY_FLIP_FAILED envelope on CF failure', async () => {
+        const videoQ = await import('../../db/queries/video.js');
+        const getPostVideoSpy = vi.spyOn(videoQ, 'getPostVideo').mockResolvedValueOnce({
+          postId,
+          cfUid: 'cf-abc',
+          pendingCfUid: null,
+          status: 'ready',
+          durationSec: null,
+          sizeBytes: null,
+          transcript: null,
+          playbackRequiresSignedUrl: false,
+          lastError: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+        const flipSpy = vi
+          .spyOn(app.videoPipeline, 'flipVisibility')
+          .mockRejectedValueOnce(new Error('VIDEO_VISIBILITY_FLIP_FAILED: cf 500'));
+
+        mockQuery.mockResolvedValueOnce({ rows: [videoPostRow], rowCount: 1 });
+
+        const response = await app.inject({
+          method: 'PATCH',
+          url: `/api/posts/${postId}`,
+          headers: { authorization: `Bearer ${token}` },
+          payload: { visibility: 'private' },
+        });
+
+        expect(response.statusCode).toBe(502);
+        const body = response.json();
+        expect(body.code).toBe('VIDEO_VISIBILITY_FLIP_FAILED');
+        expect(body.error).toBe('Could not change visibility');
+        expect(body.details.cause).toContain('VIDEO_VISIBILITY_FLIP_FAILED');
+
+        flipSpy.mockRestore();
+        getPostVideoSpy.mockRestore();
+      });
+
+      it('returns 502 when flip throws a non-Error with VIDEO_VISIBILITY_FLIP_FAILED string', async () => {
+        // err instanceof Error is false here → message becomes the 'unknown'
+        // fallback. The if-branch then bails since message does not include
+        // VIDEO_VISIBILITY_FLIP_FAILED — surfaces 500 instead.
+        const videoQ = await import('../../db/queries/video.js');
+        const getPostVideoSpy = vi.spyOn(videoQ, 'getPostVideo').mockResolvedValueOnce({
+          postId,
+          cfUid: 'cf-abc',
+          pendingCfUid: null,
+          status: 'ready',
+          durationSec: null,
+          sizeBytes: null,
+          transcript: null,
+          playbackRequiresSignedUrl: false,
+          lastError: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+        const flipSpy = vi
+          .spyOn(app.videoPipeline, 'flipVisibility')
+          // Throw a non-Error (string) so the `err instanceof Error` ternary
+          // hits the `: 'unknown'` branch.
+          .mockImplementationOnce(() => {
+            throw 'not an error object';
+          });
+
+        mockQuery.mockResolvedValueOnce({ rows: [videoPostRow], rowCount: 1 });
+
+        const response = await app.inject({
+          method: 'PATCH',
+          url: `/api/posts/${postId}`,
+          headers: { authorization: `Bearer ${token}` },
+          payload: { visibility: 'private' },
+        });
+
+        // The fallback message 'unknown' does NOT include VIDEO_VISIBILITY_FLIP_FAILED,
+        // so the catch rethrows → Fastify returns 500.
+        expect(response.statusCode).toBe(500);
+
+        flipSpy.mockRestore();
+        getPostVideoSpy.mockRestore();
+      });
+
+      it('rethrows unrelated errors so they surface as 500', async () => {
+        const videoQ = await import('../../db/queries/video.js');
+        const getPostVideoSpy = vi.spyOn(videoQ, 'getPostVideo').mockResolvedValueOnce({
+          postId,
+          cfUid: 'cf-abc',
+          pendingCfUid: null,
+          status: 'ready',
+          durationSec: null,
+          sizeBytes: null,
+          transcript: null,
+          playbackRequiresSignedUrl: false,
+          lastError: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+        const flipSpy = vi
+          .spyOn(app.videoPipeline, 'flipVisibility')
+          .mockRejectedValueOnce(new Error('something else went wrong'));
+
+        mockQuery.mockResolvedValueOnce({ rows: [videoPostRow], rowCount: 1 });
+
+        const response = await app.inject({
+          method: 'PATCH',
+          url: `/api/posts/${postId}`,
+          headers: { authorization: `Bearer ${token}` },
+          payload: { visibility: 'private' },
+        });
+
+        expect(response.statusCode).toBe(500);
+
+        flipSpy.mockRestore();
+        getPostVideoSpy.mockRestore();
+      });
+
+      it('skips SAGA when no post_videos row exists', async () => {
+        const videoQ = await import('../../db/queries/video.js');
+        const getPostVideoSpy = vi.spyOn(videoQ, 'getPostVideo').mockResolvedValueOnce(null);
+        const flipSpy = vi.spyOn(app.videoPipeline, 'flipVisibility');
+
+        mockQuery.mockResolvedValueOnce({ rows: [videoPostRow], rowCount: 1 });
+        mockQuery.mockResolvedValueOnce({
+          rows: [{ ...videoPostRow, visibility: 'private' }],
+          rowCount: 1,
+        });
+        mockFindFeedPostById.mockResolvedValueOnce(sampleFeedRow);
+
+        const response = await app.inject({
+          method: 'PATCH',
+          url: `/api/posts/${postId}`,
+          headers: { authorization: `Bearer ${token}` },
+          payload: { visibility: 'private' },
+        });
+
+        expect(response.statusCode).toBe(200);
+        expect(flipSpy).not.toHaveBeenCalled();
+
+        flipSpy.mockRestore();
+        getPostVideoSpy.mockRestore();
+      });
+
+      it('non-video posts are unaffected by the SAGA branch', async () => {
+        const flipSpy = vi.spyOn(app.videoPipeline, 'flipVisibility');
+
+        // findPostById — snippet
+        mockQuery.mockResolvedValueOnce({ rows: [samplePostRow], rowCount: 1 });
+        // updatePost
+        mockQuery.mockResolvedValueOnce({
+          rows: [{ ...samplePostRow, visibility: 'private' }],
+          rowCount: 1,
+        });
+        mockFindFeedPostById.mockResolvedValueOnce(sampleFeedRow);
+
+        const response = await app.inject({
+          method: 'PATCH',
+          url: `/api/posts/${postId}`,
+          headers: { authorization: `Bearer ${token}` },
+          payload: { visibility: 'private' },
+        });
+
+        expect(response.statusCode).toBe(200);
+        expect(flipSpy).not.toHaveBeenCalled();
+
+        flipSpy.mockRestore();
+      });
+
+      it('does NOT trigger SAGA when visibility unchanged on a video post', async () => {
+        const flipSpy = vi.spyOn(app.videoPipeline, 'flipVisibility');
+
+        mockQuery.mockResolvedValueOnce({ rows: [videoPostRow], rowCount: 1 });
+        mockQuery.mockResolvedValueOnce({
+          rows: [{ ...videoPostRow, title: 'New title' }],
+          rowCount: 1,
+        });
+        mockFindFeedPostById.mockResolvedValueOnce(sampleFeedRow);
+
+        const response = await app.inject({
+          method: 'PATCH',
+          url: `/api/posts/${postId}`,
+          headers: { authorization: `Bearer ${token}` },
+          payload: { title: 'New title' },
+        });
+
+        expect(response.statusCode).toBe(200);
+        expect(flipSpy).not.toHaveBeenCalled();
+
+        flipSpy.mockRestore();
+      });
+    });
+
+    describe('DELETE /api/posts/:id — video (5.10)', () => {
+      it('calls cf.deleteAsset(cfUid) BEFORE the DB delete', async () => {
+        const videoQ = await import('../../db/queries/video.js');
+        const getPostVideoSpy = vi.spyOn(videoQ, 'getPostVideo').mockResolvedValueOnce({
+          postId,
+          cfUid: 'cf-xyz',
+          pendingCfUid: 'cf-pending',
+          status: 'ready',
+          durationSec: null,
+          sizeBytes: null,
+          transcript: null,
+          playbackRequiresSignedUrl: false,
+          lastError: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+        const deleteAssetSpy = vi
+          .spyOn(app.cloudflareStream, 'deleteAsset')
+          .mockResolvedValue(undefined);
+
+        // findPostById
+        mockQuery.mockResolvedValueOnce({ rows: [videoPostRow], rowCount: 1 });
+        // softDeletePost
+        mockQuery.mockResolvedValueOnce({ rows: [{ id: postId }], rowCount: 1 });
+
+        const response = await app.inject({
+          method: 'DELETE',
+          url: `/api/posts/${postId}`,
+          headers: { authorization: `Bearer ${token}` },
+        });
+
+        expect(response.statusCode).toBe(204);
+        expect(deleteAssetSpy).toHaveBeenCalledWith('cf-xyz');
+        expect(deleteAssetSpy).toHaveBeenCalledWith('cf-pending');
+
+        deleteAssetSpy.mockRestore();
+        getPostVideoSpy.mockRestore();
+      });
+
+      it('logs warn on CF failure but still removes the post', async () => {
+        const videoQ = await import('../../db/queries/video.js');
+        const getPostVideoSpy = vi.spyOn(videoQ, 'getPostVideo').mockResolvedValueOnce({
+          postId,
+          cfUid: 'cf-xyz',
+          pendingCfUid: null,
+          status: 'ready',
+          durationSec: null,
+          sizeBytes: null,
+          transcript: null,
+          playbackRequiresSignedUrl: false,
+          lastError: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+        const deleteAssetSpy = vi
+          .spyOn(app.cloudflareStream, 'deleteAsset')
+          .mockRejectedValueOnce(new Error('cf 500'));
+        const warnSpy = vi.spyOn(app.log, 'warn');
+
+        mockQuery.mockResolvedValueOnce({ rows: [videoPostRow], rowCount: 1 });
+        mockQuery.mockResolvedValueOnce({ rows: [{ id: postId }], rowCount: 1 });
+
+        const response = await app.inject({
+          method: 'DELETE',
+          url: `/api/posts/${postId}`,
+          headers: { authorization: `Bearer ${token}` },
+        });
+
+        expect(response.statusCode).toBe(204);
+        const orphanCall = warnSpy.mock.calls.find(
+          (args) => (args[0] as { event?: string })?.event === 'video.pipeline.orphan-cf-asset',
+        );
+        expect(orphanCall, 'expected video.pipeline.orphan-cf-asset warn log').toBeDefined();
+
+        deleteAssetSpy.mockRestore();
+        getPostVideoSpy.mockRestore();
+      });
+
+      it('skips CF call entirely when no post_videos row exists', async () => {
+        const videoQ = await import('../../db/queries/video.js');
+        const getPostVideoSpy = vi.spyOn(videoQ, 'getPostVideo').mockResolvedValueOnce(null);
+        const deleteAssetSpy = vi.spyOn(app.cloudflareStream, 'deleteAsset');
+
+        mockQuery.mockResolvedValueOnce({ rows: [videoPostRow], rowCount: 1 });
+        mockQuery.mockResolvedValueOnce({ rows: [{ id: postId }], rowCount: 1 });
+
+        const response = await app.inject({
+          method: 'DELETE',
+          url: `/api/posts/${postId}`,
+          headers: { authorization: `Bearer ${token}` },
+        });
+
+        expect(response.statusCode).toBe(204);
+        expect(deleteAssetSpy).not.toHaveBeenCalled();
+
+        deleteAssetSpy.mockRestore();
+        getPostVideoSpy.mockRestore();
+      });
+    });
+
+    describe('GET /api/posts/:id — video field (5.13)', () => {
+      const videoPostWithRevision: PostWithRevisionRow = {
+        ...videoPostRow,
+        revision_id: '880e8400-e29b-41d4-a716-446655440111',
+        content: '',
+        revision_number: 1,
+        message: null,
+        tags: null,
+      };
+
+      it('owner sees full video object with cfUid + pendingCfUid', async () => {
+        const videoQ = await import('../../db/queries/video.js');
+        const getPostVideoSpy = vi.spyOn(videoQ, 'getPostVideo').mockResolvedValueOnce({
+          postId,
+          cfUid: 'cf-owner',
+          pendingCfUid: 'cf-pending',
+          status: 'ready',
+          durationSec: 100,
+          sizeBytes: 999,
+          transcript: 'ts',
+          playbackRequiresSignedUrl: false,
+          lastError: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+
+        // findPostWithLatestRevision (owner request)
+        mockQuery.mockResolvedValueOnce({
+          rows: [videoPostWithRevision],
+          rowCount: 1,
+        });
+
+        const response = await app.inject({
+          method: 'GET',
+          url: `/api/posts/${postId}`,
+          headers: { authorization: `Bearer ${token}` },
+        });
+
+        expect(response.statusCode).toBe(200);
+        const body = response.json();
+        expect(body.post.video).toEqual({
+          status: 'ready',
+          cfUid: 'cf-owner',
+          pendingCfUid: 'cf-pending',
+          lastError: null,
+          playbackRequiresSignedUrl: false,
+        });
+
+        getPostVideoSpy.mockRestore();
+      });
+
+      it('non-owner of public video sees only { status, pendingReplacement }', async () => {
+        const videoQ = await import('../../db/queries/video.js');
+        const getPostVideoSpy = vi.spyOn(videoQ, 'getPostVideo').mockResolvedValueOnce({
+          postId,
+          cfUid: 'cf-secret',
+          pendingCfUid: 'cf-pending-secret',
+          status: 'ready',
+          durationSec: 100,
+          sizeBytes: 999,
+          transcript: 'ts',
+          playbackRequiresSignedUrl: false,
+          lastError: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+
+        mockQuery.mockResolvedValueOnce({
+          rows: [videoPostWithRevision],
+          rowCount: 1,
+        });
+
+        const response = await app.inject({
+          method: 'GET',
+          url: `/api/posts/${postId}`,
+          headers: { authorization: `Bearer ${otherToken}` },
+        });
+
+        expect(response.statusCode).toBe(200);
+        const body = response.json();
+        expect(body.post.video).toEqual({ status: 'ready', pendingReplacement: true });
+        expect(body.post.video.cfUid).toBeUndefined();
+        expect(body.post.video.pendingCfUid).toBeUndefined();
+
+        getPostVideoSpy.mockRestore();
+      });
+
+      it('non-owner with no pending replacement sees pendingReplacement=false', async () => {
+        const videoQ = await import('../../db/queries/video.js');
+        const getPostVideoSpy = vi.spyOn(videoQ, 'getPostVideo').mockResolvedValueOnce({
+          postId,
+          cfUid: 'cf-x',
+          pendingCfUid: null,
+          status: 'ready',
+          durationSec: null,
+          sizeBytes: null,
+          transcript: null,
+          playbackRequiresSignedUrl: false,
+          lastError: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+
+        mockQuery.mockResolvedValueOnce({
+          rows: [videoPostWithRevision],
+          rowCount: 1,
+        });
+
+        const response = await app.inject({
+          method: 'GET',
+          url: `/api/posts/${postId}`,
+          headers: { authorization: `Bearer ${otherToken}` },
+        });
+
+        expect(response.statusCode).toBe(200);
+        const body = response.json();
+        expect(body.post.video).toEqual({ status: 'ready', pendingReplacement: false });
+
+        getPostVideoSpy.mockRestore();
+      });
+
+      it('non-video posts have no video field', async () => {
+        mockQuery.mockResolvedValueOnce({
+          rows: [samplePostWithRevisionRow],
+          rowCount: 1,
+        });
+
+        const response = await app.inject({
+          method: 'GET',
+          url: `/api/posts/${postId}`,
+          headers: { authorization: `Bearer ${token}` },
+        });
+
+        expect(response.statusCode).toBe(200);
+        const body = response.json();
+        expect(body.post.video).toBeUndefined();
+      });
+
+      it('video post without post_videos row omits the video field', async () => {
+        const videoQ = await import('../../db/queries/video.js');
+        const getPostVideoSpy = vi.spyOn(videoQ, 'getPostVideo').mockResolvedValueOnce(null);
+
+        mockQuery.mockResolvedValueOnce({
+          rows: [videoPostWithRevision],
+          rowCount: 1,
+        });
+
+        const response = await app.inject({
+          method: 'GET',
+          url: `/api/posts/${postId}`,
+          headers: { authorization: `Bearer ${token}` },
+        });
+
+        expect(response.statusCode).toBe(200);
+        const body = response.json();
+        expect(body.post.video).toBeUndefined();
+
+        getPostVideoSpy.mockRestore();
+      });
+    });
+  });
 });

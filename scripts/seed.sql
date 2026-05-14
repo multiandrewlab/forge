@@ -209,4 +209,61 @@ SELECT
   'b0000000-0000-0000-0000-000000000006'
 FROM generate_series(1, 25) AS n;
 
+-- ============================================================
+-- #102 WU7a — Video posts fixtures for Bruno regression tests
+-- ============================================================
+
+-- bruno_other_user — owner of the private video fixture (not testuser).
+-- Reuses testuser's bcrypt hash literal (also encodes "password123") so the
+-- inline-login path in WU7b can authenticate with deterministic creds.
+INSERT INTO users (id, email, display_name, avatar_url, auth_provider, password_hash) VALUES
+  ('a0000000-0000-0000-0000-000000000098', 'bruno_other@example.com', 'Bruno Other User', NULL, 'local', '$2b$12$jrcHUcVQnE.swctPk5GnreW9hkkyFqh8A9p2GnEaRrbxEaxXESYw2')
+ON CONFLICT (id) DO NOTHING;
+
+-- videoPostId — testuser-owned, public, ready video. Backs the playback,
+-- poster, suggestions, vote, bookmark, comment, and replace-conflict Bruno
+-- tests in bruno/posts/video/.
+INSERT INTO posts (id, author_id, title, content_type, language, visibility, is_draft, view_count) VALUES
+  ('c0000000-0000-0000-0000-000000000088', 'a0000000-0000-0000-0000-000000000099', 'Seed video post (public)', 'video', NULL, 'public', false, 0)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO post_revisions (id, post_id, author_id, content, video_cf_uid, message, revision_number) VALUES
+  ('d0000000-0000-0000-0000-000000000088', 'c0000000-0000-0000-0000-000000000088', 'a0000000-0000-0000-0000-000000000099', '', 'seedcfuid_88', 'Initial video revision', 1)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO post_videos (post_id, cf_uid, status, duration_sec, size_bytes, transcript, playback_requires_signed_url) VALUES
+  ('c0000000-0000-0000-0000-000000000088', 'seedcfuid_88', 'ready', 30, 12345, 'xenophontic_observability tutorial content for searchability tests', false)
+ON CONFLICT (post_id) DO NOTHING;
+
+INSERT INTO post_video_ai_runs (id, post_id, title, description, tags, model, transcript_chars, was_truncated, prompt_version) VALUES
+  ('f0000000-0000-0000-0000-000000000088', 'c0000000-0000-0000-0000-000000000088', 'Seed video title', 'Seed video description', ARRAY['typescript','demo'], 'mock', 42, false, 'v1')
+ON CONFLICT (id) DO NOTHING;
+
+-- privateVideoPostId — bruno_other_user-owned, private, ready video. Used to
+-- assert visibility-before-existence on playback + poster routes: testuser
+-- (the Bruno bootstrap actor) must NOT be able to read this post.
+INSERT INTO posts (id, author_id, title, content_type, language, visibility, is_draft, view_count) VALUES
+  ('c0000000-0000-0000-0000-000000000097', 'a0000000-0000-0000-0000-000000000098', 'Seed video post (private)', 'video', NULL, 'private', false, 0)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO post_revisions (id, post_id, author_id, content, video_cf_uid, message, revision_number) VALUES
+  ('d0000000-0000-0000-0000-000000000097', 'c0000000-0000-0000-0000-000000000097', 'a0000000-0000-0000-0000-000000000098', '', 'seedcfuid_97', 'Initial private video revision', 1)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO post_videos (post_id, cf_uid, status, duration_sec, size_bytes, transcript, playback_requires_signed_url) VALUES
+  ('c0000000-0000-0000-0000-000000000097', 'seedcfuid_97', 'ready', 30, 12345, NULL, true)
+ON CONFLICT (post_id) DO NOTHING;
+
+-- searchTranscriptPost — snippet post used by WU7b's
+-- search-transcript-vs-title-ranking.bru. Title contains the unique token
+-- 'xenophontic_observability' so its A-weight match outranks the
+-- D-weighted transcript hit on videoPostId.
+INSERT INTO posts (id, author_id, title, content_type, language, visibility, is_draft, view_count) VALUES
+  ('c0000000-0000-0000-0000-000000000096', 'a0000000-0000-0000-0000-000000000099', 'xenophontic_observability tutorial', 'snippet', 'typescript', 'public', false, 0)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO post_revisions (id, post_id, author_id, content, message, revision_number) VALUES
+  ('d0000000-0000-0000-0000-000000000096', 'c0000000-0000-0000-0000-000000000096', 'a0000000-0000-0000-0000-000000000099', 'tutorial body — title carries the rare token', 'Initial fixture', 1)
+ON CONFLICT (id) DO NOTHING;
+
 COMMIT;

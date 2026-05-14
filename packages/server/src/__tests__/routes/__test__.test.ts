@@ -309,12 +309,21 @@ describe('POST /api/__test__/reset — worker-scoped path', () => {
         'DELETE FROM comments               WHERE author_id = $1',
         [userId],
       );
+      // WU5b 5.12: cf_stream_webhook_events purge precedes posts so the
+      // post_videos join still resolves.
       expect(mockClient.query).toHaveBeenNthCalledWith(
         5,
+        expect.stringMatching(
+          /DELETE FROM cf_stream_webhook_events[\s\S]*WHERE cf_uid IN[\s\S]*post_videos[\s\S]*SELECT id FROM posts WHERE author_id = \$1/,
+        ),
+        [userId],
+      );
+      expect(mockClient.query).toHaveBeenNthCalledWith(
+        6,
         'DELETE FROM posts                  WHERE author_id = $1',
         [userId],
       );
-      expect(mockClient.query).toHaveBeenCalledTimes(5);
+      expect(mockClient.query).toHaveBeenCalledTimes(6);
       await app.close();
     });
   }
@@ -531,6 +540,230 @@ describe('POST /api/__test__/reset — worker-scoped path', () => {
     expect(pgTransaction).not.toHaveBeenCalled();
     expect(pgQuery).toHaveBeenCalledWith(expect.stringContaining('pg_advisory_lock'));
     expect(pgQuery).toHaveBeenCalledWith(expect.stringContaining('pg_advisory_unlock'));
+    await app.close();
+  });
+
+  it('clears cf_stream_webhook_events rows for the workers posts (WU5b 5.12)', async () => {
+    const mockClient = { query: vi.fn().mockResolvedValue({ rows: [] }) };
+    const pgTransaction = vi.fn(
+      async (
+        fn: (client: {
+          query: (sql: string, params?: unknown[]) => Promise<unknown>;
+        }) => Promise<unknown>,
+      ) => fn(mockClient),
+    );
+    const app = await buildAppWithTestRoutes({
+      pgQuery: vi.fn(async () => undefined),
+      pgTransaction,
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/__test__/reset',
+      headers: { 'X-E2E-Secret': 'test', 'X-E2E-Worker-Id': '0' },
+    });
+
+    expect(res.statusCode).toBe(204);
+    const userId = WORKER_USER_IDS['0'];
+    // Must run BEFORE posts so the join still resolves.
+    const calls = mockClient.query.mock.calls.map((c) => c[0] as string);
+    const idxWebhook = calls.findIndex((sql) => /cf_stream_webhook_events/.test(sql));
+    const idxPosts = calls.findIndex((sql) => /DELETE FROM posts\s/.test(sql));
+    expect(idxWebhook).toBeGreaterThanOrEqual(0);
+    expect(idxPosts).toBeGreaterThanOrEqual(0);
+    expect(idxWebhook).toBeLessThan(idxPosts);
+    expect(mockClient.query).toHaveBeenCalledWith(
+      expect.stringMatching(/cf_stream_webhook_events/),
+      [userId],
+    );
+    await app.close();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /api/__test__/cf-stream/advance (WU5b 5.11)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('POST /api/__test__/cf-stream/advance', () => {
+  async function buildAdvanceApp(opts: {
+    secret?: string;
+    isCI?: boolean;
+    nodeEnv?: string;
+    enableTestRoutes?: string;
+    host?: string;
+    cf?: {
+      simulateLifecycle: ReturnType<typeof vi.fn>;
+    };
+    pipeline?: object;
+  }) {
+    const app = Fastify();
+    await registerTestRoutes(app, {
+      env: {
+        ENABLE_TEST_ROUTES: opts.enableTestRoutes ?? '1',
+        NODE_ENV: opts.nodeEnv ?? 'test',
+      },
+      secret: opts.secret ?? 'test',
+      isCI: opts.isCI ?? true,
+      host: opts.host ?? '127.0.0.1',
+      pgQuery: vi.fn(async () => undefined),
+      pgTransaction: vi.fn(),
+      cloudflareStream: (opts.cf ?? {
+        simulateLifecycle: vi.fn(async () => undefined),
+      }) as never,
+      videoPipeline: (opts.pipeline ?? {
+        handleWebhook: vi.fn(async () => undefined),
+      }) as never,
+    });
+    return app;
+  }
+
+  it('happy path: 204 and invokes simulateLifecycle', async () => {
+    const simulateLifecycle = vi.fn(async () => undefined);
+    const pipeline = { handleWebhook: vi.fn(async () => undefined) };
+    const app = await buildAdvanceApp({ cf: { simulateLifecycle }, pipeline });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/__test__/cf-stream/advance',
+      headers: { 'X-E2E-Secret': 'test', 'content-type': 'application/json' },
+      payload: { cfUid: 'cf-mock-1', toState: 'ready' },
+    });
+
+    expect(res.statusCode).toBe(204);
+    expect(simulateLifecycle).toHaveBeenCalledWith('cf-mock-1', { handler: pipeline });
+    await app.close();
+  });
+
+  it('returns 403 when X-E2E-Secret is missing', async () => {
+    const app = await buildAdvanceApp({});
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/__test__/cf-stream/advance',
+      headers: { 'content-type': 'application/json' },
+      payload: { cfUid: 'cf-mock-1', toState: 'ready' },
+    });
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it('returns 403 when X-E2E-Secret is wrong (timingSafeEqual)', async () => {
+    const app = await buildAdvanceApp({});
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/__test__/cf-stream/advance',
+      headers: { 'X-E2E-Secret': 'wrong', 'content-type': 'application/json' },
+      payload: { cfUid: 'cf-mock-1', toState: 'ready' },
+    });
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it('returns 403 when an Origin header is present', async () => {
+    const app = await buildAdvanceApp({});
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/__test__/cf-stream/advance',
+      headers: {
+        'X-E2E-Secret': 'test',
+        Origin: 'http://evil.example',
+        'content-type': 'application/json',
+      },
+      payload: { cfUid: 'cf-mock-1', toState: 'ready' },
+    });
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it('returns 400 when body is invalid', async () => {
+    const simulateLifecycle = vi.fn(async () => undefined);
+    const app = await buildAdvanceApp({ cf: { simulateLifecycle } });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/__test__/cf-stream/advance',
+      headers: { 'X-E2E-Secret': 'test', 'content-type': 'application/json' },
+      payload: { cfUid: 'cf-mock-1', toState: 'not-ready' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('INVALID_ADVANCE_BODY');
+    expect(simulateLifecycle).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('returns 400 when body is null (exercises ?? {} fallback)', async () => {
+    const simulateLifecycle = vi.fn(async () => undefined);
+    const app = await buildAdvanceApp({ cf: { simulateLifecycle } });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/__test__/cf-stream/advance',
+      headers: { 'X-E2E-Secret': 'test' },
+      // No body sent — Fastify gives `null` to request.body
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('INVALID_ADVANCE_BODY');
+    expect(simulateLifecycle).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('returns 503 when mock cf service or pipeline is not wired', async () => {
+    // No cloudflareStream/videoPipeline passed → endpoint reports unavailable.
+    const app = Fastify();
+    await registerTestRoutes(app, {
+      env: { ENABLE_TEST_ROUTES: '1', NODE_ENV: 'test' },
+      secret: 'test',
+      isCI: true,
+      host: '127.0.0.1',
+      pgQuery: vi.fn(async () => undefined),
+      pgTransaction: vi.fn(),
+      // omit cloudflareStream + videoPipeline
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/__test__/cf-stream/advance',
+      headers: { 'X-E2E-Secret': 'test', 'content-type': 'application/json' },
+      payload: { cfUid: 'cf-mock-1', toState: 'ready' },
+    });
+    expect(res.statusCode).toBe(503);
+    expect(res.json().code).toBe('CF_STREAM_ADVANCE_UNAVAILABLE');
+    await app.close();
+  });
+
+  it('does NOT register when ENABLE_TEST_ROUTES is unset (route is 404)', async () => {
+    const app = Fastify();
+    await registerTestRoutes(app, {
+      env: {},
+      secret: 'test',
+      isCI: true,
+      host: '127.0.0.1',
+      pgQuery: vi.fn(async () => undefined),
+      pgTransaction: vi.fn(),
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/__test__/cf-stream/advance',
+      headers: { 'X-E2E-Secret': 'test', 'content-type': 'application/json' },
+      payload: { cfUid: 'cf-mock-1', toState: 'ready' },
+    });
+    expect(res.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it('does NOT register when NODE_ENV=production (route is 404)', async () => {
+    const app = Fastify();
+    await registerTestRoutes(app, {
+      env: { ENABLE_TEST_ROUTES: '1', NODE_ENV: 'production' },
+      secret: 'test',
+      isCI: true,
+      host: '127.0.0.1',
+      pgQuery: vi.fn(async () => undefined),
+      pgTransaction: vi.fn(),
+    });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/__test__/cf-stream/advance',
+      headers: { 'X-E2E-Secret': 'test', 'content-type': 'application/json' },
+      payload: { cfUid: 'cf-mock-1', toState: 'ready' },
+    });
+    expect(res.statusCode).toBe(404);
     await app.close();
   });
 });

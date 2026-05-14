@@ -1,0 +1,42 @@
+meta {
+  name: Search Ranks Title Hit Over Transcript Hit
+  type: http
+  seq: 18
+}
+
+get {
+  url: {{baseUrl}}/api/search?q=xenophontic_observability
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("title match (A-weight) outranks transcript match (D-weight)", function() {
+    const hits = res.body.snippets || [];
+    const titleIdx = hits.findIndex((r) => r.id === bru.getEnvVar("searchTranscriptPostId"));
+    const transcriptIdx = hits.findIndex((r) => r.id === bru.getEnvVar("videoPostId"));
+    expect(titleIdx, "title-match post should appear in results").to.be.greaterThan(-1);
+    expect(transcriptIdx, "transcript-match post should appear in results").to.be.greaterThan(-1);
+    expect(titleIdx, "title match should rank ahead of transcript match").to.be.lessThan(transcriptIdx);
+  });
+}
+
+docs {
+  Confirms search ranking weights: 'xenophontic_observability' appears in
+  {{searchTranscriptPostId}}'s TITLE (A-weight) and in {{videoPostId}}'s
+  transcript (D-weight, lowest). The title-match post MUST sort ahead.
+
+  This is the inverse assertion of search-by-transcript.bru: that file
+  proves transcripts contribute to FTS at all; this file proves they
+  don't outrank stronger lexemes. If this test inverts, search.ts
+  weight tuning has regressed — most likely the to_tsvector('english', ...)
+  call dropped a setweight() wrapper for one of the columns.
+}

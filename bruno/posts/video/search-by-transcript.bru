@@ -1,0 +1,38 @@
+meta {
+  name: Search Finds Video by Transcript
+  type: http
+  seq: 17
+}
+
+get {
+  url: {{baseUrl}}/api/search?q=xenophontic_observability
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("seeded video post appears in search results via its transcript", function() {
+    const hits = res.body.snippets || [];
+    expect(hits.some((r) => r.id === bru.getEnvVar("videoPostId"))).to.equal(true);
+  });
+}
+
+docs {
+  The unique token 'xenophontic_observability' is seeded into
+  {{videoPostId}}'s post_videos.transcript column. The search FTS index
+  weights transcripts at D (lowest), but a unique token must still
+  surface the post — confirming the search trigger on post_videos
+  writes into search_index.tsv as expected.
+
+  Response shape: search returns `snippets[]` (not `results[]`) per
+  packages/server/src/routes/search.ts:140. Each snippet has `id`,
+  `title`, `rank`, etc.
+}

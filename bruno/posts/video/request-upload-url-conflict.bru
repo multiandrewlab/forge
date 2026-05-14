@@ -1,0 +1,36 @@
+meta {
+  name: Request Upload URL (replace in progress conflict)
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/posts/{{videoPostId}}/video/upload-url
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "filename": "x.mp4",
+    "fileSizeBytes": 1024
+  }
+}
+
+assert {
+  res.status: eq 409
+}
+
+docs {
+  After seq 4 set pending_cf_uid on {{videoPostId}}, this second replace
+  request returns 409 VIDEO_REPLACE_IN_PROGRESS — one replacement can be
+  in flight at a time per post.
+
+  ORDER DEPENDENCY: seq 4 must run before this file. If you run files in
+  isolation, re-seed via `psql "$DATABASE_URL" -f scripts/seed.sql` between
+  runs to reset pending_cf_uid to NULL on the seeded video.
+}

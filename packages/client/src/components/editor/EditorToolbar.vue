@@ -49,6 +49,7 @@ const contentTypes: { label: string; value: ContentType }[] = [
   { label: 'Prompt', value: ContentType.Prompt },
   { label: 'Document', value: ContentType.Document },
   { label: 'Link', value: ContentType.Link },
+  { label: 'Video', value: ContentType.Video },
 ];
 
 const tagInput = ref('');

@@ -3,6 +3,11 @@ import { timingSafeEqual } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { isE2EFlagSet } from '../lib/env-guards.js';
+import type {
+  ICloudflareStreamService,
+  MockCloudflareStreamService,
+} from '../services/cloudflare-stream.js';
+import type { VideoPipelineService } from '../services/video-pipeline.js';
 
 export const E2E_RESET_LOCK_ID = 0xe2e5e70n;
 
@@ -33,6 +38,9 @@ export type TestRoutesDeps = {
   pgTransaction: <T>(
     fn: (client: { query: (sql: string, params?: unknown[]) => Promise<unknown> }) => Promise<T>,
   ) => Promise<T>;
+  // Optional: required only when the cf-stream/advance E2E endpoint is used.
+  cloudflareStream?: ICloudflareStreamService;
+  videoPipeline?: VideoPipelineService;
 };
 
 export async function registerTestRoutes(
@@ -79,6 +87,18 @@ export async function registerTestRoutes(
         await client.query('DELETE FROM votes                  WHERE user_id   = $1', [userId]);
         await client.query('DELETE FROM user_tag_subscriptions WHERE user_id   = $1', [userId]);
         await client.query('DELETE FROM comments               WHERE author_id = $1', [userId]);
+        // WU5b 5.12: clear cf_stream_webhook_events for the worker's video
+        // posts BEFORE the posts cascade, since the join resolves via
+        // post_videos → posts and is no longer reachable after the posts row
+        // is gone. Spec §11.3.
+        await client.query(
+          `DELETE FROM cf_stream_webhook_events
+            WHERE cf_uid IN (
+              SELECT cf_uid FROM post_videos
+               WHERE post_id IN (SELECT id FROM posts WHERE author_id = $1)
+            )`,
+          [userId],
+        );
         await client.query('DELETE FROM posts                  WHERE author_id = $1', [userId]);
       });
       request.log.info(
@@ -108,6 +128,39 @@ export async function registerTestRoutes(
       { workerId: process.env.TEST_WORKER_INDEX ?? 'unknown', ts: Date.now() },
       'E2E reset completed',
     );
+    return reply.code(204).send();
+  });
+
+  // ─── POST /api/__test__/cf-stream/advance ─────────────────────────────────
+  // E2E-only: drive the MockCloudflareStreamService lifecycle directly so a
+  // spec can transition a video post from `uploading` to `ready` without
+  // actually trafficking with CF. Inherits ALL 5 guards (ENABLE_TEST_ROUTES,
+  // NODE_ENV, loopback-or-CI, X-E2E-Secret, Origin rejection).
+  // Body: { cfUid: string, toState: 'ready' }
+  app.post('/api/__test__/cf-stream/advance', async (request, reply) => {
+    if (request.headers.origin !== undefined) {
+      return reply.code(403).send({ error: 'Origin header not allowed on test routes' });
+    }
+    const provided = request.headers['x-e2e-secret'];
+    if (typeof provided !== 'string' || !secretsEqual(provided, deps.secret)) {
+      return reply.code(403).send({ error: 'invalid X-E2E-Secret' });
+    }
+    const body = (request.body ?? {}) as { cfUid?: unknown; toState?: unknown };
+    if (typeof body.cfUid !== 'string' || body.toState !== 'ready') {
+      return reply.code(400).send({
+        error: 'cfUid (string) and toState ("ready") are required',
+        code: 'INVALID_ADVANCE_BODY',
+      });
+    }
+    const cf = deps.cloudflareStream as MockCloudflareStreamService | undefined;
+    const pipeline = deps.videoPipeline;
+    if (!cf || !pipeline || typeof cf.simulateLifecycle !== 'function') {
+      return reply.code(503).send({
+        error: 'cf-stream/advance not available (mock service not wired)',
+        code: 'CF_STREAM_ADVANCE_UNAVAILABLE',
+      });
+    }
+    await cf.simulateLifecycle(body.cfUid, { handler: pipeline });
     return reply.code(204).send();
   });
 }

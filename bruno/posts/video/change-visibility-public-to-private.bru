@@ -1,0 +1,75 @@
+meta {
+  name: Change Video Visibility (public → private)
+  type: http
+  seq: 16
+}
+
+patch {
+  url: {{baseUrl}}/api/posts/{{videoPostId}}
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "visibility": "private"
+  }
+}
+
+script:post-response {
+  // Flip back to public so this fixture stays re-runnable. The PATCH route
+  // routes video visibility flips through videoPipeline.flipVisibility,
+  // which in mock-CF mode updates `requireSignedURLs` on the in-memory
+  // asset and persists `playback_requires_signed_url` in post_videos.
+  // Re-running the same `.bru` file (or a follow-up that reads playback)
+  // would 'see' the seeded post as private without this restore step.
+  //
+  // accessToken is set by collection.bru's pre-request via `bru.setVar`,
+  // so we read it back via `bru.getVar` (NOT `bru.getEnvVar` — that
+  // reads only the static env file, which has an empty accessToken).
+  const baseUrl = bru.getEnvVar("baseUrl");
+  const postId = bru.getEnvVar("videoPostId");
+  const token = bru.getVar("accessToken");
+  const response = await bru.sendRequest({
+    method: "PATCH",
+    url: `${baseUrl}/api/posts/${postId}`,
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    },
+    data: JSON.stringify({ visibility: "public" }),
+  });
+  if (response.status !== 200) {
+    throw new Error(
+      `Restore to public failed: status=${response.status} body=${JSON.stringify(response.data)}`,
+    );
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("post.visibility echoes the requested value", function() {
+    expect(res.body.post.visibility).to.equal("private");
+  });
+}
+
+docs {
+  Exercises the video-specific visibility-flip SAGA (packages/server/src/
+  routes/posts.ts:227+). For a video post, PATCH /:id with a visibility
+  change routes through videoPipeline.flipVisibility BEFORE the standard
+  updatePost helper runs, so CF Stream's requireSignedURLs and the local
+  playback_requires_signed_url stay in sync.
+
+  IMPORTANT: this file MUTATES seeded state for {{videoPostId}}. The
+  post-response script flips it back to 'public' so subsequent suite
+  runs (and the playback assertion on seq 6) keep their seeded
+  preconditions. If this file fails mid-way and the restore step is
+  skipped, re-running scripts/seed.sql (via psql) is the recovery path.
+}

@@ -1,0 +1,105 @@
+meta {
+  name: CF Stream Webhook (duplicate event_id → idempotent 200)
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/cf-stream/webhook
+  body: json
+  auth: none
+}
+
+headers {
+  content-type: application/json
+}
+
+body:json {
+  {
+    "id": "placeholder — overwritten in pre-request",
+    "type": "video.ready",
+    "uid": "seedcfuid_88",
+    "data": { "readyToStream": true }
+  }
+}
+
+script:pre-request {
+  // Build a body with an event_id that is STABLE within this Bruno run
+  // (so the second send below dedupes against the first) but UNIQUE per
+  // run (so a re-run isn't blocked by a previous run's row in
+  // cf_stream_webhook_events).
+  const CryptoJS = require("crypto-js");
+  const ts = Math.floor(Date.now() / 1000);
+  const eventId = `bru-evt-dup-${ts}-${Math.floor(Math.random() * 1e9)}`;
+  const body = {
+    id: eventId,
+    type: "video.ready",
+    uid: "seedcfuid_88",
+    data: { readyToStream: true },
+  };
+  const rawBody = JSON.stringify(body);
+  const secret = bru.getEnvVar("cfStreamWebhookSecret");
+  const sig = CryptoJS.HmacSHA256(`${ts}.${rawBody}`, secret).toString(CryptoJS.enc.Hex);
+  req.setBody(body);
+  req.setHeader("Webhook-Signature", `t=${ts},v1=${sig}`);
+  // Stash the exact signed bytes so post-response can re-send them.
+  bru.setVar("_dupRawBody", rawBody);
+  bru.setVar("_dupSignature", `t=${ts},v1=${sig}`);
+}
+
+script:post-response {
+  // Second send: same body + same Webhook-Signature header. The first
+  // INSERT into cf_stream_webhook_events succeeded; the second must
+  // short-circuit on `eventId` UNIQUE conflict and reply 200 no-op
+  // (packages/server/src/routes/cf-stream-webhook.ts:139).
+  const baseUrl = bru.getEnvVar("baseUrl");
+  const rawBody = bru.getVar("_dupRawBody");
+  const signature = bru.getVar("_dupSignature");
+  // Pass `data` as the pre-stringified rawBody. Axios leaves strings
+  // untouched (only objects/arrays get JSON.stringify'd), so the bytes
+  // the server sees are bit-identical to the first send — and the HMAC
+  // we signed for the first send is still valid. transformRequest does
+  // not survive the QuickJS sandbox marshaller (functions arrive as
+  // null), so we rely on axios' string-passthrough instead.
+  const response = await bru.sendRequest({
+    method: "POST",
+    url: `${baseUrl}/api/cf-stream/webhook`,
+    headers: {
+      "content-type": "application/json",
+      "Webhook-Signature": signature,
+    },
+    data: rawBody,
+  });
+  if (response.status !== 200) {
+    throw new Error(`Expected idempotent 200 on duplicate webhook, got ${response.status}`);
+  }
+  if (response.data && response.data.ok !== true) {
+    throw new Error(`Expected {ok:true} on duplicate webhook, got ${JSON.stringify(response.data)}`);
+  }
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("first send is acknowledged", function() {
+    expect(res.body.ok).to.equal(true);
+  });
+}
+
+docs {
+  Idempotency: replay-protection guarantees the pipeline never processes
+  the same event twice. The post-response script re-sends the EXACT
+  same bytes + Webhook-Signature header. The route's
+  `insertWebhookEvent` returns `false` on UNIQUE-constraint conflict
+  (cf_stream_webhook_events.event_id), short-circuiting to 200 no-op
+  WITHOUT dispatching to videoPipeline.handleWebhook a second time.
+
+  The duplicate send uses `bru.sendRequest` (QuickJS-sandbox-safe)
+  instead of axios — see bruno/posts/video/README.md "HMAC-signed
+  webhook" section for the pattern. Importantly, `transformRequest:
+  [(d) => d]` is passed so axios sends the raw stringified bytes
+  unchanged — otherwise axios would re-stringify the already-stringified
+  data and invalidate the HMAC.
+}

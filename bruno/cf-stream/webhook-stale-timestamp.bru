@@ -1,0 +1,66 @@
+meta {
+  name: CF Stream Webhook (stale timestamp → 400)
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/cf-stream/webhook
+  body: json
+  auth: none
+}
+
+headers {
+  content-type: application/json
+}
+
+body:json {
+  {
+    "id": "placeholder — overwritten in pre-request",
+    "type": "video.ready",
+    "uid": "seedcfuid_88",
+    "data": { "readyToStream": true }
+  }
+}
+
+script:pre-request {
+  // Sign correctly but with a timestamp 10 minutes in the past so the
+  // route's `|now - t| > 5 * 60` freshness check rejects it. The
+  // signature MUST validate first — otherwise we'd hit the 401 branch
+  // and miss the timestamp check we want to assert.
+  const CryptoJS = require("crypto-js");
+  const ts = Math.floor(Date.now() / 1000) - 600; // 10 min stale
+  const body = {
+    id: `bru-evt-stale-${Date.now()}`,
+    type: "video.ready",
+    uid: "seedcfuid_88",
+    data: { readyToStream: true },
+  };
+  const rawBody = JSON.stringify(body);
+  const secret = bru.getEnvVar("cfStreamWebhookSecret");
+  const sig = CryptoJS.HmacSHA256(`${ts}.${rawBody}`, secret).toString(CryptoJS.enc.Hex);
+  req.setBody(body);
+  req.setHeader("Webhook-Signature", `t=${ts},v1=${sig}`);
+}
+
+assert {
+  res.status: eq 400
+}
+
+tests {
+  test("response carries WEBHOOK_TIMESTAMP_STALE code", function() {
+    expect(res.body.code).to.equal("WEBHOOK_TIMESTAMP_STALE");
+  });
+}
+
+docs {
+  Freshness check: any signed event older than 5 minutes is rejected to
+  prevent capture-and-replay attacks. The signature is CORRECT (uses the
+  same secret + ts/body construction as webhook-valid.bru), so the route
+  passes the timingSafeEqual stage and only fails on
+  `Math.abs(now - t) > TIMESTAMP_TOLERANCE_SECONDS`.
+
+  Asserting `code: 'WEBHOOK_TIMESTAMP_STALE'` (the route's exact
+  enum string) catches regressions where the freshness check is
+  reordered with HMAC verification.
+}

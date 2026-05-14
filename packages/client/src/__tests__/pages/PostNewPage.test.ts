@@ -351,6 +351,68 @@ describe('PostNewPage', () => {
     });
   });
 
+  // ── Video content-type wiring (#102 WU8b) ──────────────────────
+  describe('video content-type', () => {
+    // When the user picks Video, the create call should still POST {title,
+    // contentType:'video'} BUT the destination route is the edit page (not
+    // the view page) so the VideoEditor can take over for upload + AI metadata.
+    it('routes to post-edit instead of post-view when contentType is video on save-draft', async () => {
+      mockCreatePost.mockResolvedValue('vid-1');
+      mockSaveRevision.mockResolvedValue(undefined);
+      const wrapper = await mountPage({ contentType: 'video' });
+
+      const editor = wrapper.findComponent({ name: 'PostEditor' });
+      await editor.vm.$emit('save-draft');
+      await flushPromises();
+
+      expect(mockCreatePost).toHaveBeenCalledWith(
+        expect.objectContaining({ contentType: 'video', title: 'Untitled' }),
+      );
+      expect(router.currentRoute.value.name).toBe('post-edit');
+      expect(router.currentRoute.value.params.id).toBe('vid-1');
+    });
+
+    it('routes to post-edit instead of post-view when contentType is video on publish', async () => {
+      mockCreatePost.mockResolvedValue('vid-2');
+      mockSaveRevision.mockResolvedValue(undefined);
+      mockPublishPost.mockResolvedValue(undefined);
+      const wrapper = await mountPage({ contentType: 'video' });
+
+      const editor = wrapper.findComponent({ name: 'PostEditor' });
+      await editor.vm.$emit('publish');
+      await flushPromises();
+
+      // Publish on a video post must NOT call publishPost (server gates this
+      // on video.status === 'ready'; PostNewPage cannot satisfy that since
+      // the upload has not started). We land the user on the edit page.
+      expect(mockPublishPost).not.toHaveBeenCalled();
+      expect(router.currentRoute.value.name).toBe('post-edit');
+      expect(router.currentRoute.value.params.id).toBe('vid-2');
+    });
+
+    it('does NOT call saveRevision for a video draft (video has no text body)', async () => {
+      mockCreatePost.mockResolvedValue('vid-3');
+      const wrapper = await mountPage({ contentType: 'video' });
+
+      const editor = wrapper.findComponent({ name: 'PostEditor' });
+      await editor.vm.$emit('save-draft');
+      await flushPromises();
+
+      expect(mockSaveRevision).not.toHaveBeenCalled();
+    });
+
+    it('does NOT redirect when createPost returns null for a video', async () => {
+      mockCreatePost.mockResolvedValue(null);
+      const wrapper = await mountPage({ contentType: 'video' });
+
+      const editor = wrapper.findComponent({ name: 'PostEditor' });
+      await editor.vm.$emit('save-draft');
+      await flushPromises();
+
+      expect(router.currentRoute.value.name).toBe('post-new');
+    });
+  });
+
   // ── Tag / visibility / contentType v-model handlers ──────────
   describe('v-model handlers for template-compiled emits', () => {
     it('should update visibility when PostEditor emits update:visibility', async () => {

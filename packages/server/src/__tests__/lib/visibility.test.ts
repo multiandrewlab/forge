@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { FastifyReply } from 'fastify';
-import { assertCanReadPost } from '../../lib/visibility.js';
+import { assertCanReadPost, assertCanReadPostStrict } from '../../lib/visibility.js';
 
 function makeReply() {
   const send = vi.fn();
@@ -47,5 +47,54 @@ describe('assertCanReadPost', () => {
     expect(allowed).toBe(false);
     expect(status).toHaveBeenCalledWith(403);
     expect(send).toHaveBeenCalledWith({ error: 'This post is private' });
+  });
+});
+
+describe('assertCanReadPostStrict', () => {
+  const ownerId = 'a0000000-0000-0000-0000-000000000001';
+  const otherId = 'a0000000-0000-0000-0000-000000000002';
+
+  it('returns true for a public post (no reply sent)', () => {
+    const { reply, status, send } = makeReply();
+    const post = { visibility: 'public' as const, author_id: ownerId };
+
+    const allowed = assertCanReadPostStrict(post, otherId, reply);
+
+    expect(allowed).toBe(true);
+    expect(status).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('returns true for a private post when caller is the author (no reply sent)', () => {
+    const { reply, status, send } = makeReply();
+    const post = { visibility: 'private' as const, author_id: ownerId };
+
+    const allowed = assertCanReadPostStrict(post, ownerId, reply);
+
+    expect(allowed).toBe(true);
+    expect(status).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it('returns false and sends 404 when caller is not the author of a private post (visibility-before-existence)', () => {
+    const { reply, status, send } = makeReply();
+    const post = { visibility: 'private' as const, author_id: ownerId };
+
+    const allowed = assertCanReadPostStrict(post, otherId, reply);
+
+    expect(allowed).toBe(false);
+    expect(status).toHaveBeenCalledWith(404);
+    expect(send).toHaveBeenCalledWith({ error: 'Post not found' });
+  });
+
+  it('returns true for a public post when caller is not the author (no reply sent)', () => {
+    const { reply, status, send } = makeReply();
+    const post = { visibility: 'public' as const, author_id: ownerId };
+
+    const allowed = assertCanReadPostStrict(post, otherId, reply);
+
+    expect(allowed).toBe(true);
+    expect(status).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
   });
 });

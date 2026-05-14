@@ -1,0 +1,28 @@
+meta {
+  name: Request Playback URL (private non-owner returns 404)
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/api/posts/{{privateVideoPostId}}/video/playback
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+assert {
+  res.status: eq 404
+}
+
+docs {
+  {{privateVideoPostId}} is owned by bruno_other_user; testuser is the
+  Bruno bootstrap actor. assertCanReadPostStrict (packages/server/src/
+  lib/visibility.ts) returns 404 'Post not found' for private+non-owner
+  so the response does not leak post existence. Per spec §8.2
+  (visibility-before-existence) — the visibility check intercepts before
+  any post_videos lookup.
+}

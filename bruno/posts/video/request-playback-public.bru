@@ -1,0 +1,32 @@
+meta {
+  name: Request Playback URL (public ready)
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/posts/{{videoPostId}}/video/playback
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("playbackUrl ends with manifest/video.m3u8", function() {
+    expect(res.body.playbackUrl).to.match(/manifest\/video\.m3u8$/);
+  });
+}
+
+docs {
+  Public ready video → unsigned HLS manifest URL using the customer
+  subdomain ('mock-subdomain' in mock mode). The seeded post_videos row
+  for {{videoPostId}} has status='ready' so the 409 NOT_READY branch is
+  skipped.
+}

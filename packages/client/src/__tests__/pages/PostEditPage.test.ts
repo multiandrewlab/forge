@@ -39,6 +39,22 @@ vi.mock('@/components/editor/PostEditor.vue', () => ({
   },
 }));
 
+// Stub VideoEditor — PostEditPage routes to it for video posts (WU8b).
+vi.mock('@/components/editor/VideoEditor.vue', () => ({
+  default: {
+    name: 'VideoEditor',
+    props: ['postId', 'isAuthor'],
+    template: '<div data-testid="video-editor-stub">{{ postId }}|{{ isAuthor }}</div>',
+  },
+}));
+
+// Stub useAuth — PostEditPage uses user.id to derive isAuthor for VideoEditor.
+const mockAuthUser: Ref<{ id: string } | null> = ref({ id: 'author-1' });
+
+vi.mock('@/composables/useAuth', () => ({
+  useAuth: () => ({ user: mockAuthUser }),
+}));
+
 const mockFetchPost = vi.fn();
 const mockSaveRevision = vi.fn();
 const mockUpdatePost = vi.fn();
@@ -326,6 +342,52 @@ describe('PostEditPage', () => {
       await flushPromises();
 
       expect(wrapper.find('[data-testid="fork-attribution"]').exists()).toBe(false);
+    });
+  });
+
+  // ── Video content-type routing (#102 WU8b) ─────────────────────
+  describe('video content-type routing', () => {
+    it('renders VideoEditor instead of PostEditor when contentType is video', async () => {
+      const post = createMockPost({ contentType: 'video' });
+      mockFetchPost.mockImplementation(async () => {
+        const store = usePostsStore();
+        store.setPost(post);
+      });
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid="video-editor-stub"]').exists()).toBe(true);
+      expect(wrapper.find('[data-testid="post-editor-stub"]').exists()).toBe(false);
+    });
+
+    it('passes postId and isAuthor=true to VideoEditor', async () => {
+      const post = createMockPost({ contentType: 'video', id: 'vid-77' });
+      mockFetchPost.mockImplementation(async () => {
+        const store = usePostsStore();
+        store.setPost(post);
+      });
+
+      const wrapper = await mountPage('vid-77');
+      await flushPromises();
+
+      const editor = wrapper.findComponent({ name: 'VideoEditor' });
+      expect(editor.props('postId')).toBe('vid-77');
+      expect(editor.props('isAuthor')).toBe(true);
+    });
+
+    it('renders PostEditor (not VideoEditor) for non-video posts', async () => {
+      const post = createMockPost({ contentType: 'snippet' });
+      mockFetchPost.mockImplementation(async () => {
+        const store = usePostsStore();
+        store.setPost(post);
+      });
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid="video-editor-stub"]').exists()).toBe(false);
+      expect(wrapper.find('[data-testid="post-editor-stub"]').exists()).toBe(true);
     });
   });
 

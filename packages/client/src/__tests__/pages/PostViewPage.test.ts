@@ -88,6 +88,27 @@ vi.mock('@/components/post/CodeViewer.vue', () => ({
   },
 }));
 
+// --- Mock VideoPlayer / VideoStatusBadge (#102 WU8b) ---
+// Video posts route to <VideoPlayer> inline. The badge surfaces the author's
+// pipeline state (uploading/processing/replacing/etc.); non-authors instead
+// see the spec §9.5 "new version processing" banner.
+vi.mock('@/components/post/VideoPlayer.vue', () => ({
+  default: {
+    name: 'VideoPlayer',
+    props: ['postId'],
+    template: '<div data-testid="video-player-stub">{{ postId }}</div>',
+  },
+}));
+
+vi.mock('@/components/post/VideoStatusBadge.vue', () => ({
+  default: {
+    name: 'VideoStatusBadge',
+    props: ['status', 'pendingCfUid', 'lastError'],
+    template:
+      '<span :data-testid="`video-status-badge-${pendingCfUid ? \'replacing\' : status}`"></span>',
+  },
+}));
+
 // --- Mock PresenceIndicator component ---
 vi.mock('@/components/post/PresenceIndicator.vue', () => ({
   default: {
@@ -1165,6 +1186,134 @@ describe('PostViewPage', () => {
       const wrapper = await mountPage();
       await flushPromises();
       expect(wrapper.exists()).toBe(true);
+    });
+  });
+
+  // ── Video content-type rendering (#102 WU8b) ─────────────────────
+  describe('video content-type', () => {
+    // The server's GET /api/posts/:id attaches a `video` field for video
+    // posts (WU5b §5.13). The shape differs by viewer: author gets
+    // {status, cfUid, pendingCfUid, lastError, playbackRequiresSignedUrl};
+    // non-author gets {status, pendingReplacement}. We model both shapes
+    // by typing the post as `PostWithRevision & {video?}`.
+    interface AuthorVideoField {
+      status: string;
+      cfUid: string;
+      pendingCfUid: string | null;
+      lastError: string | null;
+      playbackRequiresSignedUrl: boolean;
+    }
+    interface NonAuthorVideoField {
+      status: string;
+      pendingReplacement: boolean;
+    }
+    type VideoPost = PostWithRevision & {
+      video?: AuthorVideoField | NonAuthorVideoField;
+    };
+
+    it('renders VideoPlayer for a video post (not CodeViewer)', async () => {
+      const post = createMockPost({ contentType: 'video' }) as VideoPost;
+      post.video = {
+        status: 'ready',
+        cfUid: 'cf-abc',
+        pendingCfUid: null,
+        lastError: null,
+        playbackRequiresSignedUrl: true,
+      };
+      mockFetchPost.mockImplementation(async () => {
+        mockCurrentPost.value = post;
+      });
+      mockUser.value = createMockUser({ id: post.authorId });
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid="video-player-stub"]').exists()).toBe(true);
+      expect(wrapper.find('[data-testid="code-viewer"]').exists()).toBe(false);
+    });
+
+    it('shows the non-author replacement banner during a mid-replace window', async () => {
+      const post = createMockPost({ contentType: 'video', authorId: 'author-1' }) as VideoPost;
+      post.video = { status: 'processing', pendingReplacement: true };
+      mockFetchPost.mockImplementation(async () => {
+        mockCurrentPost.value = post;
+      });
+      // Viewer is NOT the author
+      mockUser.value = createMockUser({ id: 'visitor-99' });
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid="video-replace-banner"]').exists()).toBe(true);
+      expect(wrapper.text()).toContain('new version of this video is processing');
+    });
+
+    it('hides the banner for the author of a mid-replace video (badge shown instead)', async () => {
+      const post = createMockPost({ contentType: 'video', authorId: 'author-1' }) as VideoPost;
+      post.video = {
+        status: 'ready',
+        cfUid: 'cf-old',
+        pendingCfUid: 'cf-new',
+        lastError: null,
+        playbackRequiresSignedUrl: true,
+      };
+      mockFetchPost.mockImplementation(async () => {
+        mockCurrentPost.value = post;
+      });
+      mockUser.value = createMockUser({ id: 'author-1' });
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid="video-replace-banner"]').exists()).toBe(false);
+      expect(wrapper.find('[data-testid="video-status-badge-replacing"]').exists()).toBe(true);
+    });
+
+    it('hides the banner for a non-author viewing a fully-ready video (no pending replacement)', async () => {
+      const post = createMockPost({ contentType: 'video', authorId: 'author-1' }) as VideoPost;
+      post.video = { status: 'ready', pendingReplacement: false };
+      mockFetchPost.mockImplementation(async () => {
+        mockCurrentPost.value = post;
+      });
+      mockUser.value = createMockUser({ id: 'visitor-99' });
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid="video-replace-banner"]').exists()).toBe(false);
+    });
+
+    it('hides the banner for a non-author when pendingReplacement is true but status is ready', async () => {
+      // Edge: pendingReplacement=true AND status=ready shouldn't show the banner
+      // (the spec gates on status !== 'ready'). The fresh upload hasn't yet
+      // promoted, so the existing asset is still the rendered one.
+      const post = createMockPost({ contentType: 'video', authorId: 'author-1' }) as VideoPost;
+      post.video = { status: 'ready', pendingReplacement: true };
+      mockFetchPost.mockImplementation(async () => {
+        mockCurrentPost.value = post;
+      });
+      mockUser.value = createMockUser({ id: 'visitor-99' });
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid="video-replace-banner"]').exists()).toBe(false);
+    });
+
+    it('does not render the video-status badge for the author when video field is absent', async () => {
+      // Defensive: an author viewing a video post whose video metadata has
+      // not yet hydrated should not crash — neither badge nor player render.
+      const post = createMockPost({ contentType: 'video', authorId: 'author-1' }) as VideoPost;
+      // post.video deliberately unset
+      mockFetchPost.mockImplementation(async () => {
+        mockCurrentPost.value = post;
+      });
+      mockUser.value = createMockUser({ id: 'author-1' });
+
+      const wrapper = await mountPage();
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid^="video-status-badge-"]').exists()).toBe(false);
     });
   });
 });

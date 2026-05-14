@@ -44,21 +44,24 @@ describe('FK ON DELETE contract (worker-scoped reset depends on these)', () => {
       expect(concatenatedSql).toMatch(pattern);
     });
 
-    // ALTER CONSTRAINT override detection: scan post-001 migrations for any clause that
-    // would change this FK's delete rule. If a post-001 ALTER CONSTRAINT mentions this column
-    // and a different rule, fail.
+    // ALTER CONSTRAINT override detection: scan each post-001 migration INDIVIDUALLY
+    // for any clause that would change this FK's delete rule. We check per-file rather
+    // than against a concatenation so that unrelated CASCADE clauses in one migration
+    // don't false-positive on author_id mentions in another migration. An actual
+    // override would be in a single migration file: `ALTER TABLE comments ALTER CONSTRAINT
+    // comments_author_id_fkey ... ON DELETE CASCADE` — all in one file.
     it(`${fk.child} is not later overridden by ALTER CONSTRAINT to a different rule`, () => {
-      const post001 = migrationFiles
-        .filter((f) => !f.startsWith('001_'))
-        .map((f) => readFileSync(join(migrationsDir, f), 'utf8'))
-        .join('\n');
       const colName = fk.child.split('.')[1];
       const otherRule = fk.rule === 'CASCADE' ? 'SET NULL' : 'CASCADE';
       const overridePattern = new RegExp(
         String.raw`ALTER\s+(TABLE|CONSTRAINT)[\s\S]*?\b${colName}\b[\s\S]*?ON\s+DELETE\s+${otherRule}`,
         'i',
       );
-      expect(post001).not.toMatch(overridePattern);
+      for (const f of migrationFiles) {
+        if (f.startsWith('001_')) continue;
+        const content = readFileSync(join(migrationsDir, f), 'utf8');
+        expect(content, `migration ${f}`).not.toMatch(overridePattern);
+      }
     });
   }
 });

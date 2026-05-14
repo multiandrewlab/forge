@@ -1,0 +1,53 @@
+meta {
+  name: Request Playback URL (private owner)
+  type: http
+  seq: 14
+}
+
+get {
+  url: {{baseUrl}}/api/posts/{{privateVideoPostId}}/video/playback
+  body: none
+  auth: bearer
+}
+
+script:pre-request {
+  // Inline-login as bruno_other_user so we can read OUR OWN private video.
+  // The collection-root pre-request bootstraps testuser into accessToken;
+  // for this file we authenticate as the owner instead and stash the
+  // result in a separate variable (brunoOtherToken) so we never trample
+  // the shared accessToken. The auth:bearer block below references that
+  // dedicated token. Pattern follows bruno/posts/get-private-post-as-owner.bru.
+  const axios = require("axios");
+  const baseUrl = bru.getEnvVar("baseUrl");
+  const loginRes = await axios.post(`${baseUrl}/api/auth/login`, {
+    email: bru.getEnvVar("bruno_other_user_email"),
+    password: bru.getEnvVar("bruno_other_user_password"),
+  });
+  bru.setVar("brunoOtherToken", loginRes.data.accessToken);
+}
+
+auth:bearer {
+  token: {{brunoOtherToken}}
+}
+
+assert {
+  res.status: eq 200
+}
+
+tests {
+  test("playbackUrl is a signed URL containing /tok_/", function() {
+    expect(res.body.playbackUrl).to.match(/\/tok_/);
+  });
+}
+
+docs {
+  Owner-as-viewer path for a private video. {{privateVideoPostId}} is
+  owned by bruno_other_user (a0…098); testuser (the global Bruno actor)
+  would receive 403 here (covered by request-playback-forbidden.bru).
+  Inline-logging in as the owner exercises the 200 branch and the signed
+  HLS playback URL emitted when playback_requires_signed_url=true.
+
+  The mock Cloudflare Stream service emits signed URLs with a '/tok_'
+  segment encoding the signature, so /\/tok_/ is a stable token-marker
+  regex without binding to a specific signature value.
+}

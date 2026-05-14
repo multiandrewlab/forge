@@ -1,0 +1,42 @@
+meta {
+  name: Request Upload URL (first upload)
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/posts/{{createdVideoPostId}}/video/upload-url
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{accessToken}}
+}
+
+body:json {
+  {
+    "filename": "test.mp4",
+    "fileSizeBytes": 1024
+  }
+}
+
+script:post-response {
+  if (res.body && res.body.cfUid) {
+    bru.setVar("createdCfUid", res.body.cfUid);
+  }
+}
+
+assert {
+  res.status: eq 201
+}
+
+docs {
+  First-upload path: mints a Cloudflare Stream tus URL and inserts a
+  post_videos row with status='uploading'. With MOCK_CF_STREAM=1 the
+  upload URL is the mock https://mock.cf.local/<cfUid>. The created cfUid
+  is captured for downstream tests.
+
+  Pre-req: seq 1 (Create Video Post) must run first so {{createdVideoPostId}}
+  is set in the run scope.
+}
